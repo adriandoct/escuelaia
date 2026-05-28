@@ -1,0 +1,24 @@
+services:
+  - type: web
+    name: dojoia-access
+    runtime: node
+    buildCommand: npm install && npm run build
+    startCommand: npm run start
+    envVars:
+      - key: NODE_VERSION
+        value: 20.0.0
+      - key: NEXT_PUBLIC_SUPABASE_URL
+        value: ""
+        sync: false
+      - key: NEXT_PUBLIC_SUPABASE_ANON_KEY
+        value: ""
+        sync: false
+      - key: TWILIO_ACCOUNT_SID
+        value: ""
+        sync: false
+      - key: TWILIO_AUTH_TOKEN
+        value: ""
+        sync: false
+      - key: TWILIO_WHATSAPP_NUMBER
+        value: ""
+        sync: false
