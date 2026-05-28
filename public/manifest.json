@@ -1,0 +1,16 @@
+{
+  "short_name": "DOJOIA Access",
+  "name": "DOJOIA ACCESS - Control Escolar Inteligente",
+  "icons": [
+    {
+      "src": "https://api.dicebear.com/7.x/bottts/svg?seed=dojoia-logo",
+      "type": "image/svg+xml",
+      "sizes": "512x512"
+    }
+  ],
+  "start_url": "/",
+  "background_color": "#040508",
+  "theme_color": "#06b6d4",
+  "display": "standalone",
+  "orientation": "portrait"
+}
