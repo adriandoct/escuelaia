@@ -6,7 +6,7 @@ services:
     startCommand: npm run start
     envVars:
       - key: NODE_VERSION
-        value: 20.0.0
+        value: 20
       - key: NEXT_PUBLIC_SUPABASE_URL
         sync: false
       - key: NEXT_PUBLIC_SUPABASE_ANON_KEY
