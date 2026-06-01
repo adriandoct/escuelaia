@@ -5,6 +5,8 @@ export interface Alumno {
   id: string;
   matricula: string;
   nombre: string;
+  apellido_paterno: string;
+  apellido_materno?: string;
   grado: string;
   grupo: string;
   tutor: string;
@@ -43,7 +45,9 @@ const MOCK_ALUMNOS: Alumno[] = [
   {
     id: 'student-1',
     matricula: 'DOJ-2026-001',
-    nombre: 'Carlos Martínez López',
+    nombre: 'Carlos',
+    apellido_paterno: 'Martínez',
+    apellido_materno: 'López',
     grado: '1°',
     grupo: 'A',
     tutor: 'Sra. Mariana López',
@@ -55,7 +59,9 @@ const MOCK_ALUMNOS: Alumno[] = [
   {
     id: 'student-2',
     matricula: 'DOJ-2026-002',
-    nombre: 'Sofía Herrera Díaz',
+    nombre: 'Sofía',
+    apellido_paterno: 'Herrera',
+    apellido_materno: 'Díaz',
     grado: '2°',
     grupo: 'B',
     tutor: 'Sr. Roberto Herrera',
@@ -67,7 +73,9 @@ const MOCK_ALUMNOS: Alumno[] = [
   {
     id: 'student-3',
     matricula: 'DOJ-2026-003',
-    nombre: 'Mateo Ramírez Gómez',
+    nombre: 'Mateo',
+    apellido_paterno: 'Ramírez',
+    apellido_materno: 'Gómez',
     grado: '3°',
     grupo: 'A',
     tutor: 'Sra. Patricia Gómez',
@@ -79,7 +87,9 @@ const MOCK_ALUMNOS: Alumno[] = [
   {
     id: 'student-4',
     matricula: 'DOJ-2026-004',
-    nombre: 'Valentina Castro Vega',
+    nombre: 'Valentina',
+    apellido_paterno: 'Castro',
+    apellido_materno: 'Vega',
     grado: '1°',
     grupo: 'B',
     tutor: 'Sr. Fernando Castro',
@@ -91,7 +101,9 @@ const MOCK_ALUMNOS: Alumno[] = [
   {
     id: 'student-5',
     matricula: 'DOJ-2026-005',
-    nombre: 'Sebastián Ortiz Flores',
+    nombre: 'Sebastián',
+    apellido_paterno: 'Ortiz',
+    apellido_materno: 'Flores',
     grado: '2°',
     grupo: 'A',
     tutor: 'Sra. Carmen Flores',
@@ -192,6 +204,8 @@ export const db = {
       const { data, error } = await supabase
         .from('alumnos')
         .select('*')
+        .order('apellido_paterno', { ascending: true })
+        .order('apellido_materno', { ascending: true })
         .order('nombre', { ascending: true });
       if (error) throw error;
       return data || [];
@@ -199,7 +213,13 @@ export const db = {
       initLocalStorage();
       const raw = localStorage.getItem('dojoia_alumnos');
       const list: Alumno[] = raw ? JSON.parse(raw) : [];
-      return list.sort((a, b) => a.nombre.localeCompare(b.nombre));
+      return list.sort((a, b) => {
+        const patCompare = a.apellido_paterno.localeCompare(b.apellido_paterno);
+        if (patCompare !== 0) return patCompare;
+        const matCompare = (a.apellido_materno || '').localeCompare(b.apellido_materno || '');
+        if (matCompare !== 0) return matCompare;
+        return a.nombre.localeCompare(b.nombre);
+      });
     }
   },
 

@@ -17,7 +17,7 @@ export default function Home() {
         </h1>
         
         <p className="text-gray-400 text-base sm:text-lg max-w-2xl mx-auto">
-          Gestiona ingresos y salidas en tiempo real. Importa listados desde Excel, genera credenciales digitales e informa automáticamente a los padres a través de notificaciones automatizadas.
+          Gestiona ingresos y salidas en tiempo real, genera credenciales digitales e informa automáticamente a los padres a través de notificaciones automatizadas.
         </p>
 
         {/* Call to actions */}
@@ -43,7 +43,7 @@ export default function Home() {
       </div>
 
       {/* Grid of Key Features */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6 w-full max-w-6xl mt-6">
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-6 w-full max-w-6xl mt-6">
         
         {/* Feature 1 */}
         <div className="glass-panel p-8 rounded-2xl relative overflow-hidden group hover:border-cyan-500/30 transition-all duration-300">
@@ -69,34 +69,6 @@ export default function Home() {
           </p>
         </div>
 
-        {/* Feature 3 */}
-        <div className="glass-panel p-8 rounded-2xl relative overflow-hidden group hover:border-indigo-500/30 transition-all duration-300">
-          <div className="absolute top-0 right-0 w-32 h-32 bg-indigo-500/5 rounded-full blur-2xl group-hover:bg-indigo-500/10 transition-colors"></div>
-          <div className="w-12 h-12 rounded-xl bg-indigo-500/10 border border-indigo-500/20 flex items-center justify-center text-2xl mb-6 text-indigo-400 shadow-[0_0_15px_rgba(99,102,241,0.15)]">
-            ⚡
-          </div>
-          <h3 className="text-xl font-bold text-white mb-2">Base de Datos Híbrida</h3>
-          <p className="text-gray-400 text-sm leading-relaxed">
-            Sincronización en tiempo real mediante Supabase, con soporte offline integrado y un Sandbox local que permite probar la aplicación sin configuraciones complejas.
-          </p>
-        </div>
-
-      </div>
-
-      {/* Database Setup Quick Info */}
-      <div className="mt-16 w-full max-w-4xl p-6 rounded-2xl glass-panel border-white/5 flex flex-col md:flex-row items-center justify-between gap-6">
-        <div className="space-y-1">
-          <h4 className="font-bold text-white text-sm sm:text-base">🚀 ¿Listo para conectar tu propio servidor?</h4>
-          <p className="text-gray-400 text-xs sm:text-sm">Configura tu proyecto de Supabase en 5 minutos ingresando los datos de conexión.</p>
-        </div>
-        <a 
-          href="https://supabase.com" 
-          target="_blank" 
-          rel="noreferrer"
-          className="px-4 py-2 rounded-lg bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 text-xs font-semibold hover:bg-emerald-500/20 transition-all"
-        >
-          Crear Proyecto Supabase
-        </a>
       </div>
     </div>
   );

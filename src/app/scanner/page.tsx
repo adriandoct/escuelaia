@@ -411,7 +411,7 @@ export default function ScannerPage() {
                                 ? '✅ ENTRADA REGISTRADA' 
                                 : '🚪 SALIDA REGISTRADA'}
                           </span>
-                          <h3 className="text-xl font-black text-white">{activeScan.student.nombre}</h3>
+                          <h3 className="text-xl font-black text-white">{activeScan.student.nombre} {activeScan.student.apellido_paterno} {activeScan.student.apellido_materno || ''}</h3>
                           <p className="text-xs text-gray-400 font-semibold">{activeScan.student.grado} &quot;{activeScan.student.grupo}&quot; • <span className="font-mono">{activeScan.student.matricula}</span></p>
                         </div>
 
@@ -484,7 +484,7 @@ export default function ScannerPage() {
                   >
                     {students.map(s => (
                       <option key={s.id} value={s.matricula}>
-                        {s.nombre} ({s.matricula})
+                        {s.nombre} {s.apellido_paterno} {s.apellido_materno || ''} ({s.matricula})
                       </option>
                     ))}
                   </select>

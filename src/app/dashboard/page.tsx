@@ -125,6 +125,8 @@ export default function DashboardPage() {
   const filteredLogs = logs.filter(log => {
     const matchesSearch = 
       log.alumno?.nombre.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      (log.alumno?.apellido_paterno && log.alumno.apellido_paterno.toLowerCase().includes(searchQuery.toLowerCase())) ||
+      (log.alumno?.apellido_materno && log.alumno.apellido_materno.toLowerCase().includes(searchQuery.toLowerCase())) ||
       log.alumno?.matricula.toLowerCase().includes(searchQuery.toLowerCase());
     
     const matchesType = typeFilter ? log.tipo === typeFilter : true;
@@ -143,7 +145,7 @@ export default function DashboardPage() {
     const headers = ['Matricula', 'Nombre', 'Grado', 'Grupo', 'Tipo de Acceso', 'Fecha', 'Hora', 'Dispositivo', 'Responsable Scanner'];
     const rows = filteredLogs.map(l => [
       l.alumno?.matricula || '',
-      l.alumno?.nombre || '',
+      `${l.alumno?.nombre || ''} ${l.alumno?.apellido_paterno || ''} ${l.alumno?.apellido_materno || ''}`.replace(/\s+/g, ' ').trim(),
       l.alumno?.grado || '',
       l.alumno?.grupo || '',
       l.tipo === 'entrada' ? 'Entrada' : 'Salida',
@@ -414,7 +416,7 @@ export default function DashboardPage() {
                               className="w-full h-full object-cover"
                             />
                           </div>
-                          <span>{log.alumno?.nombre}</span>
+                          <span>{log.alumno?.nombre} {log.alumno?.apellido_paterno} {log.alumno?.apellido_materno || ''}</span>
                         </td>
                         <td className="py-3 px-2 font-mono">{log.alumno?.matricula}</td>
                         <td className="py-3 px-2 font-medium">{log.alumno?.grado} &quot;{log.alumno?.grupo}&quot;</td>

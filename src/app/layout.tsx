@@ -15,7 +15,7 @@ const geistMono = Geist_Mono({
 
 export const metadata: Metadata = {
   title: "DOJOIA ACCESS - Control Escolar Inteligente con QR",
-  description: "Plataforma inteligente de registro escolar y control de acceso con QR, WhatsApp y base de datos Supabase.",
+  description: "Plataforma inteligente de registro escolar y control de acceso con QR y WhatsApp.",
   manifest: "/manifest.json",
 };
 
@@ -24,24 +24,12 @@ export default function RootLayout({
 }: Readonly<{
   children: React.ReactNode;
 }>) {
-  const isSandbox = !process.env.NEXT_PUBLIC_SUPABASE_URL || !process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
-
   return (
     <html
       lang="es"
       className={`${geistSans.variable} ${geistMono.variable} h-full antialiased dark`}
     >
       <body className="min-h-full flex flex-col bg-[#040508] text-[#f3f4f6] font-sans selection:bg-cyan-500 selection:text-black">
-        {/* Environment Banner */}
-        {isSandbox ? (
-          <div className="bg-gradient-to-r from-amber-600/20 via-amber-500/20 to-amber-600/20 border-b border-amber-500/20 py-1.5 px-4 text-center text-xs text-amber-300 backdrop-blur-md">
-            ⚡ Modo Sandbox Activo: Los datos se guardan en el navegador. Configura las variables de Supabase en <code className="bg-black/40 px-1.5 py-0.5 rounded border border-amber-500/30 text-[10px]">.env.local</code> para conectar la base de datos real.
-          </div>
-        ) : (
-          <div className="bg-gradient-to-r from-emerald-600/20 via-emerald-500/20 to-emerald-600/20 border-b border-emerald-500/20 py-1.5 px-4 text-center text-xs text-emerald-300 backdrop-blur-md">
-            🛡️ Conexión Exitosa con Supabase Realtime Database.
-          </div>
-        )}
 
         {/* Global Navigation Header */}
         <header className="sticky top-0 z-40 w-full border-b border-white/5 bg-[#040508]/75 backdrop-blur-md">

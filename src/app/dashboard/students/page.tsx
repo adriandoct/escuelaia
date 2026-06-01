@@ -7,7 +7,6 @@ import { db, Alumno } from '@/lib/db';
 import { 
   Search, Plus, Upload, Printer, Trash2, X, FileText, CheckCircle2, User, Phone, Layers, Shield, Download
 } from 'lucide-react';
-import * as XLSX from 'xlsx';
 
 export default function StudentsPage() {
   const [students, setStudents] = useState<Alumno[]>([]);
@@ -16,12 +15,12 @@ export default function StudentsPage() {
   const [groupFilter, setGroupFilter] = useState('');
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [selectedStudent, setSelectedStudent] = useState<Alumno | null>(null);
-  const [isImporting, setIsImporting] = useState(false);
-  const [importStatus, setImportStatus] = useState<{ success?: boolean; msg?: string } | null>(null);
   
   // Form State
   const [formData, setFormData] = useState({
     nombre: '',
+    apellido_paterno: '',
+    apellido_materno: '',
     matricula: '',
     grado: '',
     grupo: '',
@@ -53,7 +52,7 @@ export default function StudentsPage() {
 
   const handleCreateStudent = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!formData.nombre || !formData.matricula || !formData.grado || !formData.grupo) {
+    if (!formData.nombre || !formData.apellido_paterno || !formData.matricula || !formData.grado || !formData.grupo) {
       alert('Por favor complete los campos obligatorios.');
       return;
     }
@@ -62,6 +61,8 @@ export default function StudentsPage() {
       // Set default QR code as the student's matricula ID
       await db.addAlumno({
         nombre: formData.nombre,
+        apellido_paterno: formData.apellido_paterno,
+        apellido_materno: formData.apellido_materno || '',
         matricula: formData.matricula,
         grado: formData.grado,
         grupo: formData.grupo,
@@ -74,6 +75,8 @@ export default function StudentsPage() {
       // Clear Form and reload
       setFormData({
         nombre: '',
+        apellido_paterno: '',
+        apellido_materno: '',
         matricula: '',
         grado: '',
         grupo: '',
@@ -104,106 +107,14 @@ export default function StudentsPage() {
     }
   };
 
-  // Excel / CSV spreadsheet file importer logic
-  const fileInputRef = useRef<HTMLInputElement>(null);
 
-  const handleExcelImport = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-
-    setIsImporting(true);
-    setImportStatus({ msg: 'Procesando archivo...' });
-
-    const reader = new FileReader();
-    reader.onload = async (evt) => {
-      try {
-        const bstr = evt.target?.result;
-        const wb = XLSX.read(bstr, { type: 'binary' });
-        const wsname = wb.SheetNames[0];
-        const ws = wb.Sheets[wsname];
-        const rawRows: any[] = XLSX.utils.sheet_to_json(ws);
-
-        if (rawRows.length === 0) {
-          throw new Error('El archivo está vacío o no tiene formato válido.');
-        }
-
-        // Standardize column mappings (Case insensitive lookup)
-        const findValue = (row: any, keys: string[]) => {
-          const matchedKey = Object.keys(row).find(k => 
-            keys.some(key => k.toLowerCase().trim() === key.toLowerCase().trim())
-          );
-          return matchedKey ? String(row[matchedKey]).trim() : '';
-        };
-
-        const parsedAlumnos = rawRows.map((row, idx) => {
-          const nombre = findValue(row, ['nombre', 'name', 'alumno', 'estudiante']);
-          // If no matricula found, create a pseudo-random code
-          let matricula = findValue(row, ['matrícula', 'matricula', 'id', 'código', 'codigo', 'control']);
-          if (!matricula) {
-            matricula = `REG-${2026}-${Math.floor(1000 + Math.random() * 9000)}-${idx}`;
-          }
-          const grado = findValue(row, ['grado', 'grade', 'año', 'ano']);
-          const grupo = findValue(row, ['grupo', 'group', 'sección', 'seccion']);
-          const tutor = findValue(row, ['tutor', 'padre', 'madre', 'responsable', 'representante']) || 'No asignado';
-          const telefono = findValue(row, ['teléfono', 'telefono', 'tel', 'phone', 'celular']) || '+52';
-          let foto_url = findValue(row, ['foto', 'foto_url', 'imagen', 'avatar', 'photo']);
-          
-          if (!foto_url) {
-            foto_url = `https://api.dicebear.com/7.x/bottts/svg?seed=${matricula}`;
-          }
-
-          return {
-            nombre,
-            matricula,
-            grado: grado || '1°',
-            grupo: grupo || 'A',
-            tutor,
-            telefono,
-            foto_url,
-            qr_code: matricula
-          };
-        }).filter(a => a.nombre); // Filter rows that don't have a name
-
-        if (parsedAlumnos.length === 0) {
-          throw new Error('No se encontraron alumnos con nombres válidos en el archivo.');
-        }
-
-        // Bulk insert
-        await db.addAlumnosBulk(parsedAlumnos);
-        setImportStatus({
-          success: true,
-          msg: `Se importaron exitosamente ${parsedAlumnos.length} alumnos.`
-        });
-        loadStudents();
-      } catch (error: any) {
-        console.error(error);
-        setImportStatus({
-          success: false,
-          msg: `Error al importar archivo: ${error.message || error}`
-        });
-      } finally {
-        setIsImporting(false);
-        if (fileInputRef.current) {
-          fileInputRef.current.value = '';
-        }
-      }
-    };
-
-    reader.onerror = () => {
-      setImportStatus({
-        success: false,
-        msg: 'Error al leer el archivo de la computadora.'
-      });
-      setIsImporting(false);
-    };
-
-    reader.readAsBinaryString(file);
-  };
 
   // Filter students based on search queries
   const filteredStudents = students.filter(student => {
     const matchesSearch = 
       student.nombre.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      student.apellido_paterno.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      (student.apellido_materno && student.apellido_materno.toLowerCase().includes(searchQuery.toLowerCase())) ||
       student.matricula.toLowerCase().includes(searchQuery.toLowerCase());
     
     const matchesGrade = gradeFilter ? student.grado === gradeFilter : true;
@@ -223,24 +134,9 @@ export default function StudentsPage() {
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
           <h2 className="text-3xl font-extrabold text-white tracking-tight">Directorio de Alumnos</h2>
-          <p className="text-gray-400 text-sm mt-1">Administra la base de estudiantes, importa planillas y genera credenciales con códigos QR.</p>
+          <p className="text-gray-400 text-sm mt-1">Administra la base de estudiantes y genera credenciales con códigos QR.</p>
         </div>
         <div className="flex flex-wrap items-center gap-3">
-          <button
-            onClick={() => fileInputRef.current?.click()}
-            className="flex items-center space-x-2 px-4 py-2.5 rounded-xl glass-panel text-sm text-cyan-400 font-semibold hover:bg-white/5 hover:border-cyan-500/20 transition-all cursor-pointer"
-          >
-            <Upload size={16} />
-            <span>Importar Excel/CSV</span>
-          </button>
-          <input
-            type="file"
-            ref={fileInputRef}
-            onChange={handleExcelImport}
-            accept=".xlsx, .xls, .csv"
-            className="hidden"
-          />
-
           <button
             onClick={() => setIsModalOpen(true)}
             className="flex items-center space-x-2 px-5 py-2.5 rounded-xl bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-400 hover:to-blue-500 text-black font-extrabold text-sm shadow-[0_0_20px_rgba(6,182,212,0.25)] transition-all cursor-pointer"
@@ -251,27 +147,7 @@ export default function StudentsPage() {
         </div>
       </div>
 
-      {/* Spreadsheet Import Toast Alert */}
-      {importStatus && (
-        <div className={`p-4 rounded-xl glass-panel flex items-start space-x-3 border ${
-          importStatus.success === true ? 'border-emerald-500/20' : importStatus.success === false ? 'border-red-500/20' : 'border-cyan-500/20'
-        }`}>
-          {importStatus.success === true && <CheckCircle2 className="text-emerald-400 shrink-0 mt-0.5" size={18} />}
-          {importStatus.success === false && <X className="text-red-400 shrink-0 mt-0.5" size={18} />}
-          {!('success' in importStatus) && <Upload className="text-cyan-400 shrink-0 mt-0.5 animate-pulse" size={18} />}
-          <div className="flex-1">
-            <p className="text-sm font-semibold text-white">{importStatus.msg}</p>
-            {importStatus.success !== undefined && (
-              <button 
-                onClick={() => setImportStatus(null)} 
-                className="text-xs text-gray-400 underline mt-1 block hover:text-white"
-              >
-                Cerrar notificación
-              </button>
-            )}
-          </div>
-        </div>
-      )}
+
 
       {/* Main Split Section */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
@@ -355,7 +231,7 @@ export default function StudentsPage() {
 
                     {/* Student Details */}
                     <div>
-                      <h4 className="font-bold text-white group-hover:text-cyan-400 transition-colors text-sm sm:text-base line-clamp-1">{student.nombre}</h4>
+                      <h4 className="font-bold text-white group-hover:text-cyan-400 transition-colors text-sm sm:text-base line-clamp-1">{student.nombre} {student.apellido_paterno} {student.apellido_materno || ''}</h4>
                       <div className="flex items-center space-x-2 text-xs text-gray-400 mt-0.5">
                         <span className="font-mono">{student.matricula}</span>
                         <span>•</span>
@@ -417,7 +293,7 @@ export default function StudentsPage() {
 
                 {/* Meta */}
                 <div className="space-y-1">
-                  <h3 className="font-black text-white text-lg leading-tight">{selectedStudent.nombre}</h3>
+                  <h3 className="font-black text-white text-lg leading-tight">{selectedStudent.nombre} {selectedStudent.apellido_paterno} {selectedStudent.apellido_materno || ''}</h3>
                   <p className="text-gray-400 text-xs font-mono">{selectedStudent.matricula}</p>
                 </div>
 
@@ -512,14 +388,39 @@ export default function StudentsPage() {
               
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-1.5 col-span-2">
-                  <label className="text-xs text-gray-400 uppercase tracking-wider font-semibold">Nombre Completo *</label>
+                  <label className="text-xs text-gray-400 uppercase tracking-wider font-semibold">Nombre(s) *</label>
                   <input
                     type="text"
                     name="nombre"
                     required
                     value={formData.nombre}
                     onChange={handleInputChange}
-                    placeholder="Ej. Carlos Martínez López"
+                    placeholder="Ej. Carlos"
+                    className="w-full glass-input px-4 py-2.5 rounded-xl text-sm"
+                  />
+                </div>
+
+                <div className="space-y-1.5 col-span-2 sm:col-span-1">
+                  <label className="text-xs text-gray-400 uppercase tracking-wider font-semibold">Apellido Paterno *</label>
+                  <input
+                    type="text"
+                    name="apellido_paterno"
+                    required
+                    value={formData.apellido_paterno}
+                    onChange={handleInputChange}
+                    placeholder="Ej. Martínez"
+                    className="w-full glass-input px-4 py-2.5 rounded-xl text-sm"
+                  />
+                </div>
+
+                <div className="space-y-1.5 col-span-2 sm:col-span-1">
+                  <label className="text-xs text-gray-400 uppercase tracking-wider font-semibold">Apellido Materno</label>
+                  <input
+                    type="text"
+                    name="apellido_materno"
+                    value={formData.apellido_materno}
+                    onChange={handleInputChange}
+                    placeholder="Ej. López"
                     className="w-full glass-input px-4 py-2.5 rounded-xl text-sm"
                   />
                 </div>

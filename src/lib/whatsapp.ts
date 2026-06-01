@@ -43,12 +43,14 @@ export const formatWhatsAppMessage = (alumno: Alumno, log: Asistencia): string =
     // Fallback if formatting fails
   }
 
+  const nombreCompleto = `${alumno.nombre} ${alumno.apellido_paterno} ${alumno.apellido_materno || ''}`.replace(/\s+/g, ' ').trim();
+
   return `📚 Escuela DOJOIA
 
 Hola Sr./Sra. ${alumno.tutor}.
 
 Le informamos que el alumno:
-👦 ${alumno.nombre}
+👦 ${nombreCompleto}
 
 ${estadoEmoji} ${preposicion} escuela.
 
@@ -75,7 +77,7 @@ export const sendWhatsAppNotification = async (
   const logEntry: WhatsAppLog = {
     id: `wa-log-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
     alumno_id: alumno.id,
-    alumno_nombre: alumno.nombre,
+    alumno_nombre: `${alumno.nombre} ${alumno.apellido_paterno} ${alumno.apellido_materno || ''}`.replace(/\s+/g, ' ').trim(),
     tutor: alumno.tutor,
     telefono: alumno.telefono,
     tipo: log.tipo,
