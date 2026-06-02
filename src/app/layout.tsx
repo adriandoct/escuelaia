@@ -14,7 +14,7 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "DOJOIA ACCESS - Control Escolar Inteligente con QR",
+  title: "LIONS KAI - Control Escolar Inteligente con QR",
   description: "Plataforma inteligente de registro escolar y control de acceso con QR y WhatsApp.",
   manifest: "/manifest.json",
 };
@@ -35,13 +35,13 @@ export default function RootLayout({
         <header className="sticky top-0 z-40 w-full border-b border-white/5 bg-[#040508]/75 backdrop-blur-md">
           <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
             <div className="flex items-center space-x-8">
-              <Link href="/" className="flex items-center space-x-2.5 group">
-                <div className="w-8 h-8 rounded-lg bg-gradient-to-tr from-cyan-500 to-blue-600 flex items-center justify-center font-bold text-black text-sm shadow-[0_0_15px_rgba(6,182,212,0.4)] group-hover:scale-105 transition-transform duration-300">
-                  D
-                </div>
-                <span className="font-extrabold text-lg tracking-wider bg-gradient-to-r from-white via-gray-200 to-gray-400 bg-clip-text text-transparent group-hover:opacity-90 transition-opacity">
-                  DOJOIA <span className="bg-gradient-to-r from-cyan-400 to-blue-500 bg-clip-text text-transparent">ACCESS</span>
-                </span>
+              <Link href="/" className="flex items-center group">
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img 
+                  src="/lions_kai_logo.png" 
+                  alt="Lions Kai Logo" 
+                  className="h-10 w-auto object-contain"
+                />
               </Link>
 
               <nav className="hidden md:flex items-center space-x-6 text-sm font-medium text-gray-400">
@@ -90,7 +90,7 @@ export default function RootLayout({
 
         {/* Global Footer */}
         <footer className="border-t border-white/5 py-6 bg-black/20 backdrop-blur-sm text-center text-xs text-gray-500">
-          <p>© {new Date().getFullYear()} DOJOIA ACCESS. Diseñado con estética premium e innovación para instituciones educativas.</p>
+          <p>© {new Date().getFullYear()} LIONS KAI. Diseñado con estética premium e innovación para instituciones educativas.</p>
         </footer>
       </body>
     </html>
