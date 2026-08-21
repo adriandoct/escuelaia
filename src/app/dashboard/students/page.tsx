@@ -2,13 +2,16 @@
 
 'use client';
 
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect } from 'react';
 import { db, Alumno } from '@/lib/db';
+import { useAuth } from '@/lib/auth';
 import { 
-  Search, Plus, Upload, Printer, Trash2, X, FileText, CheckCircle2, User, Phone, Layers, Shield, Download
+  Search, Plus, Printer, Trash2, X, User, Phone, Shield, Lock
 } from 'lucide-react';
 
 export default function StudentsPage() {
+  const { user } = useAuth();
+
   const [students, setStudents] = useState<Alumno[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
   const [gradeFilter, setGradeFilter] = useState('');
@@ -58,7 +61,6 @@ export default function StudentsPage() {
     }
 
     try {
-      // Set default QR code as the student's matricula ID
       await db.addAlumno({
         nombre: formData.nombre,
         apellido_paterno: formData.apellido_paterno,
@@ -72,7 +74,6 @@ export default function StudentsPage() {
         qr_code: formData.matricula
       });
 
-      // Clear Form and reload
       setFormData({
         nombre: '',
         apellido_paterno: '',
@@ -92,6 +93,11 @@ export default function StudentsPage() {
   };
 
   const handleDeleteStudent = async (id: string, name: string) => {
+    if (user?.role !== 'administrador') {
+      alert('Acceso denegado: Solo el Administrador puede eliminar alumnos de la base de datos.');
+      return;
+    }
+
     if (!confirm(`¿Está seguro de eliminar a ${name}? Esta acción también borrará sus registros de asistencia.`)) {
       return;
     }
@@ -106,8 +112,6 @@ export default function StudentsPage() {
       alert(`Error al eliminar alumno: ${error.message || error}`);
     }
   };
-
-
 
   // Filter students based on search queries
   const filteredStudents = students.filter(student => {
@@ -133,21 +137,30 @@ export default function StudentsPage() {
       {/* Title Header */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
-          <h2 className="text-3xl font-extrabold text-white tracking-tight">Directorio de Alumnos</h2>
-          <p className="text-gray-400 text-sm mt-1">Administra la base de estudiantes y genera credenciales con códigos QR.</p>
+          <h2 className="text-3xl font-extrabold text-white tracking-tight">Directorio Escolar de Alumnos</h2>
+          <p className="text-gray-400 text-sm mt-1">
+            Consulta expedientes y genera credenciales digitales QR.
+          </p>
         </div>
-        <div className="flex flex-wrap items-center gap-3">
-          <button
-            onClick={() => setIsModalOpen(true)}
-            className="flex items-center space-x-2 px-5 py-2.5 rounded-xl bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-400 hover:to-blue-500 text-black font-extrabold text-sm shadow-[0_0_20px_rgba(6,182,212,0.25)] transition-all cursor-pointer"
-          >
-            <Plus size={16} />
-            <span>Registrar Alumno</span>
-          </button>
+
+        <div className="flex items-center space-x-3">
+          {/* Register Student Button ONLY for Admin */}
+          {user?.role === 'administrador' ? (
+            <button
+              onClick={() => setIsModalOpen(true)}
+              className="flex items-center space-x-2 px-5 py-2.5 rounded-xl bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-400 hover:to-blue-500 text-black font-extrabold text-sm shadow-[0_0_20px_rgba(6,182,212,0.25)] transition-all cursor-pointer"
+            >
+              <Plus size={16} />
+              <span>Registrar Alumno</span>
+            </button>
+          ) : (
+            <div className="flex items-center space-x-1.5 px-3.5 py-2 rounded-xl bg-white/5 border border-white/10 text-gray-400 text-xs font-semibold">
+              <Lock size={14} className="text-amber-400" />
+              <span>Modo Consulta (Modificaciones reservadas a Admin)</span>
+            </div>
+          )}
         </div>
       </div>
-
-
 
       {/* Main Split Section */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
@@ -175,7 +188,7 @@ export default function StudentsPage() {
               <select
                 value={gradeFilter}
                 onChange={(e) => setGradeFilter(e.target.value)}
-                className="flex-1 md:flex-initial glass-input px-4 py-2.5 rounded-xl text-xs sm:text-sm font-medium"
+                className="flex-1 md:flex-initial glass-input px-4 py-2.5 rounded-xl text-xs sm:text-sm font-medium bg-[#0b0f1a]"
               >
                 <option value="">Todos los Grados</option>
                 <option value="1°">1° Grado</option>
@@ -186,7 +199,7 @@ export default function StudentsPage() {
               <select
                 value={groupFilter}
                 onChange={(e) => setGroupFilter(e.target.value)}
-                className="flex-1 md:flex-initial glass-input px-4 py-2.5 rounded-xl text-xs sm:text-sm font-medium"
+                className="flex-1 md:flex-initial glass-input px-4 py-2.5 rounded-xl text-xs sm:text-sm font-medium bg-[#0b0f1a]"
               >
                 <option value="">Todos los Grupos</option>
                 <option value="A">Grupo A</option>
@@ -205,7 +218,7 @@ export default function StudentsPage() {
               </div>
               <div className="space-y-1">
                 <h3 className="text-lg font-bold text-white">Ningún alumno coincide</h3>
-                <p className="text-gray-400 text-sm max-w-sm mx-auto">Prueba limpiando los filtros o agregando nuevos alumnos al listado escolar.</p>
+                <p className="text-gray-400 text-sm max-w-sm mx-auto">Prueba limpiando los filtros de búsqueda.</p>
               </div>
             </div>
           ) : (
@@ -233,25 +246,27 @@ export default function StudentsPage() {
                     <div>
                       <h4 className="font-bold text-white group-hover:text-cyan-400 transition-colors text-sm sm:text-base line-clamp-1">{student.nombre} {student.apellido_paterno} {student.apellido_materno || ''}</h4>
                       <div className="flex items-center space-x-2 text-xs text-gray-400 mt-0.5">
-                        <span className="font-mono">{student.matricula}</span>
+                        <span className="font-mono text-cyan-400">{student.matricula}</span>
                         <span>•</span>
                         <span className="bg-white/5 px-1.5 py-0.5 rounded text-gray-300 font-semibold">{student.grado} &quot;{student.grupo}&quot;</span>
                       </div>
                     </div>
                   </div>
 
-                  <div className="flex items-center space-x-2">
-                    <button
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        handleDeleteStudent(student.id, student.nombre);
-                      }}
-                      className="p-2 rounded-lg text-gray-500 hover:text-red-400 hover:bg-red-500/10 transition-colors cursor-pointer"
-                      title="Eliminar Alumno"
-                    >
-                      <Trash2 size={16} />
-                    </button>
-                  </div>
+                  {user?.role === 'administrador' && (
+                    <div className="flex items-center space-x-2">
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleDeleteStudent(student.id, student.nombre);
+                        }}
+                        className="p-2 rounded-lg text-gray-500 hover:text-red-400 hover:bg-red-500/10 transition-colors cursor-pointer"
+                        title="Eliminar Alumno"
+                      >
+                        <Trash2 size={16} />
+                      </button>
+                    </div>
+                  )}
                 </div>
               ))}
             </div>
@@ -270,18 +285,16 @@ export default function StudentsPage() {
                 <span className="text-xs text-gray-500 bg-white/5 px-2 py-0.5 rounded-full font-mono">{selectedStudent.matricula}</span>
               </div>
 
-              {/* ID Card Box (Optimized for Screen and Print) */}
+              {/* ID Card Box */}
               <div id="student-id-card-print" className="glass-panel p-6 rounded-2xl border-cyan-500/20 bg-gradient-to-b from-[#0e1220] to-[#08090d] relative overflow-hidden flex flex-col items-center text-center space-y-5 shadow-2xl">
-                {/* Print Banner header */}
                 <div className="w-full flex items-center justify-between pb-4 border-b border-white/5">
                   <div className="flex items-center space-x-2">
-                    <div className="w-6 h-6 rounded bg-gradient-to-tr from-cyan-500 to-blue-600 flex items-center justify-center font-bold text-black text-xs">D</div>
-                    <span className="font-extrabold text-xs tracking-wider text-white">DOJOIA ACCESS</span>
+                    <div className="w-6 h-6 rounded bg-gradient-to-tr from-cyan-500 to-blue-600 flex items-center justify-center font-bold text-black text-xs">C</div>
+                    <span className="font-extrabold text-xs tracking-wider text-white">CECYTE BC</span>
                   </div>
                   <span className="text-[10px] text-cyan-400 font-extrabold bg-cyan-500/10 border border-cyan-500/20 px-1.5 py-0.5 rounded">ALUMNO</span>
                 </div>
 
-                {/* Picture */}
                 <div className="w-24 h-24 rounded-full overflow-hidden border-2 border-cyan-400/40 p-1 bg-black/40">
                   {/* eslint-disable-next-line @next/next/no-img-element */}
                   <img 
@@ -291,7 +304,6 @@ export default function StudentsPage() {
                   />
                 </div>
 
-                {/* Meta */}
                 <div className="space-y-1">
                   <h3 className="font-black text-white text-lg leading-tight">{selectedStudent.nombre} {selectedStudent.apellido_paterno} {selectedStudent.apellido_materno || ''}</h3>
                   <p className="text-gray-400 text-xs font-mono">{selectedStudent.matricula}</p>
@@ -308,7 +320,6 @@ export default function StudentsPage() {
                   </div>
                 </div>
 
-                {/* QR Code Container */}
                 <div className="bg-white p-3.5 rounded-xl shadow-lg border border-gray-200">
                   {/* eslint-disable-next-line @next/next/no-img-element */}
                   <img 
@@ -319,7 +330,7 @@ export default function StudentsPage() {
                 </div>
 
                 <div className="w-full pt-3 border-t border-white/5 text-[9px] text-gray-500 font-mono">
-                  Escanee esta credencial en la entrada principal
+                  Credencial Oficial Institucional CECYTE BC
                 </div>
               </div>
 
@@ -342,7 +353,6 @@ export default function StudentsPage() {
                 </div>
               </div>
 
-              {/* Actions */}
               <div className="flex gap-3">
                 <button
                   onClick={handlePrint}
@@ -359,7 +369,7 @@ export default function StudentsPage() {
               <div className="text-4xl text-gray-600">🪪</div>
               <div>
                 <h4 className="font-bold text-white text-sm">Vista Previa de Credencial</h4>
-                <p className="text-gray-500 text-xs max-w-[200px] mx-auto mt-1">Selecciona un alumno del listado para generar e imprimir su tarjeta digital QR.</p>
+                <p className="text-gray-500 text-xs max-w-[200px] mx-auto mt-1">Selecciona un alumno del listado para consultar su tarjeta digital QR.</p>
               </div>
             </div>
           )}
@@ -367,8 +377,8 @@ export default function StudentsPage() {
 
       </div>
 
-      {/* Register Manual Modal */}
-      {isModalOpen && (
+      {/* Register Manual Modal (Admin only) */}
+      {isModalOpen && user?.role === 'administrador' && (
         <div className="fixed inset-0 z-50 flex items-center justify-center px-4 bg-black/80 backdrop-blur-sm">
           <div className="relative w-full max-w-lg glass-panel p-6 sm:p-8 rounded-2xl border-cyan-500/10 space-y-6">
             
@@ -380,8 +390,8 @@ export default function StudentsPage() {
             </button>
 
             <div>
-              <h3 className="text-2xl font-black text-white">Registrar Alumno</h3>
-              <p className="text-gray-400 text-sm mt-1">Completa la ficha de información para crear al alumno y su respectivo código QR.</p>
+              <h3 className="text-2xl font-black text-white">Registrar Nuevo Alumno</h3>
+              <p className="text-gray-400 text-sm mt-1">Completa la ficha para generar su credencial QR en la base de datos.</p>
             </div>
 
             <form onSubmit={handleCreateStudent} className="space-y-4">
@@ -426,7 +436,7 @@ export default function StudentsPage() {
                 </div>
 
                 <div className="space-y-1.5">
-                  <label className="text-xs text-gray-400 uppercase tracking-wider font-semibold">Matrícula o ID Escolar *</label>
+                  <label className="text-xs text-gray-400 uppercase tracking-wider font-semibold">Matrícula Escolar *</label>
                   <input
                     type="text"
                     name="matricula"
@@ -446,7 +456,7 @@ export default function StudentsPage() {
                       required
                       value={formData.grado}
                       onChange={handleInputChange}
-                      className="w-full glass-input px-3 py-2.5 rounded-xl text-sm"
+                      className="w-full glass-input px-3 py-2.5 rounded-xl text-sm bg-[#090d16]"
                     >
                       <option value="">Selecciona</option>
                       <option value="1°">1°</option>
@@ -462,7 +472,7 @@ export default function StudentsPage() {
                       required
                       value={formData.grupo}
                       onChange={handleInputChange}
-                      className="w-full glass-input px-3 py-2.5 rounded-xl text-sm"
+                      className="w-full glass-input px-3 py-2.5 rounded-xl text-sm bg-[#090d16]"
                     >
                       <option value="">Selecciona</option>
                       <option value="A">A</option>
@@ -485,7 +495,7 @@ export default function StudentsPage() {
                 </div>
 
                 <div className="space-y-1.5">
-                  <label className="text-xs text-gray-400 uppercase tracking-wider font-semibold">Teléfono de WhatsApp</label>
+                  <label className="text-xs text-gray-400 uppercase tracking-wider font-semibold">Teléfono WhatsApp</label>
                   <input
                     type="text"
                     name="telefono"
@@ -497,13 +507,13 @@ export default function StudentsPage() {
                 </div>
 
                 <div className="space-y-1.5 col-span-2">
-                  <label className="text-xs text-gray-400 uppercase tracking-wider font-semibold">URL de Fotografía (Opcional)</label>
+                  <label className="text-xs text-gray-400 uppercase tracking-wider font-semibold">URL Fotografía (Opcional)</label>
                   <input
                     type="url"
                     name="foto_url"
                     value={formData.foto_url}
                     onChange={handleInputChange}
-                    placeholder="https://images.unsplash.com/... (o dejar vacío para avatar automático)"
+                    placeholder="https://images.unsplash.com/..."
                     className="w-full glass-input px-4 py-2.5 rounded-xl text-sm"
                   />
                 </div>
@@ -531,31 +541,6 @@ export default function StudentsPage() {
           </div>
         </div>
       )}
-
-      {/* Global CSS style overrides for printing credentials */}
-      <style jsx global>{`
-        @media print {
-          body * {
-            visibility: hidden;
-          }
-          #student-id-card-print, #student-id-card-print * {
-            visibility: visible;
-          }
-          #student-id-card-print {
-            position: absolute;
-            left: 50% !important;
-            top: 40% !important;
-            transform: translate(-50%, -50%) scale(1.4) !important;
-            width: 320px !important;
-            border: 2px solid #00f2fe !important;
-            box-shadow: none !important;
-            background: #08090d !important;
-            color: #fff !important;
-            -webkit-print-color-adjust: exact !important;
-            print-color-adjust: exact !important;
-          }
-        }
-      `}</style>
 
     </div>
   );

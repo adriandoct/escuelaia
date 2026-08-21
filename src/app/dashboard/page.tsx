@@ -3,13 +3,17 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
+import Link from 'next/link';
 import { db, Alumno, Asistencia } from '@/lib/db';
 import { getWhatsAppLogs, WhatsAppLog, clearWhatsAppLogs } from '@/lib/whatsapp';
+import { useAuth } from '@/lib/auth';
 import { 
-  Users, UserCheck, UserX, Clock, PhoneCall, Search, Filter, Download, RotateCcw, AlertTriangle, ArrowUpRight, Check, Send
+  Users, UserCheck, UserX, Clock, PhoneCall, Search, Filter, Download, RotateCcw, AlertTriangle, ArrowUpRight, Check, Send, BookOpen, Shield
 } from 'lucide-react';
 
 export default function DashboardPage() {
+  const { user } = useAuth();
+
   const [students, setStudents] = useState<Alumno[]>([]);
   const [logs, setLogs] = useState<Asistencia[]>([]);
   const [waLogs, setWaLogs] = useState<WhatsAppLog[]>([]);
@@ -169,7 +173,6 @@ export default function DashboardPage() {
 
   // Chart statistics calculations
   const getChartData = () => {
-    // 1. Group accesses by hour interval
     const hours = ['06:00', '07:00', '08:00', '09:00', '10:00', '11:00', '12:00', '13:00', '14:00'];
     const hourCounts = hours.map(h => {
       const matchHour = parseInt(h.split(':')[0]);
@@ -181,7 +184,6 @@ export default function DashboardPage() {
 
     const maxCount = Math.max(...hourCounts, 1);
     
-    // 2. Access per grade levels
     const grades = ['1°', '2°', '3°'];
     const gradePresents = grades.map(g => {
       const gradeStudents = students.filter(s => s.grado === g);
@@ -192,7 +194,6 @@ export default function DashboardPage() {
         const studentLogs = logs.filter(l => l.alumno_id === student.id && l.fecha === todayStr);
         if (studentLogs.length === 0) return false;
         
-        // Latest log today
         const sorted = [...studentLogs].sort((a,b) => a.hora.localeCompare(b.hora));
         return sorted[sorted.length - 1].tipo === 'entrada';
       }).length;
@@ -208,21 +209,47 @@ export default function DashboardPage() {
   return (
     <div className="space-y-8 pb-10 flex-1 flex flex-col">
       
-      {/* Title */}
+      {/* Docente role suggestion banner */}
+      {user?.role === 'docente' && (
+        <div className="glass-panel p-4 rounded-2xl border-emerald-500/30 bg-emerald-500/10 flex flex-col sm:flex-row items-center justify-between gap-3 text-xs">
+          <div className="flex items-center space-x-2 text-emerald-300">
+            <BookOpen size={18} className="shrink-0" />
+            <span>¿Eres Docente? Accede a tu panel especializado de pase de lista por grupos y aulas.</span>
+          </div>
+          <Link
+            href="/dashboard/teacher"
+            className="px-4 py-2 rounded-xl bg-emerald-500 text-black font-bold hover:bg-emerald-400 transition-all shrink-0"
+          >
+            Ir a Panel Docente →
+          </Link>
+        </div>
+      )}
+
+      {/* Title Bar */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
-          <h2 className="text-3xl font-extrabold text-white tracking-tight">Panel Administrativo</h2>
-          <p className="text-gray-400 text-sm mt-1">Supervisa en tiempo real las estadísticas de ingresos, demoras y registros.</p>
+          <div className="flex items-center space-x-2">
+            <h2 className="text-3xl font-extrabold text-white tracking-tight">
+              {user?.role === 'encargado_orden' ? 'Panel Disciplinar y de Asistencia' : 'Panel Administrativo General'}
+            </h2>
+          </div>
+          <p className="text-gray-400 text-sm mt-1">
+            Supervisión en tiempo real de ingresos, retardos y estado de notificaciones WhatsApp.
+          </p>
         </div>
+
         <div className="flex items-center space-x-3">
-          <button
-            onClick={handleResetData}
-            className="flex items-center space-x-1.5 px-4 py-2.5 rounded-xl glass-panel text-sm text-gray-400 hover:text-white hover:bg-white/5 transition-all cursor-pointer"
-            title="Restablecer Datos de Prueba"
-          >
-            <RotateCcw size={16} />
-            <span>Restablecer</span>
-          </button>
+          {/* Reset button ONLY for Administrador */}
+          {user?.role === 'administrador' && (
+            <button
+              onClick={handleResetData}
+              className="flex items-center space-x-1.5 px-4 py-2.5 rounded-xl glass-panel text-sm text-gray-400 hover:text-white hover:bg-white/5 transition-all cursor-pointer"
+              title="Restablecer Datos de Prueba"
+            >
+              <RotateCcw size={16} />
+              <span>Restablecer BD</span>
+            </button>
+          )}
 
           <button
             onClick={handleExportCSV}
@@ -347,7 +374,7 @@ export default function DashboardPage() {
           <div className="glass-panel p-5 rounded-2xl space-y-4">
             
             <div className="flex flex-col sm:flex-row items-center justify-between gap-4">
-              <h3 className="text-base font-bold text-white">Historial de Accesos</h3>
+              <h3 className="text-base font-bold text-white">Historial de Accesos y Entradas</h3>
               
               {/* Controls */}
               <div className="flex flex-wrap items-center gap-3 w-full sm:w-auto">
@@ -365,7 +392,7 @@ export default function DashboardPage() {
                 <select
                   value={typeFilter}
                   onChange={(e) => setTypeFilter(e.target.value)}
-                  className="glass-input px-3 py-1.5 rounded-lg text-xs"
+                  className="glass-input px-3 py-1.5 rounded-lg text-xs bg-[#090d16]"
                 >
                   <option value="">Todos los Accesos</option>
                   <option value="entrada">Entradas</option>
@@ -375,7 +402,7 @@ export default function DashboardPage() {
                 <select
                   value={gradeFilter}
                   onChange={(e) => setGradeFilter(e.target.value)}
-                  className="glass-input px-3 py-1.5 rounded-lg text-xs"
+                  className="glass-input px-3 py-1.5 rounded-lg text-xs bg-[#090d16]"
                 >
                   <option value="">Todos los Grados</option>
                   <option value="1°">1°</option>
@@ -407,7 +434,6 @@ export default function DashboardPage() {
                     {filteredLogs.slice(0, 15).map((log) => (
                       <tr key={log.id} className="hover:bg-white/[0.01] transition-colors">
                         <td className="py-3 px-2 font-medium text-white flex items-center space-x-2.5">
-                          {/* Mini Avatar */}
                           <div className="w-6 h-6 rounded-full overflow-hidden bg-gray-800 border border-white/10 shrink-0">
                             {/* eslint-disable-next-line @next/next/no-img-element */}
                             <img 
@@ -418,7 +444,7 @@ export default function DashboardPage() {
                           </div>
                           <span>{log.alumno?.nombre} {log.alumno?.apellido_paterno} {log.alumno?.apellido_materno || ''}</span>
                         </td>
-                        <td className="py-3 px-2 font-mono">{log.alumno?.matricula}</td>
+                        <td className="py-3 px-2 font-mono text-cyan-400">{log.alumno?.matricula}</td>
                         <td className="py-3 px-2 font-medium">{log.alumno?.grado} &quot;{log.alumno?.grupo}&quot;</td>
                         <td className="py-3 px-2">
                           <span className={`inline-block px-2 py-0.5 rounded text-[10px] font-bold uppercase ${
@@ -482,9 +508,9 @@ export default function DashboardPage() {
 
               {/* WhatsApp Header App Bar inside phone */}
               <div className="bg-[#121b22] px-4 py-2 flex items-center space-x-2 border-b border-[#222d34] z-20 shrink-0">
-                <div className="w-6 h-6 rounded-full bg-gradient-to-tr from-cyan-500 to-blue-600 flex items-center justify-center font-bold text-black text-[10px]">D</div>
+                <div className="w-6 h-6 rounded-full bg-gradient-to-tr from-cyan-500 to-blue-600 flex items-center justify-center font-bold text-black text-[10px]">C</div>
                 <div>
-                  <h4 className="text-[10px] font-bold text-[#e9edef] leading-tight">Escuela DOJOIA</h4>
+                  <h4 className="text-[10px] font-bold text-[#e9edef] leading-tight">CECYTE BC</h4>
                   <p className="text-[7px] text-[#8696a0]">Notificaciones de Acceso</p>
                 </div>
               </div>
@@ -492,7 +518,6 @@ export default function DashboardPage() {
               {/* Chat Messages Log Area inside phone */}
               <div className="flex-1 bg-[#0b141a] p-3 overflow-y-auto space-y-3 flex flex-col justify-start relative scrollbar-none">
                 
-                {/* Background WhatsApp style pattern */}
                 <div className="absolute inset-0 bg-[url('https://user-images.githubusercontent.com/15075759/28719144-86dc0f70-73b1-11e7-911d-60d70fcded21.png')] opacity-[0.03] pointer-events-none"></div>
 
                 {waLogs.length === 0 ? (
@@ -535,8 +560,8 @@ export default function DashboardPage() {
 
             </div>
 
-            {/* Clear logs link */}
-            {waLogs.length > 0 && (
+            {/* Clear logs link (Only for Admin) */}
+            {waLogs.length > 0 && user?.role === 'administrador' && (
               <button
                 onClick={() => {
                   clearWhatsAppLogs();

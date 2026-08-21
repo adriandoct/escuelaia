@@ -3,14 +3,18 @@
 'use client';
 
 import React, { useState, useEffect, useRef } from 'react';
+import Link from 'next/link';
 import { db, Alumno, Asistencia } from '@/lib/db';
 import { sendWhatsAppNotification } from '@/lib/whatsapp';
+import { useAuth } from '@/lib/auth';
 import { 
-  Camera, AlertCircle, CheckCircle, RefreshCw, Smartphone, Volume2, ShieldAlert, UserCheck, Play, ArrowRight, UserX
+  Camera, AlertCircle, CheckCircle, RefreshCw, Smartphone, Volume2, ShieldAlert, UserCheck, Play, ArrowRight, UserX, BookOpen, Shield
 } from 'lucide-react';
 import confetti from 'canvas-confetti';
 
 export default function ScannerPage() {
+  const { user } = useAuth();
+
   const [students, setStudents] = useState<Alumno[]>([]);
   const [scanning, setScanning] = useState(false);
   const [activeTab, setActiveTab] = useState<'entrada' | 'salida' | 'auto'>('auto');
@@ -50,7 +54,7 @@ export default function ScannerPage() {
     }
   };
 
-  // Sound generator using HTML5 Web Audio API (No files required!)
+  // Sound generator using HTML5 Web Audio API
   const playBeep = (type: 'success' | 'error' | 'duplicate') => {
     try {
       const ctx = new (window.AudioContext || (window as any).webkitAudioContext)();
@@ -60,9 +64,8 @@ export default function ScannerPage() {
       gain.connect(ctx.destination);
 
       if (type === 'success') {
-        // High pitched pleasant double-beep
         osc.type = 'sine';
-        osc.frequency.setValueAtTime(880, ctx.currentTime); // A5 note
+        osc.frequency.setValueAtTime(880, ctx.currentTime);
         gain.gain.setValueAtTime(0.08, ctx.currentTime);
         osc.start();
         osc.stop(ctx.currentTime + 0.12);
@@ -74,23 +77,21 @@ export default function ScannerPage() {
           osc2.connect(gain2);
           gain2.connect(ctx2.destination);
           osc2.type = 'sine';
-          osc2.frequency.setValueAtTime(1109, ctx2.currentTime); // C#6 note
+          osc2.frequency.setValueAtTime(1109, ctx2.currentTime);
           gain2.gain.setValueAtTime(0.08, ctx2.currentTime);
           osc2.start();
           osc2.stop(ctx2.currentTime + 0.15);
         }, 120);
 
       } else if (type === 'duplicate') {
-        // Warning dual buzz tones
         osc.type = 'triangle';
-        osc.frequency.setValueAtTime(330, ctx.currentTime); // E3 note
+        osc.frequency.setValueAtTime(330, ctx.currentTime);
         gain.gain.setValueAtTime(0.12, ctx.currentTime);
         osc.start();
         osc.stop(ctx.currentTime + 0.25);
       } else {
-        // Low pitched error buzz
         osc.type = 'sawtooth';
-        osc.frequency.setValueAtTime(150, ctx.currentTime); // Low buzz
+        osc.frequency.setValueAtTime(150, ctx.currentTime);
         gain.gain.setValueAtTime(0.15, ctx.currentTime);
         osc.start();
         osc.stop(ctx.currentTime + 0.4);
@@ -106,7 +107,6 @@ export default function ScannerPage() {
       setScanning(true);
       const { Html5Qrcode } = await import('html5-qrcode');
       
-      // Stop any existing instance
       if (scannerRef.current) {
         await stopCamera();
       }
@@ -123,11 +123,10 @@ export default function ScannerPage() {
         { facingMode: 'environment' },
         config,
         async (decodedText) => {
-          // Success callback
           await processScanResult(decodedText);
         },
         () => {
-          // Silent errors (searching for QR code)
+          // Silent callback
         }
       );
       setCameraPermission(true);
@@ -155,83 +154,85 @@ export default function ScannerPage() {
   // Master check-in logic
   const processScanResult = async (matricula: string) => {
     try {
-      // Temporarily halt scanning to display student popup card
       if (scannerRef.current && scannerRef.current.isScanning) {
         await scannerRef.current.pause(true);
       }
 
-      // Convert override tab values to parameters
       const overrideVal = activeTab === 'auto' ? undefined : activeTab;
       
-      // Save check-in
       const { asistencia, alumno, duplicateWarning } = await db.registrarAsistencia(
         matricula,
-        overrideVal
+        overrideVal,
+        'Cámara Escáner Web',
+        'Acceso Principal CECYTE',
+        user?.name || 'Encargado de Orden'
       );
 
-      // Trigger parents notification SMS/WhatsApp (runs in background)
       await sendWhatsAppNotification(alumno, asistencia);
 
-      // UI Reactions
       if (duplicateWarning) {
         playBeep('duplicate');
         setActiveScan({
           success: true,
           student: alumno,
           asistencia,
-          msg: `Acceso Registrado (${asistencia.tipo === 'entrada' ? 'ENTRADA' : 'SALIDA'}).`,
+          msg: `¡Advertencia! El alumno ya fue escaneado hace menos de 30 segundos. Registro guardado como '${asistencia.tipo.toUpperCase()}'.`,
           duplicate: true
         });
       } else {
         playBeep('success');
-        confetti({
-          particleCount: 50,
-          spread: 40,
-          origin: { y: 0.8 }
-        });
+        
+        try {
+          confetti({
+            particleCount: 40,
+            spread: 60,
+            origin: { y: 0.7 }
+          });
+        } catch (e) {
+          // Fallback if confetti fails
+        }
+
         setActiveScan({
           success: true,
           student: alumno,
           asistencia,
-          msg: `¡Acceso Exitoso! ${asistencia.tipo === 'entrada' ? 'Entrada' : 'Salida'} registrada correctamente.`
+          msg: `¡Acceso Registrado Exitosamente! (${asistencia.tipo.toUpperCase()})`
         });
       }
 
-      // Auto close/resume scan after 4.5 seconds
       setTimeout(async () => {
-        handleDismissScan();
-      }, 4500);
+        if (scannerRef.current) {
+          try {
+            await scannerRef.current.resume();
+          } catch (e) {
+            // Ignored
+          }
+        }
+      }, 4000);
 
-    } catch (error: any) {
+    } catch (err: any) {
       playBeep('error');
       setActiveScan({
         success: false,
-        msg: error.message || 'Código QR no reconocido o error en el sistema.'
+        msg: err.message || 'Código QR no reconocido o estudiante no registrado.'
       });
 
       setTimeout(async () => {
-        handleDismissScan();
-      }, 4500);
+        if (scannerRef.current) {
+          try {
+            await scannerRef.current.resume();
+          } catch (e) {
+            // Ignored
+          }
+        }
+      }, 3500);
     }
   };
 
-  const handleDismissScan = async () => {
-    setActiveScan(null);
-    if (scanning && scannerRef.current) {
-      try {
-        scannerRef.current.resume();
-      } catch (e) {
-        // If resume fails, restart camera
-        startCamera();
-      }
-    }
-  };
-
-  // Action bypass triggers
   const handleManualSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!manualMatricula.trim()) return;
-    processScanResult(manualMatricula.trim());
+    if (!manualMatricula) return;
+    processScanResult(manualMatricula);
     setManualMatricula('');
   };
 
@@ -240,277 +241,217 @@ export default function ScannerPage() {
     processScanResult(simulatedStudentId);
   };
 
+  // Notice for Teachers
+  if (user?.role === 'docente') {
+    return (
+      <div className="flex-1 flex flex-col items-center justify-center py-16 text-center space-y-6">
+        <div className="w-20 h-20 rounded-3xl bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 flex items-center justify-center text-4xl shadow-xl shadow-emerald-500/10">
+          👨‍🏫
+        </div>
+        <div className="space-y-2 max-w-lg">
+          <h2 className="text-3xl font-black text-white">Escáner General Reservado</h2>
+          <p className="text-gray-400 text-sm leading-relaxed">
+            El escáner QR de torniquete/acceso principal está configurado para ser operado por los <span className="text-cyan-400 font-semibold">Encargados de Orden</span> y <span className="text-amber-400 font-semibold">Administradores</span>.
+          </p>
+          <p className="text-gray-400 text-sm leading-relaxed">
+            Como Docente, puedes realizar el pase de lista y consultar el estado de tu grupo en el <span className="text-emerald-400 font-semibold">Panel Docente</span>.
+          </p>
+        </div>
+        <Link
+          href="/dashboard/teacher"
+          className="px-6 py-3 rounded-2xl bg-gradient-to-r from-emerald-500 to-teal-600 text-black font-extrabold text-sm shadow-lg shadow-emerald-500/20 hover:opacity-95 transition-all flex items-center space-x-2"
+        >
+          <BookOpen size={18} />
+          <span>Ir a Mi Panel Docente →</span>
+        </Link>
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-8 pb-10 flex-1 flex flex-col">
       
-      {/* Title */}
+      {/* Title & Mode Switchers */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
-          <h2 className="text-3xl font-extrabold text-white tracking-tight">Registro de Accesos QR</h2>
-          <p className="text-gray-400 text-sm mt-1">Escanea credenciales de alumnos para controlar su ingreso/salida y notificar a sus acudientes.</p>
+          <div className="flex items-center space-x-2">
+            <span className="text-xs px-2.5 py-0.5 rounded-full bg-cyan-500/10 border border-cyan-500/20 text-cyan-400 font-bold uppercase">
+              {user?.role === 'administrador' ? '👑 Administrador' : '🛡️ Encargado de Orden'}
+            </span>
+          </div>
+          <h2 className="text-3xl font-extrabold text-white tracking-tight mt-1">Escáner de Acceso Institucional</h2>
+          <p className="text-gray-400 text-sm">Escanea credenciales de alumnos para validar ingresos/salidas y disparar notificaciones WhatsApp.</p>
         </div>
 
-        {/* Access mode selection bar */}
-        <div className="bg-white/5 border border-white/10 rounded-xl p-1 flex">
-          {(['auto', 'entrada', 'salida'] as const).map((tab) => (
-            <button
-              key={tab}
-              onClick={() => setActiveTab(tab)}
-              className={`px-4 py-1.5 rounded-lg text-xs font-bold uppercase tracking-wider transition-all cursor-pointer ${
-                activeTab === tab 
-                  ? 'bg-gradient-to-r from-cyan-500 to-blue-600 text-black shadow-md shadow-cyan-500/10' 
-                  : 'text-gray-400 hover:text-white'
-              }`}
-            >
-              {tab === 'auto' ? '🔄 Inteligente' : tab === 'entrada' ? '✅ Entrada' : '🚪 Salida'}
-            </button>
-          ))}
+        {/* Tab Switcher Mode */}
+        <div className="flex items-center p-1 glass-panel rounded-2xl border-cyan-500/20 self-start sm:self-auto">
+          <button
+            onClick={() => setActiveTab('auto')}
+            className={`px-4 py-2 rounded-xl text-xs font-extrabold transition-all cursor-pointer ${
+              activeTab === 'auto'
+                ? 'bg-gradient-to-r from-cyan-500 to-blue-600 text-black shadow-lg shadow-cyan-500/20'
+                : 'text-gray-400 hover:text-white'
+            }`}
+          >
+            🔄 Detección Auto
+          </button>
+          <button
+            onClick={() => setActiveTab('entrada')}
+            className={`px-4 py-2 rounded-xl text-xs font-extrabold transition-all cursor-pointer ${
+              activeTab === 'entrada'
+                ? 'bg-emerald-500 text-black shadow-lg shadow-emerald-500/20'
+                : 'text-gray-400 hover:text-white'
+            }`}
+          >
+            ✅ Forzar Entrada
+          </button>
+          <button
+            onClick={() => setActiveTab('salida')}
+            className={`px-4 py-2 rounded-xl text-xs font-extrabold transition-all cursor-pointer ${
+              activeTab === 'salida'
+                ? 'bg-blue-500 text-black shadow-lg shadow-blue-500/20'
+                : 'text-gray-400 hover:text-white'
+            }`}
+          >
+            🚪 Forzar Salida
+          </button>
         </div>
       </div>
 
-      {/* Main Grid: Left Scanner Panel (2 cols) | Right Simulator/Logs Panel (1 col) */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 flex-1">
+      {/* Main Grid: Video Stream Camera (2 cols) & Controls Side (1 col) */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
         
-        {/* Left Side: Scanner Camera Wrapper */}
-        <div className="lg:col-span-2 flex flex-col">
-          
-          <div className="glass-panel rounded-2xl overflow-hidden flex-1 flex flex-col border-cyan-500/10 min-h-[400px] relative">
+        {/* Camera View Area */}
+        <div className="lg:col-span-2 space-y-6">
+          <div className="glass-panel p-6 rounded-3xl relative overflow-hidden flex flex-col items-center justify-center min-h-[380px] border-cyan-500/20 shadow-2xl">
             
-            {/* Ambient Background glow while scanning */}
-            {scanning && (
-              <div className="absolute inset-0 bg-cyan-500/[0.02] pulse-border pointer-events-none z-0"></div>
-            )}
+            <div id={videoContainerId} className="w-full max-w-md h-full rounded-2xl overflow-hidden shadow-inner border border-white/10 bg-black relative">
+              
+              {!scanning && (
+                <div className="absolute inset-0 flex flex-col items-center justify-center p-6 text-center space-y-4 bg-[#080b12] z-10">
+                  <div className="w-20 h-20 rounded-full bg-cyan-500/10 border border-cyan-500/30 flex items-center justify-center text-cyan-400 text-3xl animate-pulse">
+                    🎥
+                  </div>
+                  <div className="space-y-1">
+                    <h3 className="text-xl font-bold text-white">Cámara Inactiva</h3>
+                    <p className="text-gray-400 text-xs max-w-xs mx-auto">Activa la cámara del dispositivo para iniciar el escaneo continuo de credenciales de alumnos.</p>
+                  </div>
+                  <button
+                    onClick={startCamera}
+                    className="px-6 py-3 rounded-xl bg-gradient-to-r from-cyan-500 to-blue-600 text-black font-extrabold text-sm shadow-[0_0_25px_rgba(6,182,212,0.3)] hover:scale-105 transition-all flex items-center space-x-2 cursor-pointer"
+                  >
+                    <Play size={16} fill="black" />
+                    <span>Iniciar Cámara web</span>
+                  </button>
+                </div>
+              )}
 
-            {/* Title Bar */}
-            <div className="px-6 py-4 border-b border-white/5 flex items-center justify-between z-10 bg-black/20 backdrop-blur-sm">
-              <div className="flex items-center space-x-2.5">
-                <div className={`w-2.5 h-2.5 rounded-full ${scanning ? 'bg-cyan-400 animate-pulse' : 'bg-red-400'}`}></div>
-                <span className="text-xs font-bold text-gray-300 uppercase tracking-widest">
-                  {scanning ? 'Cámara de Acceso Activa' : 'Cámara Desactivada'}
-                </span>
-              </div>
-
-              {scanning ? (
-                <button
-                  onClick={stopCamera}
-                  className="text-xs text-red-400 font-semibold hover:underline cursor-pointer"
-                >
-                  Detener Cámara
-                </button>
-              ) : (
-                <button
-                  onClick={startCamera}
-                  className="flex items-center space-x-1.5 px-3 py-1.5 rounded-lg bg-cyan-500/10 border border-cyan-500/20 text-cyan-400 text-xs font-bold hover:bg-cyan-500/20 transition-all cursor-pointer"
-                >
-                  <Camera size={14} />
-                  <span>Encender Cámara</span>
-                </button>
+              {/* Scanning Laser visual animation line when camera active */}
+              {scanning && (
+                <div className="absolute inset-x-0 h-1 bg-gradient-to-r from-transparent via-cyan-400 to-transparent top-1/2 -translate-y-1/2 shadow-[0_0_15px_#00f2fe] z-20 animate-pulse pointer-events-none"></div>
               )}
             </div>
 
-            {/* Video Container Area */}
-            <div className="flex-1 flex flex-col justify-center items-center p-6 relative min-h-[300px]">
-              
-              {/* Webcam view element wrapper */}
-              <div className="w-full max-w-sm aspect-square relative rounded-2xl overflow-hidden bg-black/60 border border-white/5 shadow-2xl flex items-center justify-center">
-                
-                {/* 1. Camera Video Feed target element */}
-                <div 
-                  id={videoContainerId} 
-                  className={`w-full h-full object-cover transition-opacity ${scanning ? 'opacity-100' : 'opacity-0 absolute'}`}
-                ></div>
-
-                {/* 2. Custom Neon Scanner Overlays */}
-                {scanning && !activeScan && (
-                  <div className="absolute inset-0 z-10 pointer-events-none flex flex-col justify-between p-1">
-                    
-                    {/* Scanner Target Frame Border box */}
-                    <div className="absolute inset-[15%] corner-border">
-                      {/* Laser Line */}
-                      <div className="scanner-laser"></div>
-                      <span></span>
-                    </div>
-
-                    <div className="w-full text-center bg-black/50 py-1.5 text-[10px] text-gray-400 backdrop-blur-sm mt-auto z-20 font-medium">
-                      Coloque el código QR dentro del marco
-                    </div>
-                  </div>
-                )}
-
-                {/* 3. Camera Disabled/Off Display placeholder */}
-                {!scanning && !activeScan && (
-                  <div className="text-center space-y-4 p-8 z-10">
-                    <div className="w-16 h-16 rounded-full bg-white/5 border border-white/10 flex items-center justify-center text-gray-400 mx-auto text-3xl">
-                      📷
-                    </div>
-                    <div className="space-y-1">
-                      <h4 className="font-bold text-white text-sm">Dispositivo de Acceso Escolar</h4>
-                      <p className="text-gray-500 text-xs max-w-[240px] mx-auto">Active la cámara para iniciar el escaneo inteligente de códigos QR.</p>
-                    </div>
-                    <button
-                      onClick={startCamera}
-                      className="px-5 py-2 rounded-xl bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-400 hover:to-blue-500 text-black font-extrabold text-xs shadow-lg shadow-cyan-500/10 transition-all cursor-pointer"
-                    >
-                      Permitir y Encender
-                    </button>
-                  </div>
-                )}
-
-                {/* 4. Active scan RESULT feedback card overlays */}
-                {activeScan && (
-                  <div className={`absolute inset-0 z-20 flex flex-col items-center justify-center p-6 text-center animate-fade-in ${
-                    !activeScan.success 
-                      ? 'glass-panel-red-glow' 
-                      : activeScan.duplicate 
-                        ? 'glass-panel-glow border-amber-500/30' 
-                        : 'glass-panel-green-glow'
-                  }`}>
-                    
-                    {/* Access Result Icon and Header */}
-                    {activeScan.success ? (
-                      activeScan.duplicate ? (
-                        <div className="w-14 h-14 rounded-full bg-amber-500/10 border border-amber-500/30 flex items-center justify-center text-amber-400 mb-4 animate-bounce">
-                          <ShieldAlert size={28} />
-                        </div>
-                      ) : (
-                        <div className="w-14 h-14 rounded-full bg-emerald-500/10 border border-emerald-500/30 flex items-center justify-center text-emerald-400 mb-4 animate-bounce">
-                          <CheckCircle size={28} />
-                        </div>
-                      )
-                    ) : (
-                      <div className="w-14 h-14 rounded-full bg-red-500/10 border border-red-500/30 flex items-center justify-center text-red-400 mb-4 animate-bounce">
-                        <UserX size={28} />
-                      </div>
-                    )}
-
-                    {/* Student details display on successful scan */}
-                    {activeScan.success && activeScan.student && activeScan.asistencia && (
-                      <div className="space-y-4 w-full">
-                        {/* Student Avatar */}
-                        <div className="w-20 h-20 rounded-full overflow-hidden border-2 border-white/20 mx-auto shadow-xl bg-black/40">
-                          {/* eslint-disable-next-line @next/next/no-img-element */}
-                          <img 
-                            src={activeScan.student.foto_url || `https://api.dicebear.com/7.x/bottts/svg?seed=${activeScan.student.matricula}`} 
-                            alt={activeScan.student.nombre}
-                            className="w-full h-full object-cover"
-                          />
-                        </div>
-
-                        {/* Text Meta */}
-                        <div className="space-y-1">
-                          <span className={`inline-block text-[10px] font-extrabold px-2 py-0.5 rounded-full uppercase tracking-wider ${
-                            activeScan.duplicate
-                              ? 'bg-amber-500/20 text-amber-300 border border-amber-500/30'
-                              : activeScan.asistencia.tipo === 'entrada'
-                                ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/30'
-                                : 'bg-blue-500/20 text-blue-300 border border-blue-500/30'
-                          }`}>
-                            {activeScan.duplicate 
-                              ? '⚠️ DUPLICADO EN 30s' 
-                              : activeScan.asistencia.tipo === 'entrada' 
-                                ? '✅ ENTRADA REGISTRADA' 
-                                : '🚪 SALIDA REGISTRADA'}
-                          </span>
-                          <h3 className="text-xl font-black text-white">{activeScan.student.nombre} {activeScan.student.apellido_paterno} {activeScan.student.apellido_materno || ''}</h3>
-                          <p className="text-xs text-gray-400 font-semibold">{activeScan.student.grado} &quot;{activeScan.student.grupo}&quot; • <span className="font-mono">{activeScan.student.matricula}</span></p>
-                        </div>
-
-                        {/* Timestamp logs & whatsapp prompt */}
-                        <div className="bg-black/40 border border-white/5 rounded-xl py-2 px-3 inline-flex items-center space-x-2 text-xs font-semibold text-gray-300">
-                          <span>🕒 {activeScan.asistencia.hora}</span>
-                          <span>•</span>
-                          <span className="text-emerald-400">💬 Envío WhatsApp listo</span>
-                        </div>
-                      </div>
-                    )}
-
-                    {/* Error display */}
-                    {!activeScan.success && (
-                      <div className="space-y-2 max-w-xs">
-                        <h3 className="text-lg font-black text-white">Denegado / No Registrado</h3>
-                        <p className="text-xs text-gray-400 leading-relaxed">{activeScan.msg}</p>
-                      </div>
-                    )}
-
-                    {/* Resume Scanner Button override */}
-                    <button
-                      onClick={handleDismissScan}
-                      className="mt-6 px-4 py-1.5 rounded-lg bg-white/10 hover:bg-white/15 border border-white/15 text-xs text-white font-bold transition-all cursor-pointer"
-                    >
-                      Continuar Escaneo
-                    </button>
-
-                  </div>
-                )}
-
+            {scanning && (
+              <div className="mt-4 flex items-center space-x-4">
+                <button
+                  onClick={stopCamera}
+                  className="px-4 py-2 rounded-xl glass-panel text-xs text-red-400 font-bold hover:bg-red-500/10 transition-all flex items-center space-x-1.5 cursor-pointer"
+                >
+                  <span>⏹ Detener Cámara</span>
+                </button>
               </div>
+            )}
 
-            </div>
+            {/* Scan Alert Notification Card overlay */}
+            {activeScan && (
+              <div className={`mt-6 w-full max-w-md p-5 rounded-2xl border text-sm flex items-start space-x-3.5 animate-slide-up shadow-2xl ${
+                activeScan.success
+                  ? activeScan.duplicate
+                    ? 'bg-amber-500/10 border-amber-500/30 text-amber-300'
+                    : 'bg-emerald-500/10 border-emerald-500/30 text-emerald-300'
+                  : 'bg-red-500/10 border-red-500/30 text-red-300'
+              }`}>
+                {activeScan.success ? (
+                  activeScan.duplicate ? (
+                    <AlertCircle size={24} className="shrink-0 text-amber-400 mt-0.5" />
+                  ) : (
+                    <CheckCircle size={24} className="shrink-0 text-emerald-400 mt-0.5" />
+                  )
+                ) : (
+                  <ShieldAlert size={24} className="shrink-0 text-red-400 mt-0.5" />
+                )}
 
-            {/* Bottom Status bar */}
-            {cameraPermission === false && (
-              <div className="bg-red-500/10 border-t border-red-500/20 px-6 py-3 flex items-center space-x-2 text-xs text-red-400 z-10">
-                <AlertCircle size={16} />
-                <span>Error de acceso a la cámara. Verifique que posee webcam y ha brindado permisos en el navegador.</span>
+                <div className="space-y-1 flex-1">
+                  <h4 className="font-bold text-white text-base">
+                    {activeScan.student 
+                      ? `${activeScan.student.nombre} ${activeScan.student.apellido_paterno}`
+                      : 'Notificación de Escaneo'}
+                  </h4>
+                  <p className="text-xs leading-relaxed">{activeScan.msg}</p>
+                  
+                  {activeScan.asistencia && (
+                    <div className="flex items-center space-x-4 text-[11px] pt-2 text-gray-300 font-mono">
+                      <span>Hora: {activeScan.asistencia.hora}</span>
+                      <span>•</span>
+                      <span>Tutor: {activeScan.student?.tutor}</span>
+                    </div>
+                  )}
+                </div>
               </div>
             )}
 
           </div>
-
         </div>
 
-        {/* Right Side: Control Panels, Scan Simulator, and Manual Override */}
+        {/* Right Side: Simulator for Quick Evaluation & Manual Input */}
         <div className="space-y-6">
           
-          {/* Section 1: Demonstration Scan Simulator */}
-          <div className="glass-panel p-6 rounded-2xl border-cyan-500/10 space-y-4">
-            <div>
-              <h3 className="text-lg font-bold text-white">Simulador de Acceso</h3>
-              <p className="text-gray-400 text-xs">Utiliza este simulador para probar los flujos de entrada, sonido, confeti y WhatsApp sin usar la cámara.</p>
+          {/* Section 1: Simulated QR Scan for Testing without physical camera */}
+          <div className="glass-panel p-6 rounded-2xl border-cyan-500/20 space-y-4 bg-gradient-to-b from-[#0e1322] to-[#08090d]">
+            <div className="flex items-center space-x-2">
+              <span className="text-lg">⚡</span>
+              <h3 className="text-base font-bold text-white">Escaneo Simulado de Prueba</h3>
             </div>
+            <p className="text-gray-400 text-xs">Prueba el registro instantáneo con sonido, notificación a WhatsApp y animación seleccionando un alumno:</p>
 
             {students.length === 0 ? (
-              <div className="text-center text-xs text-gray-500 py-4 bg-black/20 border border-white/5 rounded-xl">
-                Agrega alumnos en el directorio primero.
-              </div>
+              <div className="text-xs text-gray-500 py-2">No hay alumnos registrados.</div>
             ) : (
               <div className="space-y-3">
-                <div className="space-y-1">
-                  <label className="text-[10px] text-gray-400 uppercase tracking-wider font-semibold">Seleccionar Alumno</label>
-                  <select
-                    value={simulatedStudentId}
-                    onChange={(e) => setSimulatedStudentId(e.target.value)}
-                    className="w-full glass-input px-3 py-2.5 rounded-xl text-sm font-medium"
-                  >
-                    {students.map(s => (
-                      <option key={s.id} value={s.matricula}>
-                        {s.nombre} {s.apellido_paterno} {s.apellido_materno || ''} ({s.matricula})
-                      </option>
-                    ))}
-                  </select>
-                </div>
+                <select
+                  value={simulatedStudentId}
+                  onChange={(e) => setSimulatedStudentId(e.target.value)}
+                  className="w-full glass-input py-2.5 px-3 rounded-xl text-xs text-white bg-[#0a0f1d] border-white/10"
+                >
+                  {students.map((st) => (
+                    <option key={st.id} value={st.matricula}>
+                      {st.nombre} {st.apellido_paterno} ({st.matricula}) - {st.grado} &quot;{st.grupo}&quot;
+                    </option>
+                  ))}
+                </select>
 
                 <button
+                  type="button"
                   onClick={handleSimulatedScan}
-                  className="w-full flex items-center justify-center space-x-2 px-4 py-3 rounded-xl bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-400 hover:to-blue-500 text-black font-extrabold text-sm shadow-[0_0_15px_rgba(6,182,212,0.2)] transition-all cursor-pointer"
+                  className="w-full py-3 rounded-xl bg-gradient-to-r from-cyan-500 to-blue-600 text-black font-extrabold text-xs shadow-lg shadow-cyan-500/20 hover:opacity-95 transition-all flex items-center justify-center space-x-2 cursor-pointer"
                 >
-                  <Play size={14} />
                   <span>Simular Lectura QR</span>
+                  <span>→</span>
                 </button>
               </div>
             )}
           </div>
 
-          {/* Section 2: Manual Matricula Override Form */}
+          {/* Section 2: Manual Matricula Form */}
           <div className="glass-panel p-6 rounded-2xl border-cyan-500/10 space-y-4">
             <div>
-              <h3 className="text-lg font-bold text-white">Ingreso Manual</h3>
-              <p className="text-gray-400 text-xs">Si el código QR de la credencial está deteriorado o no se dispone de lector, digite la matrícula manualmente.</p>
+              <h3 className="text-lg font-bold text-white">Ingreso Manual por Matrícula</h3>
+              <p className="text-gray-400 text-xs">Si la credencial presenta desgaste, digite la matrícula manualmente:</p>
             </div>
 
             <form onSubmit={handleManualSubmit} className="space-y-3">
               <div className="space-y-1">
-                <label className="text-[10px] text-gray-400 uppercase tracking-wider font-semibold">Matrícula o Código</label>
                 <div className="relative">
                   <input
                     type="text"
@@ -529,17 +470,6 @@ export default function ScannerPage() {
                 </div>
               </div>
             </form>
-          </div>
-
-          {/* Section 3: User Advice Guidelines */}
-          <div className="glass-panel p-6 rounded-2xl border-white/5 space-y-3 text-xs text-gray-400 leading-relaxed">
-            <h4 className="font-bold text-white">💡 Consejos para escaneo óptimo:</h4>
-            <ul className="list-disc pl-4 space-y-1">
-              <li>Asegure iluminación de frente en las credenciales impresas.</li>
-              <li>Mantenga la lente de la cámara limpia.</li>
-              <li>Ajuste el brillo de la pantalla de celulares a 100% si lee códigos QR digitales.</li>
-              <li>La detección inteligente alternará automáticamente el tipo de registro (Entrada ⇄ Salida) en base a los registros previos del alumno en el día.</li>
-            </ul>
           </div>
 
         </div>
