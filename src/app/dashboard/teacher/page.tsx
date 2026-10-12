@@ -174,7 +174,7 @@ export default function TeacherDashboardPage() {
         <div className="flex items-center space-x-4 w-full md:w-auto">
           <div className="flex items-center space-x-2">
             <span className="text-xs font-bold text-gray-400 uppercase tracking-wider">Grado:</span>
-            {['1°', '2°', '3°'].map((g) => (
+            {['1°', '3°', '5°'].map((g) => (
               <button
                 key={g}
                 onClick={() => setSelectedGrade(g)}

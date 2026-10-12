@@ -129,8 +129,8 @@ export default function StudentsPage() {
     return matchesSearch && matchesGrade && matchesGroup;
   });
 
-  // Dynamically extract available grades (prioritizing 1°, 3° and 5° for current school cycle) and groups
-  const availableGrades = Array.from(new Set(['1°', '3°', '5°', '2°', '4°', '6°', ...students.map(s => s.grado)])).filter(Boolean);
+  // Grados escolares oficiales: 1°, 3° y 5° grado
+  const availableGrades = ['1°', '3°', '5°'];
   const availableGroups = Array.from(new Set(['A', 'B', 'C', ...students.map(s => s.grupo)])).filter(Boolean);
 
   const handlePrint = () => {
@@ -528,9 +528,6 @@ export default function StudentsPage() {
                       <option value="1°">1° Grado</option>
                       <option value="3°">3° Grado</option>
                       <option value="5°">5° Grado</option>
-                      <option value="2°">2° Grado</option>
-                      <option value="4°">4° Grado</option>
-                      <option value="6°">6° Grado</option>
                     </select>
                   </div>
 

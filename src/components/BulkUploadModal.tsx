@@ -751,24 +751,15 @@ export default function BulkUploadModal({ isOpen, onClose, onSuccess }: BulkUplo
                   </div>
                 </div>
 
-                {/* 3. Grade Selection: Prominently 1°, 3° and 5° for this cycle */}
+                {/* 3. Grade Selection: Strictly 1°, 3° and 5° for this cycle */}
                 <div className="space-y-1.5">
-                  <div className="flex items-center justify-between">
-                    <label className="text-xs text-gray-300 font-bold block">
-                      Grado Escolar:
-                    </label>
-                    <button
-                      type="button"
-                      onClick={() => setCycleType(cycleType === 'impares' ? 'pares' : 'impares')}
-                      className="text-[10px] text-cyan-400 hover:underline"
-                    >
-                      {cycleType === 'impares' ? 'Ver 2°, 4°, 6°' : 'Ver Ciclo 1°, 3°, 5°'}
-                    </button>
-                  </div>
+                  <label className="text-xs text-gray-300 font-bold block">
+                    Grado Escolar (Ciclo Actual):
+                  </label>
 
-                  {/* Buttons for 1°, 3°, 5° (Ciclo Actual) */}
+                  {/* Buttons for 1°, 3°, 5° */}
                   <div className="grid grid-cols-3 gap-2">
-                    {(cycleType === 'impares' ? ['1°', '3°', '5°'] : ['2°', '4°', '6°']).map((grade) => (
+                    {['1°', '3°', '5°'].map((grade) => (
                       <button
                         key={grade}
                         type="button"
@@ -779,7 +770,7 @@ export default function BulkUploadModal({ isOpen, onClose, onSuccess }: BulkUplo
                             : 'bg-white/5 text-gray-300 border-white/5 hover:bg-white/10'
                         }`}
                       >
-                        {grade}
+                        {grade} Grado
                       </button>
                     ))}
                   </div>

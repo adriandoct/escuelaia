@@ -184,7 +184,7 @@ export default function DashboardPage() {
 
     const maxCount = Math.max(...hourCounts, 1);
     
-    const grades = ['1°', '2°', '3°'];
+    const grades = ['1°', '3°', '5°'];
     const gradePresents = grades.map(g => {
       const gradeStudents = students.filter(s => s.grado === g);
       if (gradeStudents.length === 0) return 0;
@@ -406,8 +406,8 @@ export default function DashboardPage() {
                 >
                   <option value="">Todos los Grados</option>
                   <option value="1°">1°</option>
-                  <option value="2°">2°</option>
                   <option value="3°">3°</option>
+                  <option value="5°">5°</option>
                 </select>
               </div>
             </div>
