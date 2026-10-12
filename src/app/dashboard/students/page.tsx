@@ -6,8 +6,9 @@ import React, { useState, useEffect } from 'react';
 import { db, Alumno } from '@/lib/db';
 import { useAuth } from '@/lib/auth';
 import { 
-  Search, Plus, Printer, Trash2, X, User, Phone, Shield, Lock
+  Search, Plus, Printer, Trash2, X, User, Phone, Shield, Lock, FileSpreadsheet
 } from 'lucide-react';
+import BulkUploadModal from '@/components/BulkUploadModal';
 
 export default function StudentsPage() {
   const { user } = useAuth();
@@ -17,6 +18,7 @@ export default function StudentsPage() {
   const [gradeFilter, setGradeFilter] = useState('');
   const [groupFilter, setGroupFilter] = useState('');
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [isBulkModalOpen, setIsBulkModalOpen] = useState(false);
   const [selectedStudent, setSelectedStudent] = useState<Alumno | null>(null);
   
   // Form State
@@ -127,6 +129,10 @@ export default function StudentsPage() {
     return matchesSearch && matchesGrade && matchesGroup;
   });
 
+  // Dynamically extract available grades and groups
+  const availableGrades = Array.from(new Set(['1°', '2°', '3°', ...students.map(s => s.grado)])).filter(Boolean).sort();
+  const availableGroups = Array.from(new Set(['A', 'B', 'C', ...students.map(s => s.grupo)])).filter(Boolean).sort();
+
   const handlePrint = () => {
     window.print();
   };
@@ -139,20 +145,31 @@ export default function StudentsPage() {
         <div>
           <h2 className="text-3xl font-extrabold text-white tracking-tight">Directorio Escolar de Alumnos</h2>
           <p className="text-gray-400 text-sm mt-1">
-            Consulta expedientes y genera credenciales digitales QR.
+            Consulta expedientes, genera credenciales digitales QR y gestiona matrículas por grupo.
           </p>
         </div>
 
-        <div className="flex items-center space-x-3">
-          {/* Register Student Button ONLY for Admin */}
+        <div className="flex flex-wrap items-center gap-3">
+          {/* Action Buttons ONLY for Admin */}
           {user?.role === 'administrador' ? (
-            <button
-              onClick={() => setIsModalOpen(true)}
-              className="flex items-center space-x-2 px-5 py-2.5 rounded-xl bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-400 hover:to-blue-500 text-black font-extrabold text-sm shadow-[0_0_20px_rgba(6,182,212,0.25)] transition-all cursor-pointer"
-            >
-              <Plus size={16} />
-              <span>Registrar Alumno</span>
-            </button>
+            <>
+              <button
+                onClick={() => setIsBulkModalOpen(true)}
+                className="flex items-center space-x-2 px-4 py-2.5 rounded-xl bg-gradient-to-r from-emerald-500/20 to-teal-500/20 hover:from-emerald-500/30 hover:to-teal-500/30 border border-emerald-500/40 text-emerald-300 font-extrabold text-sm shadow-[0_0_15px_rgba(16,185,129,0.2)] transition-all cursor-pointer"
+                title="Subir lista de alumnos desde Excel o CSV"
+              >
+                <FileSpreadsheet size={16} className="text-emerald-400" />
+                <span>Subir por Grupos (Excel)</span>
+              </button>
+
+              <button
+                onClick={() => setIsModalOpen(true)}
+                className="flex items-center space-x-2 px-5 py-2.5 rounded-xl bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-400 hover:to-blue-500 text-black font-extrabold text-sm shadow-[0_0_20px_rgba(6,182,212,0.25)] transition-all cursor-pointer"
+              >
+                <Plus size={16} />
+                <span>Registrar Alumno</span>
+              </button>
+            </>
           ) : (
             <div className="flex items-center space-x-1.5 px-3.5 py-2 rounded-xl bg-white/5 border border-white/10 text-gray-400 text-xs font-semibold">
               <Lock size={14} className="text-amber-400" />
@@ -191,9 +208,9 @@ export default function StudentsPage() {
                 className="flex-1 md:flex-initial glass-input px-4 py-2.5 rounded-xl text-xs sm:text-sm font-medium bg-[#0b0f1a]"
               >
                 <option value="">Todos los Grados</option>
-                <option value="1°">1° Grado</option>
-                <option value="2°">2° Grado</option>
-                <option value="3°">3° Grado</option>
+                {availableGrades.map(g => (
+                  <option key={g} value={g}>{g} Grado</option>
+                ))}
               </select>
 
               <select
@@ -202,9 +219,9 @@ export default function StudentsPage() {
                 className="flex-1 md:flex-initial glass-input px-4 py-2.5 rounded-xl text-xs sm:text-sm font-medium bg-[#0b0f1a]"
               >
                 <option value="">Todos los Grupos</option>
-                <option value="A">Grupo A</option>
-                <option value="B">Grupo B</option>
-                <option value="C">Grupo C</option>
+                {availableGroups.map(grp => (
+                  <option key={grp} value={grp}>Grupo {grp}</option>
+                ))}
               </select>
             </div>
 
@@ -537,10 +554,21 @@ export default function StudentsPage() {
               </div>
 
             </form>
-
           </div>
         </div>
       )}
+
+      {/* Bulk Upload Modal (Admin only) */}
+      <BulkUploadModal
+        isOpen={isBulkModalOpen}
+        onClose={() => setIsBulkModalOpen(false)}
+        onSuccess={(targetGroup) => {
+          loadStudents();
+          if (targetGroup) {
+            setGroupFilter(targetGroup);
+          }
+        }}
+      />
 
     </div>
   );

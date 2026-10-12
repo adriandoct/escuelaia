@@ -266,7 +266,7 @@ export const db = {
     if (supabase) {
       const { data, error } = await supabase
         .from('alumnos')
-        .insert(alumnos)
+        .upsert(alumnos, { onConflict: 'matricula' })
         .select();
       if (error) throw error;
       return data || [];
@@ -276,13 +276,19 @@ export const db = {
       const added: Alumno[] = [];
       
       alumnos.forEach((al, idx) => {
-        const newAlumno: Alumno = {
-          ...al,
-          id: `student-${Date.now()}-${idx}-${Math.floor(Math.random() * 1000)}`,
-          created_at: new Date().toISOString()
-        };
-        list.push(newAlumno);
-        added.push(newAlumno);
+        const existingIdx = list.findIndex(item => item.matricula === al.matricula);
+        if (existingIdx >= 0) {
+          list[existingIdx] = { ...list[existingIdx], ...al };
+          added.push(list[existingIdx]);
+        } else {
+          const newAlumno: Alumno = {
+            ...al,
+            id: `student-${Date.now()}-${idx}-${Math.floor(Math.random() * 1000)}`,
+            created_at: new Date().toISOString()
+          };
+          list.push(newAlumno);
+          added.push(newAlumno);
+        }
       });
       
       localStorage.setItem('dojoia_alumnos', JSON.stringify(list));
