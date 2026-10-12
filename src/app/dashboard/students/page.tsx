@@ -611,11 +611,11 @@ export default function StudentsPage() {
       <BulkUploadModal
         isOpen={isBulkModalOpen}
         onClose={() => setIsBulkModalOpen(false)}
-        onSuccess={(targetGroup) => {
-          loadStudents();
-          if (targetGroup) {
-            setGroupFilter(targetGroup);
-          }
+        onSuccess={async () => {
+          setGradeFilter('');
+          setGroupFilter('');
+          setSearchQuery('');
+          await loadStudents();
         }}
       />
 

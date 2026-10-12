@@ -1,0 +1,72 @@
+[
+  {
+    "id": "student-1",
+    "matricula": "DOJ-2026-001",
+    "nombre": "Carlos",
+    "apellido_paterno": "Martínez",
+    "apellido_materno": "López",
+    "grado": "1°",
+    "grupo": "A",
+    "tutor": "Sra. Mariana López",
+    "telefono": "+525512345678",
+    "foto_url": "https://images.unsplash.com/photo-1544717305-2782549b5136?auto=format&fit=crop&q=80&w=200&h=200",
+    "qr_code": "DOJ-2026-001",
+    "created_at": "2026-01-01T00:00:00.000Z"
+  },
+  {
+    "id": "student-2",
+    "matricula": "DOJ-2026-002",
+    "nombre": "Sofía",
+    "apellido_paterno": "Herrera",
+    "apellido_materno": "Díaz",
+    "grado": "3°",
+    "grupo": "B",
+    "tutor": "Sr. Roberto Herrera",
+    "telefono": "+525523456789",
+    "foto_url": "https://images.unsplash.com/photo-1517841905240-472988babdf9?auto=format&fit=crop&q=80&w=200&h=200",
+    "qr_code": "DOJ-2026-002",
+    "created_at": "2026-01-01T00:00:00.000Z"
+  },
+  {
+    "id": "student-3",
+    "matricula": "DOJ-2026-003",
+    "nombre": "Mateo",
+    "apellido_paterno": "Ramírez",
+    "apellido_materno": "Gómez",
+    "grado": "3°",
+    "grupo": "A",
+    "tutor": "Sra. Patricia Gómez",
+    "telefono": "+525534567890",
+    "foto_url": "https://images.unsplash.com/photo-1539571696357-5a69c17a67c6?auto=format&fit=crop&q=80&w=200&h=200",
+    "qr_code": "DOJ-2026-003",
+    "created_at": "2026-01-01T00:00:00.000Z"
+  },
+  {
+    "id": "student-4",
+    "matricula": "DOJ-2026-004",
+    "nombre": "Valentina",
+    "apellido_paterno": "Castro",
+    "apellido_materno": "Vega",
+    "grado": "1°",
+    "grupo": "B",
+    "tutor": "Sr. Fernando Castro",
+    "telefono": "+525545678901",
+    "foto_url": "https://images.unsplash.com/photo-1494790108377-be9c29b29330?auto=format&fit=crop&q=80&w=200&h=200",
+    "qr_code": "DOJ-2026-004",
+    "created_at": "2026-01-01T00:00:00.000Z"
+  },
+  {
+    "id": "student-5",
+    "matricula": "DOJ-2026-005",
+    "nombre": "Sebastián",
+    "apellido_paterno": "Ortiz",
+    "apellido_materno": "Flores",
+    "grado": "5°",
+    "grupo": "A",
+    "tutor": "Sra. Carmen Flores",
+    "telefono": "+525556789012",
+    "foto_url": "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?auto=format&fit=crop&q=80&w=200&h=200",
+    "qr_code": "DOJ-2026-005",
+    "created_at": "2026-01-01T00:00:00.000Z"
+  }
+]
