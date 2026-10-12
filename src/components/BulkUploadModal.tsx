@@ -2,18 +2,24 @@
 
 'use client';
 
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect, useCallback } from 'react';
 import * as XLSX from 'xlsx';
 import { db, Alumno } from '@/lib/db';
 import { 
   Upload, FileSpreadsheet, X, Check, AlertCircle, Download, 
-  Layers, CheckCircle2, Sparkles 
+  Layers, CheckCircle2, Sparkles, Filter, Hash, User, Phone, CheckSquare
 } from 'lucide-react';
 
 interface BulkUploadModalProps {
   isOpen: boolean;
   onClose: () => void;
   onSuccess: (targetGroup?: string) => void;
+}
+
+interface ColumnOption {
+  index: number;
+  letter: string;
+  name: string;
 }
 
 interface ParsedStudentPreview {
@@ -28,6 +34,97 @@ interface ParsedStudentPreview {
   errorReason?: string;
 }
 
+// Convert 0-indexed column number to Excel letter (0 -> A, 1 -> B, 26 -> AA)
+const getExcelColumnLetter = (colIndex: number): string => {
+  let temp = colIndex;
+  let letter = '';
+  while (temp >= 0) {
+    letter = String.fromCharCode((temp % 26) + 65) + letter;
+    temp = Math.floor(temp / 26) - 1;
+  }
+  return letter;
+};
+
+// String normalization for header comparison
+const normalizeText = (val: unknown): string =>
+  String(val ?? '')
+    .trim()
+    .toUpperCase()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '');
+
+const isMatriculaHeader = (text: string): boolean => {
+  const norm = normalizeText(text);
+  return (
+    norm.includes('MATRICULA') ||
+    norm.includes('CONTROL') ||
+    norm.includes('EXPEDIENTE') ||
+    norm.includes('ID ALUMNO') ||
+    norm === 'ID' ||
+    norm.includes('CVE') ||
+    norm.includes('CLAVE') ||
+    norm.includes('FOLIO') ||
+    norm === 'REGISTRO' ||
+    norm === 'CODIGO'
+  );
+};
+
+const isNombreHeader = (text: string): boolean => {
+  const norm = normalizeText(text);
+  return (
+    norm.includes('NOMBRE') ||
+    norm.includes('ALUMNO') ||
+    norm.includes('ESTUDIANTE') ||
+    norm.includes('APELLIDO')
+  );
+};
+
+const isTelefonoHeader = (text: string): boolean => {
+  const norm = normalizeText(text);
+  return (
+    norm.includes('TELEFONO1') ||
+    norm.includes('TELEFONO 1') ||
+    norm.includes('TEL1') ||
+    norm.includes('TEL 1') ||
+    norm.includes('TELEFONO') ||
+    norm.includes('TEL') ||
+    norm.includes('CEL') ||
+    norm.includes('WHATSAPP') ||
+    norm.includes('MOVIL') ||
+    norm.includes('CONTACTO')
+  );
+};
+
+// Check if a row is a summary or repeated title row
+const isSummaryOrHeaderRow = (matricula: string, nombre: string): boolean => {
+  const normMat = normalizeText(matricula);
+  const normNom = normalizeText(nombre);
+
+  if (!normMat && !normNom) return true;
+
+  // Header repetitions
+  if (normMat.includes('MATRICULA') || normMat.includes('CONTROL') || normNom.includes('NOMBRE') || normNom.includes('ALUMNO')) {
+    return true;
+  }
+
+  // Summary / report labels to ignore
+  const ignoreKeywords = [
+    'TOTAL', 'TOTALES', 'PROMEDIO', 'PROMEDIOS', 'APROBADO', 'APROBADOS',
+    'REPROBADO', 'REPROBADOS', 'DOCENTE', 'PROFESOR', 'FIRMA', 'FECHA',
+    'PARCIAL', 'PRIMER PARCIAL', 'SEGUNDO PARCIAL', 'TERCER PARCIAL',
+    'SEMESTRE', 'ASIGNATURA', 'MATERIA', 'OBSERVACIONES',
+    'HOMBRES', 'MUJERES', 'CANTIDAD', 'BAJAS', 'ALUMNOS INSCRITOS', 'GRUPO'
+  ];
+
+  for (const kw of ignoreKeywords) {
+    if (normMat === kw || normMat.startsWith(kw) || normNom === kw || normNom.startsWith(kw)) {
+      return true;
+    }
+  }
+
+  return false;
+};
+
 export default function BulkUploadModal({ isOpen, onClose, onSuccess }: BulkUploadModalProps) {
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -37,6 +134,16 @@ export default function BulkUploadModal({ isOpen, onClose, onSuccess }: BulkUplo
   const [sheetNames, setSheetNames] = useState<string[]>([]);
   const [selectedSheet, setSelectedSheet] = useState<string>('');
 
+  // 2D Matrix of the current sheet
+  const [sheetMatrix, setSheetMatrix] = useState<unknown[][]>([]);
+  const [headerRowIndex, setHeaderRowIndex] = useState<number>(0);
+  const [availableColumns, setAvailableColumns] = useState<ColumnOption[]>([]);
+
+  // Selected column mappings
+  const [colMatriculaIndex, setColMatriculaIndex] = useState<number>(-1);
+  const [colNombreIndex, setColNombreIndex] = useState<number>(-1);
+  const [colTelefonoIndex, setColTelefonoIndex] = useState<number>(-1);
+
   // Group & Grade configuration
   const [writtenGroup, setWrittenGroup] = useState<string>('A');
   const [selectedGrade, setSelectedGrade] = useState<string>('1°');
@@ -44,162 +151,227 @@ export default function BulkUploadModal({ isOpen, onClose, onSuccess }: BulkUplo
 
   // Parsed students preview
   const [previewStudents, setPreviewStudents] = useState<ParsedStudentPreview[]>([]);
-  const [detectedColumns, setDetectedColumns] = useState<string[]>([]);
   const [isProcessing, setIsProcessing] = useState<boolean>(false);
   const [importStatus, setImportStatus] = useState<{ count: number; group: string } | null>(null);
 
-  if (!isOpen) return null;
-
-  // Helper to normalize strings for header matching (removes accents, trims, uppercase)
-  const normalizeHeader = (str: unknown): string =>
-    String(str ?? '')
-      .trim()
-      .toUpperCase()
-      .normalize('NFD')
-      .replace(/[\u0300-\u036f]/g, '');
-
-  const findValueByKeys = (row: Record<string, unknown>, candidateKeys: string[]): string => {
-    const rowKeys = Object.keys(row);
-    for (const cand of candidateKeys) {
-      const normCand = normalizeHeader(cand);
-      const matchedKey = rowKeys.find(k => normalizeHeader(k) === normCand);
-      if (matchedKey !== undefined && row[matchedKey] !== undefined && row[matchedKey] !== null) {
-        const val = String(row[matchedKey]).trim();
-        if (val.length > 0) return val;
-      }
-    }
-    return '';
-  };
-
-  // Parse a specific worksheet from the workbook
-  const parseSheetData = (wb: XLSX.WorkBook, sheetName: string) => {
+  // Parse a sheet into raw 2D array and auto-detect header row & columns
+  const loadSheetMatrix = useCallback((wb: XLSX.WorkBook, sheetName: string) => {
     try {
       const worksheet = wb.Sheets[sheetName];
       if (!worksheet) return;
 
-      const rawRows = XLSX.utils.sheet_to_json<Record<string, unknown>>(worksheet, { defval: '' });
-      if (rawRows.length === 0) {
+      // Extract raw rows as 2D array to inspect without losing row positions
+      const matrix = XLSX.utils.sheet_to_json<unknown[]>(worksheet, { header: 1, defval: '' });
+      if (!matrix || matrix.length === 0) {
+        setSheetMatrix([]);
+        setAvailableColumns([]);
         setPreviewStudents([]);
-        setDetectedColumns([]);
         return;
       }
 
-      // Collect detected column names from first rows
-      const allFoundKeys = Array.from(new Set(rawRows.flatMap(r => Object.keys(r))));
-      setDetectedColumns(allFoundKeys);
+      setSheetMatrix(matrix);
 
-      const parsedList: ParsedStudentPreview[] = rawRows.map((row, idx) => {
-        // Detect NOMBRE, MATRICULA, TELEFONO1
-        const nombreVal = findValueByKeys(row, [
-          'NOMBRE', 'NOMBRE COMPLETO', 'NOMBRES', 'ALUMNO', 'ESTUDIANTE', 'NAME', 'FULL NAME'
-        ]);
-        const matriculaVal = findValueByKeys(row, [
-          'MATRICULA', 'MATRICULA ESCOLAR', 'MATRÍCULA', 'ID', 'EXPEDIENTE', 'CODIGO', 'CLAVE', 'CVE'
-        ]);
-        const telefonoVal = findValueByKeys(row, [
-          'TELEFONO1', 'TELEFONO 1', 'TELEFONO', 'TEL1', 'TEL', 'WHATSAPP', 'CELULAR', 'PHONE'
-        ]);
-        const tutorVal = findValueByKeys(row, ['TUTOR', 'PADRE', 'APODERADO', 'CONTACTO']);
+      // Find best header row (scan first 25 rows)
+      let bestRowIndex = 0;
+      let highestScore = -1;
 
-        // Check if separate paternal/maternal last names exist
-        const patVal = findValueByKeys(row, ['APELLIDO PATERNO', 'APELLIDO_PATERNO', 'PATERNO']);
-        const matVal = findValueByKeys(row, ['APELLIDO MATERNO', 'APELLIDO_MATERNO', 'MATERNO']);
+      const maxScan = Math.min(25, matrix.length);
+      for (let r = 0; r < maxScan; r++) {
+        const row = matrix[r];
+        if (!Array.isArray(row)) continue;
 
-        // Check for missing required values
-        if (!nombreVal && !matriculaVal) {
-          return {
-            matricula: '',
-            nombreCompleto: '',
-            nombre: '',
-            apellido_paterno: '',
-            apellido_materno: '',
-            telefono: '',
-            tutor: '',
-            isValid: false,
-            errorReason: 'Fila vacía o sin atributos'
-          };
+        let score = 0;
+        let hasMatricula = false;
+        let hasNombre = false;
+
+        row.forEach((cell) => {
+          const str = String(cell ?? '').trim();
+          if (!str) return;
+
+          if (isMatriculaHeader(str)) {
+            score += 10;
+            hasMatricula = true;
+          }
+          if (isNombreHeader(str)) {
+            score += 10;
+            hasNombre = true;
+          }
+          if (isTelefonoHeader(str)) {
+            score += 8;
+          }
+        });
+
+        // Boost if both matricula and nombre are in the same row
+        if (hasMatricula && hasNombre) score += 20;
+
+        if (score > highestScore && score > 0) {
+          highestScore = score;
+          bestRowIndex = r;
         }
+      }
 
-        if (!matriculaVal) {
-          return {
-            matricula: `TEMP-${idx + 1}`,
-            nombreCompleto: nombreVal,
-            nombre: nombreVal,
-            apellido_paterno: '',
-            apellido_materno: '',
-            telefono: telefonoVal,
-            tutor: tutorVal,
-            isValid: false,
-            errorReason: 'Falta la Matrícula del alumno'
-          };
+      setHeaderRowIndex(bestRowIndex);
+
+      // Build column options from the detected header row
+      const headerRow = matrix[bestRowIndex] || [];
+      const cols: ColumnOption[] = [];
+      const totalCols = Math.max(headerRow.length, ...matrix.slice(0, 10).map(r => r?.length || 0));
+
+      for (let c = 0; c < totalCols; c++) {
+        const rawName = String(headerRow[c] ?? '').trim();
+        // If current header cell is empty, check previous row cell (for merged multi-level headers)
+        const fallbackName = rawName || (bestRowIndex > 0 ? String(matrix[bestRowIndex - 1]?.[c] ?? '').trim() : '');
+        const letter = getExcelColumnLetter(c);
+        const label = fallbackName ? `${letter}: ${fallbackName}` : `Columna ${letter}`;
+
+        cols.push({
+          index: c,
+          letter,
+          name: label
+        });
+      }
+
+      setAvailableColumns(cols);
+
+      // Auto-detect column indices for Matricula, Nombre and Telefono
+      let detectedMat = -1;
+      let detectedNom = -1;
+      let detectedTel = -1;
+
+      cols.forEach(col => {
+        const norm = normalizeText(col.name);
+        if (detectedMat === -1 && isMatriculaHeader(norm)) {
+          detectedMat = col.index;
         }
-
-        if (!nombreVal) {
-          return {
-            matricula: matriculaVal,
-            nombreCompleto: '',
-            nombre: '',
-            apellido_paterno: '',
-            apellido_materno: '',
-            telefono: telefonoVal,
-            tutor: tutorVal,
-            isValid: false,
-            errorReason: 'Falta el Nombre del alumno'
-          };
+        if (detectedNom === -1 && isNombreHeader(norm)) {
+          detectedNom = col.index;
         }
+        if (detectedTel === -1 && isTelefonoHeader(norm)) {
+          detectedTel = col.index;
+        }
+      });
 
-        // Split name intelligently if paternal not provided separately
-        let finalNombre = nombreVal;
-        let finalPaterno = patVal || '';
-        let finalMaterno = matVal || '';
+      // Fallbacks if not found by header label: scan sample data rows (check column patterns)
+      if (detectedMat === -1 || detectedNom === -1) {
+        const sampleRows = matrix.slice(bestRowIndex + 1, bestRowIndex + 10);
+        for (let c = 0; c < totalCols; c++) {
+          const sampleValues = sampleRows.map(r => String(r?.[c] ?? '').trim()).filter(Boolean);
+          if (sampleValues.length === 0) continue;
 
-        if (!finalPaterno) {
-          const parts = nombreVal.split(/\s+/).filter(Boolean);
-          if (parts.length === 1) {
-            finalNombre = parts[0];
-            finalPaterno = '-';
-            finalMaterno = '';
-          } else if (parts.length === 2) {
-            finalNombre = parts[0];
-            finalPaterno = parts[1];
-            finalMaterno = '';
-          } else if (parts.length === 3) {
-            finalNombre = parts[0];
-            finalPaterno = parts[1];
-            finalMaterno = parts[2];
-          } else {
-            // E.g. "Juan Carlos García Hernández"
-            finalNombre = parts.slice(0, parts.length - 2).join(' ');
-            finalPaterno = parts[parts.length - 2];
-            finalMaterno = parts[parts.length - 1];
+          // Check if looks like a student registration code (numeric or alphanumeric, 5-15 chars)
+          const allLookLikeMatricula = sampleValues.every(v => /^[A-Za-z0-9\-_]{5,20}$/.test(v) && !v.includes(' '));
+          if (detectedMat === -1 && allLookLikeMatricula) {
+            detectedMat = c;
+            continue;
+          }
+
+          // Check if looks like a full name (contains space, letters only)
+          const allLookLikeNames = sampleValues.every(v => v.includes(' ') && /^[A-Za-zÁÉÍÓÚáéíóúñÑ\s\.]+$/.test(v));
+          if (detectedNom === -1 && allLookLikeNames) {
+            detectedNom = c;
           }
         }
+      }
 
-        // Format phone number clean
-        let cleanPhone = telefonoVal ? telefonoVal.replace(/\s+/g, '') : '+52';
-        if (cleanPhone && !cleanPhone.startsWith('+')) {
-          cleanPhone = cleanPhone.length === 10 ? `+52${cleanPhone}` : `+${cleanPhone}`;
-        }
+      setColMatriculaIndex(detectedMat !== -1 ? detectedMat : (cols[0]?.index ?? 0));
+      setColNombreIndex(detectedNom !== -1 ? detectedNom : (cols[1]?.index ?? 1));
+      setColTelefonoIndex(detectedTel !== -1 ? detectedTel : -1);
 
-        return {
-          matricula: matriculaVal.toUpperCase(),
-          nombreCompleto: nombreVal,
-          nombre: finalNombre,
-          apellido_paterno: finalPaterno,
-          apellido_materno: finalMaterno,
-          telefono: cleanPhone,
-          tutor: tutorVal || `Tutor de ${finalNombre}`,
-          isValid: true
-        };
-      }).filter(s => s.isValid || s.errorReason !== 'Fila vacía o sin atributos');
-
-      setPreviewStudents(parsedList);
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : String(err);
-      console.error('Error parsing worksheet:', err);
+      console.error('Error loading sheet matrix:', err);
       alert('Error al leer la hoja de trabajo: ' + msg);
     }
-  };
+  }, []);
+
+  // Recalculate parsed students preview when column mappings, matrix, or header row changes
+  useEffect(() => {
+    if (!sheetMatrix || sheetMatrix.length === 0) {
+      setPreviewStudents([]);
+      return;
+    }
+
+    if (colMatriculaIndex === -1 && colNombreIndex === -1) {
+      setPreviewStudents([]);
+      return;
+    }
+
+    const students: ParsedStudentPreview[] = [];
+    const dataRows = sheetMatrix.slice(headerRowIndex + 1);
+
+    dataRows.forEach((row, idx) => {
+      if (!Array.isArray(row)) return;
+
+      const rawMatricula = colMatriculaIndex >= 0 ? String(row[colMatriculaIndex] ?? '').trim() : '';
+      const rawNombre = colNombreIndex >= 0 ? String(row[colNombreIndex] ?? '').trim() : '';
+      const rawTelefono = colTelefonoIndex >= 0 ? String(row[colTelefonoIndex] ?? '').trim() : '';
+
+      // Skip empty or summary rows (TOTALES, PROMEDIO, PARCIALES, etc.)
+      if (isSummaryOrHeaderRow(rawMatricula, rawNombre)) {
+        return;
+      }
+
+      // Check validation
+      if (!rawMatricula || !rawNombre) {
+        students.push({
+          matricula: rawMatricula || `FILA-${idx + 1}`,
+          nombreCompleto: rawNombre,
+          nombre: rawNombre,
+          apellido_paterno: '',
+          apellido_materno: '',
+          telefono: rawTelefono,
+          tutor: '',
+          isValid: false,
+          errorReason: !rawMatricula ? 'Falta Matrícula' : 'Falta Nombre'
+        });
+        return;
+      }
+
+      // Split name intelligently into nombre and apellidos
+      const parts = rawNombre.split(/\s+/).filter(Boolean);
+      let finalNombre = rawNombre;
+      let finalPaterno = '-';
+      let finalMaterno = '';
+
+      if (parts.length === 1) {
+        finalNombre = parts[0];
+        finalPaterno = '-';
+        finalMaterno = '';
+      } else if (parts.length === 2) {
+        finalNombre = parts[0];
+        finalPaterno = parts[1];
+        finalMaterno = '';
+      } else if (parts.length === 3) {
+        finalNombre = parts[0];
+        finalPaterno = parts[1];
+        finalMaterno = parts[2];
+      } else {
+        // 4+ words (e.g. "Juan Carlos Pérez Gómez")
+        finalNombre = parts.slice(0, parts.length - 2).join(' ');
+        finalPaterno = parts[parts.length - 2];
+        finalMaterno = parts[parts.length - 1];
+      }
+
+      // Format telephone number
+      let cleanPhone = rawTelefono ? rawTelefono.replace(/[\s\-\(\)]/g, '') : '+52';
+      if (cleanPhone && cleanPhone !== '+52' && !cleanPhone.startsWith('+')) {
+        cleanPhone = cleanPhone.length === 10 ? `+52${cleanPhone}` : `+${cleanPhone}`;
+      }
+
+      students.push({
+        matricula: rawMatricula.toUpperCase(),
+        nombreCompleto: rawNombre,
+        nombre: finalNombre,
+        apellido_paterno: finalPaterno,
+        apellido_materno: finalMaterno,
+        telefono: cleanPhone || '+52',
+        tutor: `Tutor de ${finalNombre}`,
+        isValid: true
+      });
+    });
+
+    setPreviewStudents(students);
+  }, [sheetMatrix, headerRowIndex, colMatriculaIndex, colNombreIndex, colTelefonoIndex]);
 
   // Handle file selection
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -221,12 +393,11 @@ export default function BulkUploadModal({ isOpen, onClose, onSuccess }: BulkUplo
           const initialSheet = wb.SheetNames[0];
           setSelectedSheet(initialSheet);
 
-          // Infer clean group name from sheet name if possible
+          // Infer clean group name from sheet name
           const candidateGroup = initialSheet.replace(/hoja\s*\d*/i, '').replace(/sheet\s*\d*/i, '').trim();
-          const defaultGroup = candidateGroup ? candidateGroup : 'A';
-          setWrittenGroup(defaultGroup);
+          setWrittenGroup(candidateGroup ? candidateGroup.toUpperCase() : 'A');
 
-          parseSheetData(wb, initialSheet);
+          loadSheetMatrix(wb, initialSheet);
         }
       } catch (err: unknown) {
         const msg = err instanceof Error ? err.message : String(err);
@@ -236,63 +407,82 @@ export default function BulkUploadModal({ isOpen, onClose, onSuccess }: BulkUplo
     reader.readAsArrayBuffer(file);
   };
 
-  // Handle switching sheets in workbook
+  // Switch sheet
   const handleSelectSheet = (sheet: string) => {
     setSelectedSheet(sheet);
     if (workbook) {
-      // Suggest sheet name as written group if it looks like a group name
       const candidateGroup = sheet.replace(/hoja\s*\d*/i, '').replace(/sheet\s*\d*/i, '').trim();
       if (candidateGroup) {
-        setWrittenGroup(candidateGroup);
+        setWrittenGroup(candidateGroup.toUpperCase());
       }
-      parseSheetData(workbook, sheet);
+      loadSheetMatrix(workbook, sheet);
     }
   };
 
-  // Download official sample Excel template
+  // Change header row index manually if needed
+  const handleChangeHeaderRow = (newRowIdx: number) => {
+    setHeaderRowIndex(newRowIdx);
+    if (sheetMatrix && sheetMatrix[newRowIdx]) {
+      const headerRow = sheetMatrix[newRowIdx];
+      const cols: ColumnOption[] = [];
+      const totalCols = Math.max(headerRow.length, ...sheetMatrix.slice(0, 10).map(r => r?.length || 0));
+
+      for (let c = 0; c < totalCols; c++) {
+        const rawName = String(headerRow[c] ?? '').trim();
+        const letter = getExcelColumnLetter(c);
+        cols.push({
+          index: c,
+          letter,
+          name: rawName ? `${letter}: ${rawName}` : `Columna ${letter}`
+        });
+      }
+      setAvailableColumns(cols);
+    }
+  };
+
+  // Download official template
   const handleDownloadTemplate = () => {
     const wb = XLSX.utils.book_new();
     const sampleData = [
       {
-        NOMBRE: 'Carlos Martínez López',
         MATRICULA: 'DOJ-2026-101',
+        NOMBRE: 'Carlos Martínez López',
         TELEFONO1: '+525512345678'
       },
       {
-        NOMBRE: 'Sofía Herrera Díaz',
         MATRICULA: 'DOJ-2026-102',
+        NOMBRE: 'Sofía Herrera Díaz',
         TELEFONO1: '+525523456789'
       },
       {
-        NOMBRE: 'Mateo Ramírez Gómez',
         MATRICULA: 'DOJ-2026-103',
+        NOMBRE: 'Mateo Ramírez Gómez',
         TELEFONO1: '+525534567890'
       },
       {
-        NOMBRE: 'Valentina Castro Vega',
         MATRICULA: 'DOJ-2026-104',
+        NOMBRE: 'Valentina Castro Vega',
         TELEFONO1: '+525545678901'
       },
       {
-        NOMBRE: 'Sebastián Ortiz Flores',
         MATRICULA: 'DOJ-2026-105',
+        NOMBRE: 'Sebastián Ortiz Flores',
         TELEFONO1: '+525556789012'
       }
     ];
 
     const ws = XLSX.utils.json_to_sheet(sampleData);
-    // Set column widths for readability
-    ws['!cols'] = [{ wch: 30 }, { wch: 18 }, { wch: 18 }];
+    ws['!cols'] = [{ wch: 18 }, { wch: 32 }, { wch: 20 }];
 
     XLSX.utils.book_append_sheet(wb, ws, 'Grupo A');
-    XLSX.writeFile(wb, 'plantilla_estudiantes_grupo.xlsx');
+    XLSX.writeFile(wb, 'plantilla_matricula_nombre_telefono1.xlsx');
   };
 
-  // Final submission: bulk insert students to database
+  // Bulk import only Matricula, Nombre and Telefono1 (ignore all other columns)
   const handleBulkImport = async () => {
     const targetGroup = writtenGroup.trim().toUpperCase();
     if (!targetGroup) {
-      alert('Por favor escribe o especifica el GRUPO asignado para esta hoja.');
+      alert('Por favor escribe el GRUPO asignado para esta lista.');
       return;
     }
 
@@ -300,13 +490,15 @@ export default function BulkUploadModal({ isOpen, onClose, onSuccess }: BulkUplo
     const validStudents = previewStudents.filter(s => s.isValid);
 
     if (validStudents.length === 0) {
-      alert('No se encontraron estudiantes válidos para importar en esta hoja.');
+      alert('No se encontraron alumnos válidos para importar. Revisa el mapeo de columnas de Matrícula y Nombre.');
       return;
     }
 
     setIsProcessing(true);
 
     try {
+      // ONLY include Matricula, Nombre, Telefono1 (and required system fields)
+      // Discard all other columns from the Excel (grades, partials, totals, averages, etc.)
       const recordsToInsert: Omit<Alumno, 'id' | 'created_at'>[] = validStudents.map(s => ({
         matricula: s.matricula,
         nombre: s.nombre,
@@ -315,7 +507,7 @@ export default function BulkUploadModal({ isOpen, onClose, onSuccess }: BulkUplo
         grado: effectiveGrade,
         grupo: targetGroup,
         tutor: s.tutor,
-        telefono: s.telefono,
+        telefono: s.telefono || '+52',
         foto_url: `https://api.dicebear.com/7.x/bottts/svg?seed=${s.matricula}`,
         qr_code: s.matricula
       }));
@@ -327,7 +519,6 @@ export default function BulkUploadModal({ isOpen, onClose, onSuccess }: BulkUplo
         group: targetGroup
       });
 
-      // Notify parent to refresh and filter by this newly uploaded group
       setTimeout(() => {
         setIsProcessing(false);
         onSuccess(targetGroup);
@@ -340,6 +531,8 @@ export default function BulkUploadModal({ isOpen, onClose, onSuccess }: BulkUplo
       alert(`Error al guardar en la base de datos: ${msg}`);
     }
   };
+
+  if (!isOpen) return null;
 
   const validCount = previewStudents.filter(s => s.isValid).length;
   const errorCount = previewStudents.filter(s => !s.isValid).length;
@@ -357,13 +550,13 @@ export default function BulkUploadModal({ isOpen, onClose, onSuccess }: BulkUplo
             </div>
             <div>
               <h3 className="text-xl sm:text-2xl font-black text-white flex items-center gap-2">
-                Carga Masiva de Estudiantes por Grupo
+                Subir Alumnos por Grupos (Excel)
                 <span className="text-[10px] uppercase font-bold tracking-wider px-2 py-0.5 rounded-full bg-cyan-500/20 text-cyan-300 border border-cyan-500/30">
-                  Excel / CSV
+                  Filtro Estricto
                 </span>
               </h3>
               <p className="text-xs sm:text-sm text-gray-400 mt-0.5">
-                Importa listas con atributos <span className="font-mono text-cyan-400 font-bold">NOMBRE</span>, <span className="font-mono text-cyan-400 font-bold">MATRICULA</span> y <span className="font-mono text-cyan-400 font-bold">TELEFONO1</span>.
+                Detecta y extrae únicamente <span className="font-mono text-cyan-400 font-bold">MATRÍCULA</span>, <span className="font-mono text-cyan-400 font-bold">NOMBRE</span> y <span className="font-mono text-cyan-400 font-bold">TELÉFONO 1</span>. Las demás columnas (parciales, promedios) son ignoradas.
               </p>
             </div>
           </div>
@@ -386,9 +579,9 @@ export default function BulkUploadModal({ isOpen, onClose, onSuccess }: BulkUplo
             {/* Template Box */}
             <div className="glass-panel p-4 rounded-xl border-white/5 bg-white/[0.02] flex flex-col justify-between space-y-3">
               <div>
-                <span className="text-xs font-bold text-gray-400 uppercase tracking-wider block">Plantilla Oficial</span>
+                <span className="text-xs font-bold text-gray-400 uppercase tracking-wider block">Plantilla Limpia</span>
                 <p className="text-xs text-gray-400 mt-1">
-                  Descarga el formato exacto de Excel con las columnas requeridas para evitar errores.
+                  Descarga un archivo con las 3 columnas exactas: MATRICULA, NOMBRE y TELEFONO1.
                 </p>
               </div>
               <button
@@ -421,11 +614,11 @@ export default function BulkUploadModal({ isOpen, onClose, onSuccess }: BulkUplo
                   {fileName ? (
                     <span className="text-cyan-400 font-mono">{fileName}</span>
                   ) : (
-                    'Selecciona o arrastra tu archivo de Excel (.xlsx, .xls o .csv)'
+                    'Selecciona o arrastra tu lista de Excel o calificaciones (.xlsx, .xls, .csv)'
                   )}
                 </p>
                 <p className="text-xs text-gray-400 mt-0.5">
-                  El sistema detectará automáticamente las hojas de cálculo y las columnas.
+                  Compatible con listas de parciales, actas de evaluación y hojas con encabezados complejos.
                 </p>
               </div>
 
@@ -434,7 +627,7 @@ export default function BulkUploadModal({ isOpen, onClose, onSuccess }: BulkUplo
                 onClick={() => fileInputRef.current?.click()}
                 className="px-4 py-2 rounded-xl bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-400 hover:to-blue-500 text-black font-extrabold text-xs shadow-md shadow-cyan-500/20 transition-all cursor-pointer"
               >
-                {fileName ? 'Reemplazar Archivo' : 'Explorar Archivo'}
+                {fileName ? 'Cambiar Archivo' : 'Seleccionar Archivo de Alumnos'}
               </button>
             </div>
 
@@ -446,7 +639,7 @@ export default function BulkUploadModal({ isOpen, onClose, onSuccess }: BulkUplo
               
               <div className="flex items-center space-x-2 text-cyan-400 font-bold text-xs uppercase tracking-wider">
                 <Layers size={16} />
-                <span>Configuración de Hoja y Asignación de Grupo</span>
+                <span>1. Selección de Hoja y Asignación de Grupo</span>
               </div>
 
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4 items-start">
@@ -454,7 +647,7 @@ export default function BulkUploadModal({ isOpen, onClose, onSuccess }: BulkUplo
                 {/* 1. Sheet Selector */}
                 <div className="space-y-1.5">
                   <label className="text-xs text-gray-300 font-bold block">
-                    1. Hoja de Trabajo del archivo:
+                    Hoja de Trabajo activa:
                   </label>
                   <select
                     value={selectedSheet}
@@ -468,21 +661,21 @@ export default function BulkUploadModal({ isOpen, onClose, onSuccess }: BulkUplo
                     ))}
                   </select>
                   <p className="text-[11px] text-gray-400">
-                    Cambia de hoja si tu archivo tiene varios grupos por pestañas.
+                    Selecciona la pestaña correspondiente al grupo que deseas subir.
                   </p>
                 </div>
 
                 {/* 2. Group Input (Write Group) */}
                 <div className="space-y-1.5">
                   <label className="text-xs text-gray-300 font-bold flex items-center justify-between">
-                    <span>2. Escribir Grupo Asignado:</span>
+                    <span>Escribir Grupo Asignado:</span>
                     <span className="text-[10px] text-cyan-400 font-normal">Obligatorio</span>
                   </label>
                   <input
                     type="text"
                     value={writtenGroup}
                     onChange={(e) => setWrittenGroup(e.target.value.toUpperCase())}
-                    placeholder="Ej. A, B, 101, A-Matutino..."
+                    placeholder="Ej. A, B, 1A, 101, Matutino-A..."
                     className="w-full glass-input px-3 py-2.5 rounded-xl text-sm font-black text-cyan-400 uppercase tracking-wider bg-[#080d1a] border border-cyan-500/40"
                   />
                   {/* Quick Select Buttons */}
@@ -521,7 +714,7 @@ export default function BulkUploadModal({ isOpen, onClose, onSuccess }: BulkUplo
                 {/* 3. Grade Selection */}
                 <div className="space-y-1.5">
                   <label className="text-xs text-gray-300 font-bold block">
-                    3. Grado Escolar:
+                    Grado Escolar:
                   </label>
                   <div className="grid grid-cols-3 gap-2">
                     {['1°', '2°', '3°'].map((grade) => (
@@ -561,17 +754,119 @@ export default function BulkUploadModal({ isOpen, onClose, onSuccess }: BulkUplo
 
               </div>
 
-              {/* Detected columns feedback */}
-              {detectedColumns.length > 0 && (
-                <div className="pt-2 border-t border-white/5 flex flex-wrap items-center gap-1.5 text-[11px] text-gray-400">
-                  <span className="font-semibold text-gray-300">Columnas encontradas en esta hoja:</span>
-                  {detectedColumns.map(col => (
-                    <span key={col} className="px-1.5 py-0.5 rounded bg-white/5 border border-white/10 font-mono text-[10px] text-cyan-300">
-                      {col}
-                    </span>
-                  ))}
+            </div>
+          )}
+
+          {/* CRITICAL STEP: Column Mapping for Matricula, Nombre and Telefono1 */}
+          {availableColumns.length > 0 && (
+            <div className="glass-panel p-5 rounded-xl border-cyan-500/30 bg-[#0d1322] space-y-4">
+              
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-white/10 pb-3">
+                <div className="flex items-center space-x-2 text-cyan-400 font-bold text-xs uppercase tracking-wider">
+                  <Filter size={16} />
+                  <span>2. Mapeo de Atributos Solicitados (Exclusivo Matricula, Nombre, Telefono1)</span>
                 </div>
-              )}
+
+                <div className="flex items-center space-x-2 text-[11px] text-gray-400">
+                  <span>Fila de Encabezados:</span>
+                  <select
+                    value={headerRowIndex}
+                    onChange={(e) => handleChangeHeaderRow(Number(e.target.value))}
+                    className="glass-input px-2 py-1 rounded-lg text-xs bg-[#080d1a] border border-cyan-500/30 text-cyan-300 font-mono font-bold"
+                  >
+                    {Array.from({ length: Math.min(15, sheetMatrix.length) }).map((_, r) => (
+                      <option key={r} value={r}>
+                        Fila {r + 1}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+
+              {/* 3 Strict Column Pickers */}
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                
+                {/* 1. Matricula Selector */}
+                <div className="space-y-1.5 p-3 rounded-xl bg-white/[0.02] border border-white/5">
+                  <label className="text-xs font-bold text-white flex items-center space-x-1.5">
+                    <Hash size={14} className="text-cyan-400" />
+                    <span>Columna de MATRÍCULA *</span>
+                  </label>
+                  <select
+                    value={colMatriculaIndex}
+                    onChange={(e) => setColMatriculaIndex(Number(e.target.value))}
+                    className={`w-full glass-input px-3 py-2 rounded-xl text-xs font-semibold bg-[#080d1a] ${
+                      colMatriculaIndex >= 0 ? 'border-cyan-500/50 text-cyan-300' : 'border-red-500/50 text-red-300'
+                    }`}
+                  >
+                    <option value={-1}>-- Seleccionar Columna --</option>
+                    {availableColumns.map((col) => (
+                      <option key={col.index} value={col.index}>
+                        {col.name}
+                      </option>
+                    ))}
+                  </select>
+                  <span className="text-[10px] text-gray-400 block">
+                    No. de control, clave de alumno o ID.
+                  </span>
+                </div>
+
+                {/* 2. Nombre Selector */}
+                <div className="space-y-1.5 p-3 rounded-xl bg-white/[0.02] border border-white/5">
+                  <label className="text-xs font-bold text-white flex items-center space-x-1.5">
+                    <User size={14} className="text-cyan-400" />
+                    <span>Columna de NOMBRE *</span>
+                  </label>
+                  <select
+                    value={colNombreIndex}
+                    onChange={(e) => setColNombreIndex(Number(e.target.value))}
+                    className={`w-full glass-input px-3 py-2 rounded-xl text-xs font-semibold bg-[#080d1a] ${
+                      colNombreIndex >= 0 ? 'border-cyan-500/50 text-cyan-300' : 'border-red-500/50 text-red-300'
+                    }`}
+                  >
+                    <option value={-1}>-- Seleccionar Columna --</option>
+                    {availableColumns.map((col) => (
+                      <option key={col.index} value={col.index}>
+                        {col.name}
+                      </option>
+                    ))}
+                  </select>
+                  <span className="text-[10px] text-gray-400 block">
+                    Nombre completo o apellidos del alumno.
+                  </span>
+                </div>
+
+                {/* 3. Telefono1 Selector */}
+                <div className="space-y-1.5 p-3 rounded-xl bg-white/[0.02] border border-white/5">
+                  <label className="text-xs font-bold text-white flex items-center space-x-1.5">
+                    <Phone size={14} className="text-cyan-400" />
+                    <span>Columna de TELEFONO 1</span>
+                  </label>
+                  <select
+                    value={colTelefonoIndex}
+                    onChange={(e) => setColTelefonoIndex(Number(e.target.value))}
+                    className="w-full glass-input px-3 py-2 rounded-xl text-xs font-semibold bg-[#080d1a] border-cyan-500/30 text-cyan-300"
+                  >
+                    <option value={-1}>-- Sin columna de teléfono (+52 por defecto) --</option>
+                    {availableColumns.map((col) => (
+                      <option key={col.index} value={col.index}>
+                        {col.name}
+                      </option>
+                    ))}
+                  </select>
+                  <span className="text-[10px] text-gray-400 block">
+                    Teléfono celular o WhatsApp para notificaciones.
+                  </span>
+                </div>
+
+              </div>
+
+              <div className="p-2.5 rounded-lg bg-cyan-950/40 border border-cyan-500/20 text-[11px] text-cyan-300/90 flex items-center space-x-2">
+                <CheckSquare size={14} className="text-cyan-400 shrink-0" />
+                <span>
+                  <strong>Aviso:</strong> Solo se extraerán y guardarán la <strong>Matrícula</strong>, <strong>Nombre</strong> y <strong>Teléfono 1</strong>. Calificaciones, parciales, asistencias y promedios presentes en tu archivo serán ignorados por completo.
+                </span>
+              </div>
 
             </div>
           )}
@@ -584,11 +879,11 @@ export default function BulkUploadModal({ isOpen, onClose, onSuccess }: BulkUplo
                 <div className="flex items-center space-x-2">
                   <span className="font-extrabold text-white text-sm">Vista Previa de Alumnos Detectados</span>
                   <span className="px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-400 text-xs font-bold border border-emerald-500/30">
-                    {validCount} listos
+                    {validCount} alumnos listos
                   </span>
                   {errorCount > 0 && (
                     <span className="px-2 py-0.5 rounded-full bg-red-500/10 text-red-400 text-xs font-bold border border-red-500/30">
-                      {errorCount} con advertencia
+                      {errorCount} filas omitidas/incompletas
                     </span>
                   )}
                 </div>
@@ -620,7 +915,7 @@ export default function BulkUploadModal({ isOpen, onClose, onSuccess }: BulkUplo
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-white/5 text-gray-300">
-                      {previewStudents.slice(0, 50).map((student, i) => (
+                      {previewStudents.slice(0, 60).map((student, i) => (
                         <tr key={student.matricula || i} className={student.isValid ? 'hover:bg-white/[0.02]' : 'bg-red-500/[0.04]'}>
                           <td className="py-2 px-3 text-gray-500 font-mono">{i + 1}</td>
                           <td className="py-2 px-3 font-mono font-bold text-cyan-400">
@@ -659,9 +954,9 @@ export default function BulkUploadModal({ isOpen, onClose, onSuccess }: BulkUplo
                   </table>
                 </div>
 
-                {previewStudents.length > 50 && (
+                {previewStudents.length > 60 && (
                   <div className="py-2 px-4 bg-white/[0.02] border-t border-white/5 text-[11px] text-gray-400 text-center">
-                    Mostrando primeros 50 registros de un total de {previewStudents.length}.
+                    Mostrando primeros 60 registros de un total de {previewStudents.length} alumnos detectados.
                   </div>
                 )}
               </div>
