@@ -186,45 +186,74 @@ export default function StudentsPage() {
         <div className="lg:col-span-2 space-y-6">
           
           {/* Controls Bar */}
-          <div className="glass-panel p-5 rounded-2xl flex flex-col md:flex-row gap-4 items-center justify-between">
-            
-            {/* Search */}
-            <div className="relative w-full md:w-80">
-              <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400" size={18} />
-              <input
-                type="text"
-                placeholder="Buscar por nombre o matrícula..."
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                className="w-full glass-input py-2.5 pl-10 pr-4 rounded-xl text-sm"
-              />
+          <div className="glass-panel p-5 rounded-2xl flex flex-col gap-4">
+            <div className="flex flex-col md:flex-row gap-4 items-center justify-between">
+              {/* Search */}
+              <div className="relative w-full md:w-80">
+                <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400" size={18} />
+                <input
+                  type="text"
+                  placeholder="Buscar por nombre o matrícula..."
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  className="w-full glass-input py-2.5 pl-10 pr-4 rounded-xl text-sm"
+                />
+              </div>
+
+              {/* Filters */}
+              <div className="flex items-center space-x-3 w-full md:w-auto">
+                <select
+                  value={gradeFilter}
+                  onChange={(e) => setGradeFilter(e.target.value)}
+                  className="flex-1 md:flex-initial glass-input px-4 py-2.5 rounded-xl text-xs sm:text-sm font-medium bg-[#0b0f1a]"
+                >
+                  <option value="">Todos los Grados</option>
+                  {availableGrades.map(g => (
+                    <option key={g} value={g}>{g} Grado</option>
+                  ))}
+                </select>
+
+                <select
+                  value={groupFilter}
+                  onChange={(e) => setGroupFilter(e.target.value)}
+                  className="flex-1 md:flex-initial glass-input px-4 py-2.5 rounded-xl text-xs sm:text-sm font-medium bg-[#0b0f1a]"
+                >
+                  <option value="">Todos los Grupos</option>
+                  {availableGroups.map(grp => (
+                    <option key={grp} value={grp}>Grupo {grp}</option>
+                  ))}
+                </select>
+              </div>
             </div>
 
-            {/* Filters */}
-            <div className="flex items-center space-x-3 w-full md:w-auto">
-              <select
-                value={gradeFilter}
-                onChange={(e) => setGradeFilter(e.target.value)}
-                className="flex-1 md:flex-initial glass-input px-4 py-2.5 rounded-xl text-xs sm:text-sm font-medium bg-[#0b0f1a]"
-              >
-                <option value="">Todos los Grados</option>
-                {availableGrades.map(g => (
-                  <option key={g} value={g}>{g} Grado</option>
-                ))}
-              </select>
+            {/* Active Filters & Counter Banner */}
+            <div className="flex flex-wrap items-center justify-between pt-2 border-t border-white/5 text-xs text-gray-400 gap-2">
+              <div className="flex items-center space-x-2">
+                <span className="font-bold text-gray-300">Total en Base de Datos:</span>
+                <span className="bg-cyan-500/10 text-cyan-400 border border-cyan-500/20 px-2 py-0.5 rounded-full font-mono font-bold">
+                  {students.length} alumnos
+                </span>
+                {(gradeFilter || groupFilter || searchQuery) && (
+                  <span className="text-gray-400">
+                    (Mostrando {filteredStudents.length})
+                  </span>
+                )}
+              </div>
 
-              <select
-                value={groupFilter}
-                onChange={(e) => setGroupFilter(e.target.value)}
-                className="flex-1 md:flex-initial glass-input px-4 py-2.5 rounded-xl text-xs sm:text-sm font-medium bg-[#0b0f1a]"
-              >
-                <option value="">Todos los Grupos</option>
-                {availableGroups.map(grp => (
-                  <option key={grp} value={grp}>Grupo {grp}</option>
-                ))}
-              </select>
+              {(gradeFilter || groupFilter || searchQuery) && (
+                <button
+                  onClick={() => {
+                    setGradeFilter('');
+                    setGroupFilter('');
+                    setSearchQuery('');
+                  }}
+                  className="flex items-center space-x-1.5 px-3 py-1 rounded-lg bg-white/5 hover:bg-white/10 text-cyan-400 hover:text-cyan-300 border border-white/10 transition-colors cursor-pointer"
+                >
+                  <X size={12} />
+                  <span>Limpiar filtros (Ver todos los {students.length})</span>
+                </button>
+              )}
             </div>
-
           </div>
 
           {/* Student Grid / List */}
@@ -233,9 +262,29 @@ export default function StudentsPage() {
               <div className="w-16 h-16 rounded-full bg-white/5 border border-white/10 flex items-center justify-center text-3xl mx-auto">
                 🔎
               </div>
-              <div className="space-y-1">
-                <h3 className="text-lg font-bold text-white">Ningún alumno coincide</h3>
-                <p className="text-gray-400 text-sm max-w-sm mx-auto">Prueba limpiando los filtros de búsqueda.</p>
+              <div className="space-y-2">
+                <h3 className="text-lg font-bold text-white">
+                  {students.length > 0 
+                    ? `Ningún alumno coincide con los filtros (${students.length} registrados en total)` 
+                    : 'No hay alumnos registrados'}
+                </h3>
+                <p className="text-gray-400 text-sm max-w-sm mx-auto">
+                  {students.length > 0 
+                    ? 'Los alumnos que subiste siguen guardados en el sistema. Haz clic abajo para quitar los filtros de grado o grupo.'
+                    : 'Usa el botón "Subir por Grupos (Excel)" para importar tu lista de alumnos.'}
+                </p>
+                {students.length > 0 && (
+                  <button
+                    onClick={() => {
+                      setGradeFilter('');
+                      setGroupFilter('');
+                      setSearchQuery('');
+                    }}
+                    className="mt-3 inline-flex items-center space-x-2 px-4 py-2 rounded-xl bg-cyan-500/20 hover:bg-cyan-500/30 text-cyan-400 border border-cyan-500/30 text-sm font-bold transition-all cursor-pointer"
+                  >
+                    <span>Mostrar todos los {students.length} alumnos</span>
+                  </button>
+                )}
               </div>
             </div>
           ) : (

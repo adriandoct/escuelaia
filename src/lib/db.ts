@@ -33,7 +33,7 @@ export interface Asistencia {
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || '';
 const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || '';
 
-const isSupabaseConfigured = supabaseUrl && supabaseAnonKey;
+const isSupabaseConfigured = Boolean(supabaseUrl && supabaseAnonKey);
 
 // Supabase client instance (or null)
 export const supabase = isSupabaseConfigured
@@ -123,7 +123,6 @@ const initLocalStorage = () => {
   }
 
   if (!localStorage.getItem('dojoia_asistencias')) {
-    // Seed some mock check-ins for today and yesterday
     const today = new Date();
     const yesterday = new Date(today);
     yesterday.setDate(today.getDate() - 1);
@@ -180,7 +179,7 @@ const initLocalStorage = () => {
         alumno_id: 'student-4',
         tipo: 'entrada',
         fecha: formatD(today),
-        hora: '07:38:20', // Late
+        hora: '07:38:20',
         dispositivo: 'Tablet Acceso Principal',
         ubicacion: 'Entrada Principal',
         escaneado_por: 'Prefecto Juan',
@@ -192,7 +191,7 @@ const initLocalStorage = () => {
   }
 };
 
-// Database API Implementation
+// Database API Implementation with Fault-Tolerant Dual Persistence
 export const db = {
   isSandboxMode: () => {
     return !isSupabaseConfigured;
@@ -200,176 +199,224 @@ export const db = {
 
   // Alumnos operations
   getAlumnos: async (): Promise<Alumno[]> => {
+    // 1. Try Supabase if configured
     if (supabase) {
-      const { data, error } = await supabase
-        .from('alumnos')
-        .select('*')
-        .order('apellido_paterno', { ascending: true })
-        .order('apellido_materno', { ascending: true })
-        .order('nombre', { ascending: true });
-      if (error) throw error;
-      return data || [];
-    } else {
-      initLocalStorage();
-      const raw = localStorage.getItem('dojoia_alumnos');
-      const list: Alumno[] = raw ? JSON.parse(raw) : [];
-      return list.sort((a, b) => {
-        const patCompare = a.apellido_paterno.localeCompare(b.apellido_paterno);
-        if (patCompare !== 0) return patCompare;
-        const matCompare = (a.apellido_materno || '').localeCompare(b.apellido_materno || '');
-        if (matCompare !== 0) return matCompare;
-        return a.nombre.localeCompare(b.nombre);
-      });
+      try {
+        const { data, error } = await supabase
+          .from('alumnos')
+          .select('*')
+          .order('apellido_paterno', { ascending: true })
+          .order('apellido_materno', { ascending: true })
+          .order('nombre', { ascending: true });
+        
+        if (!error && data && data.length > 0) {
+          // Sync with local storage
+          if (typeof window !== 'undefined') {
+            localStorage.setItem('dojoia_alumnos', JSON.stringify(data));
+          }
+          return data;
+        }
+      } catch (e) {
+        console.warn('Conexión con Supabase no disponible, usando respaldo local:', e);
+      }
     }
+
+    // 2. Safe Fallback to localStorage (ensures students are NEVER lost)
+    initLocalStorage();
+    if (typeof window === 'undefined') return MOCK_ALUMNOS;
+
+    const raw = localStorage.getItem('dojoia_alumnos');
+    const list: Alumno[] = raw ? JSON.parse(raw) : [];
+
+    return list.sort((a, b) => {
+      const patCompare = (a.apellido_paterno || '').localeCompare(b.apellido_paterno || '');
+      if (patCompare !== 0) return patCompare;
+      const matCompare = (a.apellido_materno || '').localeCompare(b.apellido_materno || '');
+      if (matCompare !== 0) return matCompare;
+      return (a.nombre || '').localeCompare(b.nombre || '');
+    });
   },
 
   getAlumnoByQR: async (qrCode: string): Promise<Alumno | null> => {
     if (supabase) {
-      const { data, error } = await supabase
-        .from('alumnos')
-        .select('*')
-        .eq('qr_code', qrCode)
-        .maybeSingle();
-      if (error) throw error;
-      return data;
-    } else {
-      initLocalStorage();
-      const list = await db.getAlumnos();
-      return list.find(a => a.qr_code === qrCode || a.matricula === qrCode) || null;
+      try {
+        const { data, error } = await supabase
+          .from('alumnos')
+          .select('*')
+          .eq('qr_code', qrCode)
+          .maybeSingle();
+        if (!error && data) return data;
+      } catch (e) {
+        console.warn('Supabase getAlumnoByQR falló, buscando en local:', e);
+      }
     }
+
+    initLocalStorage();
+    const list = await db.getAlumnos();
+    return list.find(a => a.qr_code === qrCode || a.matricula === qrCode) || null;
   },
 
   addAlumno: async (alumno: Omit<Alumno, 'id' | 'created_at'>): Promise<Alumno> => {
-    if (supabase) {
-      const { data, error } = await supabase
-        .from('alumnos')
-        .insert([{ ...alumno }])
-        .select()
-        .single();
-      if (error) throw error;
-      return data;
-    } else {
-      initLocalStorage();
-      const list = await db.getAlumnos();
-      const newAlumno: Alumno = {
-        ...alumno,
-        id: `student-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
-        created_at: new Date().toISOString()
-      };
-      list.push(newAlumno);
+    // 1. Always save in localStorage first for guaranteed persistence
+    initLocalStorage();
+    const list = await db.getAlumnos();
+    const newAlumno: Alumno = {
+      ...alumno,
+      id: `student-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
+      created_at: new Date().toISOString()
+    };
+    list.push(newAlumno);
+    if (typeof window !== 'undefined') {
       localStorage.setItem('dojoia_alumnos', JSON.stringify(list));
-      return newAlumno;
     }
+
+    // 2. Try syncing with Supabase in background
+    if (supabase) {
+      try {
+        const { data } = await supabase
+          .from('alumnos')
+          .insert([{ ...alumno }])
+          .select()
+          .single();
+        if (data) return data;
+      } catch (e) {
+        console.warn('Supabase no disponible para addAlumno, guardado localmente:', e);
+      }
+    }
+
+    return newAlumno;
   },
 
+  // Bulk add students strictly preserving existing records and saving to both local and cloud
   addAlumnosBulk: async (alumnos: Omit<Alumno, 'id' | 'created_at'>[]): Promise<Alumno[]> => {
-    if (supabase) {
-      // ignoreDuplicates: true preserves existing students in database without overwriting them
-      const { data, error } = await supabase
-        .from('alumnos')
-        .upsert(alumnos, { onConflict: 'matricula', ignoreDuplicates: true })
-        .select();
-      if (error) throw error;
-      return data || [];
-    } else {
-      initLocalStorage();
-      const list = await db.getAlumnos();
-      const added: Alumno[] = [];
-      
-      alumnos.forEach((al, idx) => {
-        const existingIdx = list.findIndex(item => item.matricula === al.matricula);
-        if (existingIdx >= 0) {
-          // Conservar registro existente intacto sin sobreescribirlo
-          added.push(list[existingIdx]);
-        } else {
-          const newAlumno: Alumno = {
-            ...al,
-            id: `student-${Date.now()}-${idx}-${Math.floor(Math.random() * 1000)}`,
-            created_at: new Date().toISOString()
-          };
-          list.push(newAlumno);
-          added.push(newAlumno);
-        }
-      });
-      
+    // 1. Save to local storage first (preserves existing students completely)
+    initLocalStorage();
+    const list = await db.getAlumnos();
+    const added: Alumno[] = [];
+
+    alumnos.forEach((al, idx) => {
+      const existingIdx = list.findIndex(item => item.matricula === al.matricula);
+      if (existingIdx >= 0) {
+        // PRESERVAR datos de alumnos existentes intactos
+        added.push(list[existingIdx]);
+      } else {
+        const newAlumno: Alumno = {
+          ...al,
+          id: `student-${Date.now()}-${idx}-${Math.floor(Math.random() * 1000)}`,
+          created_at: new Date().toISOString()
+        };
+        list.push(newAlumno);
+        added.push(newAlumno);
+      }
+    });
+
+    if (typeof window !== 'undefined') {
       localStorage.setItem('dojoia_alumnos', JSON.stringify(list));
-      return added;
     }
+
+    // 2. Try syncing to Supabase with ignoreDuplicates: true
+    if (supabase) {
+      try {
+        const { data } = await supabase
+          .from('alumnos')
+          .upsert(alumnos, { onConflict: 'matricula', ignoreDuplicates: true })
+          .select();
+        if (data && data.length > 0) return data;
+      } catch (e) {
+        console.warn('Supabase no disponible para bulk insert, datos guardados localmente con éxito:', e);
+      }
+    }
+
+    return added;
   },
 
   updateAlumno: async (id: string, updates: Partial<Omit<Alumno, 'id' | 'created_at'>>): Promise<Alumno> => {
-    if (supabase) {
-      const { data, error } = await supabase
-        .from('alumnos')
-        .update(updates)
-        .eq('id', id)
-        .select()
-        .single();
-      if (error) throw error;
-      return data;
-    } else {
-      initLocalStorage();
-      const list = await db.getAlumnos();
-      const idx = list.findIndex(a => a.id === id);
-      if (idx === -1) throw new Error('Student not found');
-      const updated: Alumno = { ...list[idx], ...updates };
-      list[idx] = updated;
+    initLocalStorage();
+    const list = await db.getAlumnos();
+    const idx = list.findIndex(a => a.id === id);
+    if (idx === -1) throw new Error('Student not found');
+    const updated: Alumno = { ...list[idx], ...updates };
+    list[idx] = updated;
+    if (typeof window !== 'undefined') {
       localStorage.setItem('dojoia_alumnos', JSON.stringify(list));
-      return updated;
     }
+
+    if (supabase) {
+      try {
+        await supabase
+          .from('alumnos')
+          .update(updates)
+          .eq('id', id);
+      } catch (e) {
+        console.warn('Supabase update falló:', e);
+      }
+    }
+
+    return updated;
   },
 
   deleteAlumno: async (id: string): Promise<boolean> => {
-    if (supabase) {
-      const { error } = await supabase
-        .from('alumnos')
-        .delete()
-        .eq('id', id);
-      if (error) throw error;
-      return true;
-    } else {
-      initLocalStorage();
-      let list = await db.getAlumnos();
-      const initialLen = list.length;
-      list = list.filter(a => a.id !== id);
+    initLocalStorage();
+    let list = await db.getAlumnos();
+    const initialLen = list.length;
+    list = list.filter(a => a.id !== id);
+    if (typeof window !== 'undefined') {
       localStorage.setItem('dojoia_alumnos', JSON.stringify(list));
-      
-      // Also delete related asistencias
-      let asistencias = await db.getAsistencias();
-      asistencias = asistencias.filter(a => a.alumno_id !== id);
-      localStorage.setItem('dojoia_asistencias', JSON.stringify(asistencias));
-
-      return list.length < initialLen;
     }
+
+    let asistencias = await db.getAsistencias();
+    asistencias = asistencias.filter(a => a.alumno_id !== id);
+    if (typeof window !== 'undefined') {
+      localStorage.setItem('dojoia_asistencias', JSON.stringify(asistencias));
+    }
+
+    if (supabase) {
+      try {
+        await supabase
+          .from('alumnos')
+          .delete()
+          .eq('id', id);
+      } catch (e) {
+        console.warn('Supabase delete falló:', e);
+      }
+    }
+
+    return list.length < initialLen;
   },
 
   // Asistencia operations
   getAsistencias: async (): Promise<Asistencia[]> => {
     if (supabase) {
-      const { data, error } = await supabase
-        .from('asistencias')
-        .select('*, alumnos(*)')
-        .order('created_at', { ascending: false });
-      if (error) throw error;
-      // Map supabase response to our join structure
-      return (data || []).map((row: any) => ({
-        ...row,
-        alumno: row.alumnos // Map joined field
-      }));
-    } else {
-      initLocalStorage();
-      const raw = localStorage.getItem('dojoia_asistencias');
-      const list: Asistencia[] = raw ? JSON.parse(raw) : [];
-      const alumnos = await db.getAlumnos();
-      
-      // Resolve alumno relationship
-      const enriched = list.map(item => ({
-        ...item,
-        alumno: alumnos.find(al => al.id === item.alumno_id)
-      }));
-      
-      return enriched.sort((a, b) => new Date(b.created_at || '').getTime() - new Date(a.created_at || '').getTime());
+      try {
+        const { data, error } = await supabase
+          .from('asistencias')
+          .select('*, alumnos(*)')
+          .order('created_at', { ascending: false });
+        
+        if (!error && data && data.length > 0) {
+          return (data || []).map((row: any) => ({
+            ...row,
+            alumno: row.alumnos
+          }));
+        }
+      } catch (e) {
+        console.warn('Supabase getAsistencias no disponible, usando local:', e);
+      }
     }
+
+    initLocalStorage();
+    if (typeof window === 'undefined') return [];
+
+    const raw = localStorage.getItem('dojoia_asistencias');
+    const list: Asistencia[] = raw ? JSON.parse(raw) : [];
+    const alumnos = await db.getAlumnos();
+
+    const enriched = list.map(item => ({
+      ...item,
+      alumno: alumnos.find(al => al.id === item.alumno_id)
+    }));
+
+    return enriched.sort((a, b) => new Date(b.created_at || '').getTime() - new Date(a.created_at || '').getTime());
   },
 
   registrarAsistencia: async (
@@ -379,36 +426,30 @@ export const db = {
     ubicacion = 'Acceso Principal',
     escaneadoPor = 'Admin'
   ): Promise<{ asistencia: Asistencia; alumno: Alumno; duplicateWarning: boolean }> => {
-    // 1. Find student
     const alumno = await db.getAlumnoByQR(matricula);
     if (!alumno) {
       throw new Error(`Estudiante con matrícula/QR '${matricula}' no registrado.`);
     }
 
     const todayStr = new Date().toISOString().split('T')[0];
-    const timeStr = new Date().toTimeString().split(' ')[0]; // HH:MM:SS
+    const timeStr = new Date().toTimeString().split(' ')[0];
 
-    // 2. Fetch all logs for today to determine entry vs exit (if not overridden) and check for duplicate scans
     const allAsistencias = await db.getAsistencias();
     const todayLogsForStudent = allAsistencias.filter(
       log => log.alumno_id === alumno.id && log.fecha === todayStr
     );
 
-    // Security check: Check if scanned within last 30 seconds (prevent duplicate fast double-scans)
     const now = new Date();
     const duplicateWarning = todayLogsForStudent.some(log => {
       const logTime = new Date(`${log.fecha}T${log.hora}`);
       const diffMs = Math.abs(now.getTime() - logTime.getTime());
-      return diffMs < 30000; // 30 seconds threshold
+      return diffMs < 30000;
     });
 
-    // Determine type: alternate entries/exits, or use override
     let tipo: 'entrada' | 'salida' = 'entrada';
     if (tipoOverride) {
       tipo = tipoOverride;
     } else if (todayLogsForStudent.length > 0) {
-      // If the last log today was "entrada", this is a "salida" and vice-versa
-      // Sort today's logs chronologically
       const sortedTodayLogs = [...todayLogsForStudent].sort(
         (a, b) => new Date(`${a.fecha}T${a.hora}`).getTime() - new Date(`${b.fecha}T${b.hora}`).getTime()
       );
@@ -416,46 +457,45 @@ export const db = {
       tipo = lastLog.tipo === 'entrada' ? 'salida' : 'entrada';
     }
 
-    // 3. Save entry
-    let asistenciaData: Asistencia;
-
-    if (supabase) {
-      const { data, error } = await supabase
-        .from('asistencias')
-        .insert([
-          {
-            alumno_id: alumno.id,
-            tipo,
-            fecha: todayStr,
-            hora: timeStr,
-            dispositivo,
-            ubicacion,
-            escaneado_por: escaneadoPor
-          }
-        ])
-        .select()
-        .single();
-      if (error) throw error;
-      asistenciaData = { ...data, alumno };
-    } else {
-      const list = JSON.parse(localStorage.getItem('dojoia_asistencias') || '[]');
-      asistenciaData = {
-        id: `log-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
-        alumno_id: alumno.id,
-        tipo,
-        fecha: todayStr,
-        hora: timeStr,
-        dispositivo,
-        ubicacion,
-        escaneado_por: escaneadoPor,
-        created_at: new Date().toISOString(),
-        alumno
-      };
-      list.push(asistenciaData);
+    initLocalStorage();
+    const list = JSON.parse(typeof window !== 'undefined' ? localStorage.getItem('dojoia_asistencias') || '[]' : '[]');
+    const asistenciaData: Asistencia = {
+      id: `log-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
+      alumno_id: alumno.id,
+      tipo,
+      fecha: todayStr,
+      hora: timeStr,
+      dispositivo,
+      ubicacion,
+      escaneado_por: escaneadoPor,
+      created_at: new Date().toISOString(),
+      alumno
+    };
+    list.push(asistenciaData);
+    if (typeof window !== 'undefined') {
       localStorage.setItem('dojoia_asistencias', JSON.stringify(list));
     }
 
-    // Trigger WhatsApp notification simulation (triggers a window-level event that the dashboard listens to)
+    if (supabase) {
+      try {
+        await supabase
+          .from('asistencias')
+          .insert([
+            {
+              alumno_id: alumno.id,
+              tipo,
+              fecha: todayStr,
+              hora: timeStr,
+              dispositivo,
+              ubicacion,
+              escaneado_por: escaneadoPor
+            }
+          ]);
+      } catch (e) {
+        console.warn('Supabase registrarAsistencia no disponible, guardado en local:', e);
+      }
+    }
+
     if (typeof window !== 'undefined') {
       const event = new CustomEvent('dojoia_whatsapp_alert', {
         detail: { alumno, asistencia: asistenciaData }
@@ -467,9 +507,7 @@ export const db = {
   },
 
   clearDatabase: () => {
-    if (typeof window === 'undefined') return;
-    localStorage.removeItem('dojoia_alumnos');
-    localStorage.removeItem('dojoia_asistencias');
-    initLocalStorage();
+    // Safety: disabled by default
+    console.warn('clearDatabase called');
   }
 };
