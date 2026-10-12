@@ -264,9 +264,10 @@ export const db = {
 
   addAlumnosBulk: async (alumnos: Omit<Alumno, 'id' | 'created_at'>[]): Promise<Alumno[]> => {
     if (supabase) {
+      // ignoreDuplicates: true preserves existing students in database without overwriting them
       const { data, error } = await supabase
         .from('alumnos')
-        .upsert(alumnos, { onConflict: 'matricula' })
+        .upsert(alumnos, { onConflict: 'matricula', ignoreDuplicates: true })
         .select();
       if (error) throw error;
       return data || [];
@@ -278,7 +279,7 @@ export const db = {
       alumnos.forEach((al, idx) => {
         const existingIdx = list.findIndex(item => item.matricula === al.matricula);
         if (existingIdx >= 0) {
-          list[existingIdx] = { ...list[existingIdx], ...al };
+          // Conservar registro existente intacto sin sobreescribirlo
           added.push(list[existingIdx]);
         } else {
           const newAlumno: Alumno = {

@@ -7,7 +7,8 @@ import * as XLSX from 'xlsx';
 import { db, Alumno } from '@/lib/db';
 import { 
   Upload, FileSpreadsheet, X, Check, AlertCircle, Download, 
-  Layers, CheckCircle2, Sparkles, Filter, Hash, User, Phone, CheckSquare
+  Layers, CheckCircle2, Sparkles, Filter, Hash, User, Phone, CheckSquare,
+  ShieldCheck, ArrowUpDown
 } from 'lucide-react';
 
 interface BulkUploadModalProps {
@@ -73,9 +74,10 @@ const isNombreHeader = (text: string): boolean => {
   const norm = normalizeText(text);
   return (
     norm.includes('NOMBRE') ||
-    norm.includes('ALUMNO') ||
-    norm.includes('ESTUDIANTE') ||
-    norm.includes('APELLIDO')
+    norm.includes('ALUMN') ||
+    norm.includes('ESTUDIANT') ||
+    norm.includes('APELLID') ||
+    norm.includes('LISTA')
   );
 };
 
@@ -144,15 +146,22 @@ export default function BulkUploadModal({ isOpen, onClose, onSuccess }: BulkUplo
   const [colNombreIndex, setColNombreIndex] = useState<number>(-1);
   const [colTelefonoIndex, setColTelefonoIndex] = useState<number>(-1);
 
-  // Group & Grade configuration
+  // Name format in the Excel file
+  // 'apellidos_primero' = "Martínez López Carlos Daniel" (Standard Mexican school lists)
+  // 'nombres_primero'   = "Carlos Daniel Martínez López"
+  // 'nombre_completo'   = Keep as-is
+  const [nameFormat, setNameFormat] = useState<'apellidos_primero' | 'nombres_primero' | 'nombre_completo'>('apellidos_primero');
+
+  // Group & Grade configuration (Active school cycle: 1°, 3° y 5°)
   const [writtenGroup, setWrittenGroup] = useState<string>('A');
   const [selectedGrade, setSelectedGrade] = useState<string>('1°');
+  const [cycleType, setCycleType] = useState<'impares' | 'pares'>('impares');
   const [customGrade, setCustomGrade] = useState<string>('');
 
   // Parsed students preview
   const [previewStudents, setPreviewStudents] = useState<ParsedStudentPreview[]>([]);
   const [isProcessing, setIsProcessing] = useState<boolean>(false);
-  const [importStatus, setImportStatus] = useState<{ count: number; group: string } | null>(null);
+  const [importStatus, setImportStatus] = useState<{ count: number; group: string; grade: string } | null>(null);
 
   // Parse a sheet into raw 2D array and auto-detect header row & columns
   const loadSheetMatrix = useCallback((wb: XLSX.WorkBook, sheetName: string) => {
@@ -160,7 +169,7 @@ export default function BulkUploadModal({ isOpen, onClose, onSuccess }: BulkUplo
       const worksheet = wb.Sheets[sheetName];
       if (!worksheet) return;
 
-      // Extract raw rows as 2D array to inspect without losing row positions
+      // Extract raw rows as 2D array
       const matrix = XLSX.utils.sheet_to_json<unknown[]>(worksheet, { header: 1, defval: '' });
       if (!matrix || matrix.length === 0) {
         setSheetMatrix([]);
@@ -201,7 +210,6 @@ export default function BulkUploadModal({ isOpen, onClose, onSuccess }: BulkUplo
           }
         });
 
-        // Boost if both matricula and nombre are in the same row
         if (hasMatricula && hasNombre) score += 20;
 
         if (score > highestScore && score > 0) {
@@ -219,7 +227,6 @@ export default function BulkUploadModal({ isOpen, onClose, onSuccess }: BulkUplo
 
       for (let c = 0; c < totalCols; c++) {
         const rawName = String(headerRow[c] ?? '').trim();
-        // If current header cell is empty, check previous row cell (for merged multi-level headers)
         const fallbackName = rawName || (bestRowIndex > 0 ? String(matrix[bestRowIndex - 1]?.[c] ?? '').trim() : '');
         const letter = getExcelColumnLetter(c);
         const label = fallbackName ? `${letter}: ${fallbackName}` : `Columna ${letter}`;
@@ -251,22 +258,22 @@ export default function BulkUploadModal({ isOpen, onClose, onSuccess }: BulkUplo
         }
       });
 
-      // Fallbacks if not found by header label: scan sample data rows (check column patterns)
+      // Sample-based fallback for finding Matricula and Nombre
       if (detectedMat === -1 || detectedNom === -1) {
-        const sampleRows = matrix.slice(bestRowIndex + 1, bestRowIndex + 10);
+        const sampleRows = matrix.slice(bestRowIndex + 1, bestRowIndex + 15);
         for (let c = 0; c < totalCols; c++) {
           const sampleValues = sampleRows.map(r => String(r?.[c] ?? '').trim()).filter(Boolean);
           if (sampleValues.length === 0) continue;
 
-          // Check if looks like a student registration code (numeric or alphanumeric, 5-15 chars)
-          const allLookLikeMatricula = sampleValues.every(v => /^[A-Za-z0-9\-_]{5,20}$/.test(v) && !v.includes(' '));
+          // Matricula pattern: alphanumeric, no spaces, 5-20 characters
+          const allLookLikeMatricula = sampleValues.length >= 3 && sampleValues.every(v => /^[A-Za-z0-9\-_]{5,20}$/.test(v) && !v.includes(' '));
           if (detectedMat === -1 && allLookLikeMatricula) {
             detectedMat = c;
             continue;
           }
 
-          // Check if looks like a full name (contains space, letters only)
-          const allLookLikeNames = sampleValues.every(v => v.includes(' ') && /^[A-Za-zÁÉÍÓÚáéíóúñÑ\s\.]+$/.test(v));
+          // Name pattern: letters only with spaces (2-5 words)
+          const allLookLikeNames = sampleValues.length >= 3 && sampleValues.every(v => v.includes(' ') && /^[A-Za-zÁÉÍÓÚáéíóúñÑ\s\.]+$/.test(v));
           if (detectedNom === -1 && allLookLikeNames) {
             detectedNom = c;
           }
@@ -284,7 +291,7 @@ export default function BulkUploadModal({ isOpen, onClose, onSuccess }: BulkUplo
     }
   }, []);
 
-  // Recalculate parsed students preview when column mappings, matrix, or header row changes
+  // Recalculate parsed students preview when column mappings, matrix, header row, or name format changes
   useEffect(() => {
     if (!sheetMatrix || sheetMatrix.length === 0) {
       setPreviewStudents([]);
@@ -327,32 +334,63 @@ export default function BulkUploadModal({ isOpen, onClose, onSuccess }: BulkUplo
         return;
       }
 
-      // Split name intelligently into nombre and apellidos
+      // Parse and localize student names properly based on selected format
       const parts = rawNombre.split(/\s+/).filter(Boolean);
       let finalNombre = rawNombre;
       let finalPaterno = '-';
       let finalMaterno = '';
 
-      if (parts.length === 1) {
-        finalNombre = parts[0];
+      if (nameFormat === 'apellidos_primero') {
+        // Standard Mexican School / CECYTE Format: [APELLIDO PATERNO] [APELLIDO MATERNO] [NOMBRE(S)]
+        // Ej: "MARTÍNEZ LÓPEZ CARLOS DANIEL"
+        if (parts.length === 1) {
+          finalNombre = parts[0];
+          finalPaterno = '-';
+          finalMaterno = '';
+        } else if (parts.length === 2) {
+          // "MARTÍNEZ CARLOS" -> Paterno: MARTÍNEZ, Nombre: CARLOS
+          finalPaterno = parts[0];
+          finalMaterno = '';
+          finalNombre = parts[1];
+        } else if (parts.length === 3) {
+          // "MARTÍNEZ LÓPEZ CARLOS" -> Paterno: MARTÍNEZ, Materno: LÓPEZ, Nombre: CARLOS
+          finalPaterno = parts[0];
+          finalMaterno = parts[1];
+          finalNombre = parts[2];
+        } else {
+          // "MARTÍNEZ LÓPEZ CARLOS DANIEL" -> Paterno: MARTÍNEZ, Materno: LÓPEZ, Nombre: CARLOS DANIEL
+          finalPaterno = parts[0];
+          finalMaterno = parts[1];
+          finalNombre = parts.slice(2).join(' ');
+        }
+      } else if (nameFormat === 'nombres_primero') {
+        // [NOMBRE(S)] [APELLIDO PATERNO] [APELLIDO MATERNO]
+        // Ej: "CARLOS DANIEL MARTÍNEZ LÓPEZ"
+        if (parts.length === 1) {
+          finalNombre = parts[0];
+          finalPaterno = '-';
+          finalMaterno = '';
+        } else if (parts.length === 2) {
+          finalNombre = parts[0];
+          finalPaterno = parts[1];
+          finalMaterno = '';
+        } else if (parts.length === 3) {
+          finalNombre = parts[0];
+          finalPaterno = parts[1];
+          finalMaterno = parts[2];
+        } else {
+          finalNombre = parts.slice(0, parts.length - 2).join(' ');
+          finalPaterno = parts[parts.length - 2];
+          finalMaterno = parts[parts.length - 1];
+        }
+      } else {
+        // Mantener nombre completo tal cual
+        finalNombre = rawNombre;
         finalPaterno = '-';
         finalMaterno = '';
-      } else if (parts.length === 2) {
-        finalNombre = parts[0];
-        finalPaterno = parts[1];
-        finalMaterno = '';
-      } else if (parts.length === 3) {
-        finalNombre = parts[0];
-        finalPaterno = parts[1];
-        finalMaterno = parts[2];
-      } else {
-        // 4+ words (e.g. "Juan Carlos Pérez Gómez")
-        finalNombre = parts.slice(0, parts.length - 2).join(' ');
-        finalPaterno = parts[parts.length - 2];
-        finalMaterno = parts[parts.length - 1];
       }
 
-      // Format telephone number
+      // Clean telephone
       let cleanPhone = rawTelefono ? rawTelefono.replace(/[\s\-\(\)]/g, '') : '+52';
       if (cleanPhone && cleanPhone !== '+52' && !cleanPhone.startsWith('+')) {
         cleanPhone = cleanPhone.length === 10 ? `+52${cleanPhone}` : `+${cleanPhone}`;
@@ -371,7 +409,7 @@ export default function BulkUploadModal({ isOpen, onClose, onSuccess }: BulkUplo
     });
 
     setPreviewStudents(students);
-  }, [sheetMatrix, headerRowIndex, colMatriculaIndex, colNombreIndex, colTelefonoIndex]);
+  }, [sheetMatrix, headerRowIndex, colMatriculaIndex, colNombreIndex, colTelefonoIndex, nameFormat]);
 
   // Handle file selection
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -440,45 +478,45 @@ export default function BulkUploadModal({ isOpen, onClose, onSuccess }: BulkUplo
     }
   };
 
-  // Download official template
+  // Download official template with standard format
   const handleDownloadTemplate = () => {
     const wb = XLSX.utils.book_new();
     const sampleData = [
       {
         MATRICULA: 'DOJ-2026-101',
-        NOMBRE: 'Carlos Martínez López',
+        NOMBRE: 'Martínez López Carlos Daniel',
         TELEFONO1: '+525512345678'
       },
       {
         MATRICULA: 'DOJ-2026-102',
-        NOMBRE: 'Sofía Herrera Díaz',
+        NOMBRE: 'Herrera Díaz Sofía',
         TELEFONO1: '+525523456789'
       },
       {
         MATRICULA: 'DOJ-2026-103',
-        NOMBRE: 'Mateo Ramírez Gómez',
+        NOMBRE: 'Ramírez Gómez Mateo',
         TELEFONO1: '+525534567890'
       },
       {
         MATRICULA: 'DOJ-2026-104',
-        NOMBRE: 'Valentina Castro Vega',
+        NOMBRE: 'Castro Vega Valentina',
         TELEFONO1: '+525545678901'
       },
       {
         MATRICULA: 'DOJ-2026-105',
-        NOMBRE: 'Sebastián Ortiz Flores',
+        NOMBRE: 'Ortiz Flores Sebastián',
         TELEFONO1: '+525556789012'
       }
     ];
 
     const ws = XLSX.utils.json_to_sheet(sampleData);
-    ws['!cols'] = [{ wch: 18 }, { wch: 32 }, { wch: 20 }];
+    ws['!cols'] = [{ wch: 18 }, { wch: 35 }, { wch: 20 }];
 
     XLSX.utils.book_append_sheet(wb, ws, 'Grupo A');
     XLSX.writeFile(wb, 'plantilla_matricula_nombre_telefono1.xlsx');
   };
 
-  // Bulk import only Matricula, Nombre and Telefono1 (ignore all other columns)
+  // Bulk import strictly preserving existing database records
   const handleBulkImport = async () => {
     const targetGroup = writtenGroup.trim().toUpperCase();
     if (!targetGroup) {
@@ -497,8 +535,8 @@ export default function BulkUploadModal({ isOpen, onClose, onSuccess }: BulkUplo
     setIsProcessing(true);
 
     try {
-      // ONLY include Matricula, Nombre, Telefono1 (and required system fields)
-      // Discard all other columns from the Excel (grades, partials, totals, averages, etc.)
+      // ONLY include Matricula, Nombre, Telefono1
+      // All grades, totals, exams and extra columns in the Excel are ignored
       const recordsToInsert: Omit<Alumno, 'id' | 'created_at'>[] = validStudents.map(s => ({
         matricula: s.matricula,
         nombre: s.nombre,
@@ -512,11 +550,13 @@ export default function BulkUploadModal({ isOpen, onClose, onSuccess }: BulkUplo
         qr_code: s.matricula
       }));
 
+      // db.addAlumnosBulk uses ignoreDuplicates: true, preserving any previously uploaded students!
       await db.addAlumnosBulk(recordsToInsert);
 
       setImportStatus({
         count: recordsToInsert.length,
-        group: targetGroup
+        group: targetGroup,
+        grade: effectiveGrade
       });
 
       setTimeout(() => {
@@ -552,11 +592,11 @@ export default function BulkUploadModal({ isOpen, onClose, onSuccess }: BulkUplo
               <h3 className="text-xl sm:text-2xl font-black text-white flex items-center gap-2">
                 Subir Alumnos por Grupos (Excel)
                 <span className="text-[10px] uppercase font-bold tracking-wider px-2 py-0.5 rounded-full bg-cyan-500/20 text-cyan-300 border border-cyan-500/30">
-                  Filtro Estricto
+                  Ciclo 1°, 3° y 5°
                 </span>
               </h3>
               <p className="text-xs sm:text-sm text-gray-400 mt-0.5">
-                Detecta y extrae únicamente <span className="font-mono text-cyan-400 font-bold">MATRÍCULA</span>, <span className="font-mono text-cyan-400 font-bold">NOMBRE</span> y <span className="font-mono text-cyan-400 font-bold">TELÉFONO 1</span>. Las demás columnas (parciales, promedios) son ignoradas.
+                Localiza nombres y matrículas con precisión. <span className="text-emerald-400 font-semibold">Tus registros existentes se conservan intactos.</span>
               </p>
             </div>
           </div>
@@ -581,7 +621,7 @@ export default function BulkUploadModal({ isOpen, onClose, onSuccess }: BulkUplo
               <div>
                 <span className="text-xs font-bold text-gray-400 uppercase tracking-wider block">Plantilla Limpia</span>
                 <p className="text-xs text-gray-400 mt-1">
-                  Descarga un archivo con las 3 columnas exactas: MATRICULA, NOMBRE y TELEFONO1.
+                  Descarga un formato con las columnas: MATRICULA, NOMBRE y TELEFONO1.
                 </p>
               </div>
               <button
@@ -614,7 +654,7 @@ export default function BulkUploadModal({ isOpen, onClose, onSuccess }: BulkUplo
                   {fileName ? (
                     <span className="text-cyan-400 font-mono">{fileName}</span>
                   ) : (
-                    'Selecciona o arrastra tu lista de Excel o calificaciones (.xlsx, .xls, .csv)'
+                    'Selecciona o arrastra tu archivo de Excel de alumnos (.xlsx, .xls, .csv)'
                   )}
                 </p>
                 <p className="text-xs text-gray-400 mt-0.5">
@@ -633,13 +673,13 @@ export default function BulkUploadModal({ isOpen, onClose, onSuccess }: BulkUplo
 
           </div>
 
-          {/* Configuration Step: Worksheets & Group Writing */}
+          {/* Configuration Step: Worksheets, Group & Grades (1°, 3°, 5°) */}
           {sheetNames.length > 0 && (
             <div className="glass-panel p-5 rounded-xl border-cyan-500/20 bg-cyan-950/20 space-y-4">
               
               <div className="flex items-center space-x-2 text-cyan-400 font-bold text-xs uppercase tracking-wider">
                 <Layers size={16} />
-                <span>1. Selección de Hoja y Asignación de Grupo</span>
+                <span>1. Configuración de Hoja, Grupo y Grado (Ciclo 1°, 3° y 5°)</span>
               </div>
 
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4 items-start">
@@ -675,7 +715,7 @@ export default function BulkUploadModal({ isOpen, onClose, onSuccess }: BulkUplo
                     type="text"
                     value={writtenGroup}
                     onChange={(e) => setWrittenGroup(e.target.value.toUpperCase())}
-                    placeholder="Ej. A, B, 1A, 101, Matutino-A..."
+                    placeholder="Ej. A, B, 1A, 3A, 5B..."
                     className="w-full glass-input px-3 py-2.5 rounded-xl text-sm font-black text-cyan-400 uppercase tracking-wider bg-[#080d1a] border border-cyan-500/40"
                   />
                   {/* Quick Select Buttons */}
@@ -711,13 +751,24 @@ export default function BulkUploadModal({ isOpen, onClose, onSuccess }: BulkUplo
                   </div>
                 </div>
 
-                {/* 3. Grade Selection */}
+                {/* 3. Grade Selection: Prominently 1°, 3° and 5° for this cycle */}
                 <div className="space-y-1.5">
-                  <label className="text-xs text-gray-300 font-bold block">
-                    Grado Escolar:
-                  </label>
+                  <div className="flex items-center justify-between">
+                    <label className="text-xs text-gray-300 font-bold block">
+                      Grado Escolar:
+                    </label>
+                    <button
+                      type="button"
+                      onClick={() => setCycleType(cycleType === 'impares' ? 'pares' : 'impares')}
+                      className="text-[10px] text-cyan-400 hover:underline"
+                    >
+                      {cycleType === 'impares' ? 'Ver 2°, 4°, 6°' : 'Ver Ciclo 1°, 3°, 5°'}
+                    </button>
+                  </div>
+
+                  {/* Buttons for 1°, 3°, 5° (Ciclo Actual) */}
                   <div className="grid grid-cols-3 gap-2">
-                    {['1°', '2°', '3°'].map((grade) => (
+                    {(cycleType === 'impares' ? ['1°', '3°', '5°'] : ['2°', '4°', '6°']).map((grade) => (
                       <button
                         key={grade}
                         type="button"
@@ -732,6 +783,7 @@ export default function BulkUploadModal({ isOpen, onClose, onSuccess }: BulkUplo
                       </button>
                     ))}
                   </div>
+
                   <div className="pt-1">
                     <button
                       type="button"
@@ -745,7 +797,7 @@ export default function BulkUploadModal({ isOpen, onClose, onSuccess }: BulkUplo
                         type="text"
                         value={customGrade}
                         onChange={(e) => setCustomGrade(e.target.value)}
-                        placeholder="Ej. 4°, Semestre 1..."
+                        placeholder="Ej. 1er Semestre, 3er Semestre..."
                         className="w-full mt-1.5 glass-input px-3 py-1.5 rounded-lg text-xs bg-[#080d1a]"
                       />
                     )}
@@ -757,14 +809,14 @@ export default function BulkUploadModal({ isOpen, onClose, onSuccess }: BulkUplo
             </div>
           )}
 
-          {/* CRITICAL STEP: Column Mapping for Matricula, Nombre and Telefono1 */}
+          {/* CRITICAL STEP: Column Mapping & Precise Name Localization */}
           {availableColumns.length > 0 && (
             <div className="glass-panel p-5 rounded-xl border-cyan-500/30 bg-[#0d1322] space-y-4">
               
               <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-white/10 pb-3">
                 <div className="flex items-center space-x-2 text-cyan-400 font-bold text-xs uppercase tracking-wider">
                   <Filter size={16} />
-                  <span>2. Mapeo de Atributos Solicitados (Exclusivo Matricula, Nombre, Telefono1)</span>
+                  <span>2. Localización de Columnas (Matrícula, Nombre, Teléfono 1)</span>
                 </div>
 
                 <div className="flex items-center space-x-2 text-[11px] text-gray-400">
@@ -807,7 +859,7 @@ export default function BulkUploadModal({ isOpen, onClose, onSuccess }: BulkUplo
                     ))}
                   </select>
                   <span className="text-[10px] text-gray-400 block">
-                    No. de control, clave de alumno o ID.
+                    No. de control, clave de alumno o ID escolar.
                   </span>
                 </div>
 
@@ -832,7 +884,7 @@ export default function BulkUploadModal({ isOpen, onClose, onSuccess }: BulkUplo
                     ))}
                   </select>
                   <span className="text-[10px] text-gray-400 block">
-                    Nombre completo o apellidos del alumno.
+                    Columna con el nombre completo del alumno.
                   </span>
                 </div>
 
@@ -861,10 +913,65 @@ export default function BulkUploadModal({ isOpen, onClose, onSuccess }: BulkUplo
 
               </div>
 
-              <div className="p-2.5 rounded-lg bg-cyan-950/40 border border-cyan-500/20 text-[11px] text-cyan-300/90 flex items-center space-x-2">
-                <CheckSquare size={14} className="text-cyan-400 shrink-0" />
+              {/* Precise Name Structure Selector */}
+              <div className="p-3.5 rounded-xl bg-white/[0.02] border border-cyan-500/20 space-y-2">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1.5">
+                  <label className="text-xs font-bold text-cyan-300 flex items-center space-x-1.5">
+                    <ArrowUpDown size={14} className="text-cyan-400" />
+                    <span>Estructura del Nombre en la Lista:</span>
+                  </label>
+                  <span className="text-[11px] text-gray-400">
+                    Elige cómo vienen ordenados los nombres en tu archivo:
+                  </span>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setNameFormat('apellidos_primero')}
+                    className={`p-2.5 rounded-xl text-xs font-semibold text-left transition-all border ${
+                      nameFormat === 'apellidos_primero'
+                        ? 'bg-cyan-500/10 border-cyan-400 text-cyan-300'
+                        : 'bg-white/5 border-white/5 text-gray-400 hover:bg-white/10'
+                    }`}
+                  >
+                    <span className="font-bold block text-white">🇲🇽 Apellidos Nombre(s)</span>
+                    <span className="text-[10px] text-gray-400">Ej: Martínez López Carlos</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => setNameFormat('nombres_primero')}
+                    className={`p-2.5 rounded-xl text-xs font-semibold text-left transition-all border ${
+                      nameFormat === 'nombres_primero'
+                        ? 'bg-cyan-500/10 border-cyan-400 text-cyan-300'
+                        : 'bg-white/5 border-white/5 text-gray-400 hover:bg-white/10'
+                    }`}
+                  >
+                    <span className="font-bold block text-white">Nombre(s) Apellidos</span>
+                    <span className="text-[10px] text-gray-400">Ej: Carlos Martínez López</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => setNameFormat('nombre_completo')}
+                    className={`p-2.5 rounded-xl text-xs font-semibold text-left transition-all border ${
+                      nameFormat === 'nombre_completo'
+                        ? 'bg-cyan-500/10 border-cyan-400 text-cyan-300'
+                        : 'bg-white/5 border-white/5 text-gray-400 hover:bg-white/10'
+                    }`}
+                  >
+                    <span className="font-bold block text-white">Nombre Completo</span>
+                    <span className="text-[10px] text-gray-400">Dejar sin separar</span>
+                  </button>
+                </div>
+              </div>
+
+              {/* Database Preservation Guarantee Banner */}
+              <div className="p-3 rounded-lg bg-emerald-950/30 border border-emerald-500/30 text-[11px] text-emerald-300 flex items-center space-x-2.5">
+                <ShieldCheck size={16} className="text-emerald-400 shrink-0" />
                 <span>
-                  <strong>Aviso:</strong> Solo se extraerán y guardarán la <strong>Matrícula</strong>, <strong>Nombre</strong> y <strong>Teléfono 1</strong>. Calificaciones, parciales, asistencias y promedios presentes en tu archivo serán ignorados por completo.
+                  <strong>Protección de Base de Datos Activa:</strong> Tus alumnos previamente registrados se conservan intactos. Si subes un alumno con una matrícula ya existente, no se modificará ni se borrará nada.
                 </span>
               </div>
 
@@ -877,13 +984,13 @@ export default function BulkUploadModal({ isOpen, onClose, onSuccess }: BulkUplo
               
               <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
                 <div className="flex items-center space-x-2">
-                  <span className="font-extrabold text-white text-sm">Vista Previa de Alumnos Detectados</span>
+                  <span className="font-extrabold text-white text-sm">Vista Previa de Alumnos Localizados</span>
                   <span className="px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-400 text-xs font-bold border border-emerald-500/30">
                     {validCount} alumnos listos
                   </span>
                   {errorCount > 0 && (
                     <span className="px-2 py-0.5 rounded-full bg-red-500/10 text-red-400 text-xs font-bold border border-red-500/30">
-                      {errorCount} filas omitidas/incompletas
+                      {errorCount} filas omitidas
                     </span>
                   )}
                 </div>
@@ -908,9 +1015,10 @@ export default function BulkUploadModal({ isOpen, onClose, onSuccess }: BulkUplo
                         <th className="py-2.5 px-3">#</th>
                         <th className="py-2.5 px-3">Matrícula</th>
                         <th className="py-2.5 px-3">Nombre(s)</th>
-                        <th className="py-2.5 px-3">Apellidos</th>
+                        <th className="py-2.5 px-3">Apellido Paterno</th>
+                        <th className="py-2.5 px-3">Apellido Materno</th>
                         <th className="py-2.5 px-3">Teléfono 1</th>
-                        <th className="py-2.5 px-3">Grupo Asignado</th>
+                        <th className="py-2.5 px-3">Grupo</th>
                         <th className="py-2.5 px-3">Estado</th>
                       </tr>
                     </thead>
@@ -924,8 +1032,11 @@ export default function BulkUploadModal({ isOpen, onClose, onSuccess }: BulkUplo
                           <td className="py-2 px-3 font-semibold text-white">
                             {student.nombre}
                           </td>
+                          <td className="py-2 px-3 text-cyan-300">
+                            {student.apellido_paterno}
+                          </td>
                           <td className="py-2 px-3 text-gray-300">
-                            {student.apellido_paterno} {student.apellido_materno}
+                            {student.apellido_materno}
                           </td>
                           <td className="py-2 px-3 font-mono text-gray-400">
                             {student.telefono}
@@ -956,7 +1067,7 @@ export default function BulkUploadModal({ isOpen, onClose, onSuccess }: BulkUplo
 
                 {previewStudents.length > 60 && (
                   <div className="py-2 px-4 bg-white/[0.02] border-t border-white/5 text-[11px] text-gray-400 text-center">
-                    Mostrando primeros 60 registros de un total de {previewStudents.length} alumnos detectados.
+                    Mostrando primeros 60 registros de un total de {previewStudents.length} alumnos localizados.
                   </div>
                 )}
               </div>
@@ -973,7 +1084,7 @@ export default function BulkUploadModal({ isOpen, onClose, onSuccess }: BulkUplo
                   ¡Alumnos importados con éxito!
                 </p>
                 <p className="text-xs text-emerald-400/80">
-                  Se subieron {importStatus.count} estudiantes al Grupo &quot;{importStatus.group}&quot;. Actualizando directorio...
+                  Se subieron {importStatus.count} estudiantes al Grado {importStatus.grade} - Grupo &quot;{importStatus.group}&quot;. Actualizando directorio...
                 </p>
               </div>
             </div>
@@ -986,7 +1097,7 @@ export default function BulkUploadModal({ isOpen, onClose, onSuccess }: BulkUplo
           <div className="text-xs text-gray-400 flex items-center space-x-2">
             <Sparkles size={14} className="text-cyan-400" />
             <span>
-              Generación automática de códigos QR y credenciales digitales para cada alumno.
+              Generación automática de códigos QR y credenciales oficiales para cada alumno.
             </span>
           </div>
 
@@ -1015,7 +1126,7 @@ export default function BulkUploadModal({ isOpen, onClose, onSuccess }: BulkUplo
                 <>
                   <Check size={16} />
                   <span>
-                    Importar {validCount > 0 ? `${validCount} Alumnos` : 'Estudiantes'} al Grupo &quot;{writtenGroup || '...'}&quot;
+                    Importar {validCount > 0 ? `${validCount} Alumnos` : 'Estudiantes'} al Grado {effectiveGradeDisplay} - Grupo &quot;{writtenGroup || '...'}&quot;
                   </span>
                 </>
               )}
