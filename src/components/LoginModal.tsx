@@ -4,21 +4,22 @@
 
 import React, { useState } from 'react';
 import { useAuth, Role } from '@/lib/auth';
-import { Shield, Key, Mail, CheckCircle2, AlertCircle, X, Sparkles, UserCheck } from 'lucide-react';
+import { Shield, Key, Mail, CheckCircle2, AlertCircle, X, Sparkles, UserCheck, Eye, EyeOff } from 'lucide-react';
 
 export default function LoginModal() {
-  const { isLoginModalOpen, closeLoginModal, loginWithCredentials, loginWithGoogle, user } = useAuth();
+  const { isLoginModalOpen, closeLoginModal, loginWithCredentials, loginWithGoogle, user, usersPasswordsMap } = useAuth();
   
-  const [tab, setTab] = useState<'google' | 'admin' | 'demo'>('google');
+  const [tab, setTab] = useState<'google' | 'password' | 'demo'>('password');
   
   // Google form state
   const [googleEmail, setGoogleEmail] = useState('');
   const [googleName, setGoogleName] = useState('');
   const [selectedRole, setSelectedRole] = useState<Role>('docente');
   
-  // Admin form state
-  const [adminEmail, setAdminEmail] = useState('admin@admin.com');
-  const [adminPass, setAdminPass] = useState('12345678Cecyte');
+  // Credentials form state
+  const [credentialsEmail, setCredentialsEmail] = useState('admin@admin.com');
+  const [credentialsPass, setCredentialsPass] = useState('12345678Cecyte');
+  const [showPassword, setShowPassword] = useState(false);
   
   // Error / Success alert state
   const [errorMessage, setErrorMessage] = useState('');
@@ -47,14 +48,14 @@ export default function LoginModal() {
     }
   };
 
-  const handleAdminSubmit = (e: React.FormEvent) => {
+  const handleCredentialsSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     setErrorMessage('');
     setSuccessMessage('');
 
-    const res = loginWithCredentials(adminEmail, adminPass);
+    const res = loginWithCredentials(credentialsEmail, credentialsPass);
     if (res.success) {
-      setSuccessMessage('¡Bienvenido Superadministrador! Control Total activado.');
+      setSuccessMessage('¡Sesión iniciada con éxito! Redirigiendo a tu panel...');
       setTimeout(() => {
         setSuccessMessage('');
       }, 1500);
@@ -63,19 +64,19 @@ export default function LoginModal() {
     }
   };
 
-  const handleDemoLogin = (email: string, name: string, role: Role) => {
+  const handleDemoLogin = (email: string, pass: string) => {
     setErrorMessage('');
     setSuccessMessage('');
     
-    if (email === 'admin@admin.com') {
-      loginWithCredentials('admin@admin.com', '12345678Cecyte');
+    const res = loginWithCredentials(email, pass);
+    if (res.success) {
+      setSuccessMessage(`Sesión iniciada correctamente con ${email}`);
+      setTimeout(() => {
+        setSuccessMessage('');
+      }, 1500);
     } else {
-      loginWithGoogle(email, name, role);
+      setErrorMessage(res.error || 'Error al ingresar con cuenta demo.');
     }
-    setSuccessMessage(`Sesión iniciada como ${role.toUpperCase()}`);
-    setTimeout(() => {
-      setSuccessMessage('');
-    }, 1500);
   };
 
   return (
@@ -107,12 +108,24 @@ export default function LoginModal() {
             Acceso Institucional CECYTE BC
           </h2>
           <p className="text-xs text-gray-400 max-w-xs mx-auto">
-            Ingresa con tu correo institucional <span className="text-cyan-400 font-semibold">@cecytebc.edu.mx</span> o cuenta de administración.
+            Ingresa con tu correo institucional y contraseña asignada o vía Gmail institucional.
           </p>
         </div>
 
         {/* Navigation Tabs */}
         <div className="flex rounded-xl bg-black/40 p-1 border border-white/10 mb-6">
+          <button
+            onClick={() => { setTab('password'); setErrorMessage(''); }}
+            className={`flex-1 py-2.5 px-3 rounded-lg text-xs font-bold transition-all flex items-center justify-center space-x-1.5 cursor-pointer ${
+              tab === 'password' 
+                ? 'bg-gradient-to-r from-cyan-500 to-blue-600 text-white shadow-md' 
+                : 'text-gray-400 hover:text-white'
+            }`}
+          >
+            <Key size={14} />
+            <span>Contraseña</span>
+          </button>
+
           <button
             onClick={() => { setTab('google'); setErrorMessage(''); }}
             className={`flex-1 py-2.5 px-3 rounded-lg text-xs font-bold transition-all flex items-center justify-center space-x-1.5 cursor-pointer ${
@@ -126,18 +139,6 @@ export default function LoginModal() {
           </button>
 
           <button
-            onClick={() => { setTab('admin'); setErrorMessage(''); }}
-            className={`flex-1 py-2.5 px-3 rounded-lg text-xs font-bold transition-all flex items-center justify-center space-x-1.5 cursor-pointer ${
-              tab === 'admin' 
-                ? 'bg-gradient-to-r from-cyan-500 to-blue-600 text-white shadow-md' 
-                : 'text-gray-400 hover:text-white'
-            }`}
-          >
-            <Shield size={14} />
-            <span>Superadmin</span>
-          </button>
-
-          <button
             onClick={() => { setTab('demo'); setErrorMessage(''); }}
             className={`flex-1 py-2.5 px-3 rounded-lg text-xs font-bold transition-all flex items-center justify-center space-x-1.5 cursor-pointer ${
               tab === 'demo' 
@@ -146,7 +147,7 @@ export default function LoginModal() {
             }`}
           >
             <Sparkles size={14} />
-            <span>Modo Demo</span>
+            <span>Cuentas Demo</span>
           </button>
         </div>
 
@@ -165,7 +166,57 @@ export default function LoginModal() {
           </div>
         )}
 
-        {/* Tab 1: Google Institutional Login Form */}
+        {/* Tab 1: Password Direct Login Form (Any user with password) */}
+        {tab === 'password' && (
+          <form onSubmit={handleCredentialsSubmit} className="space-y-4">
+            <div className="p-3 rounded-xl bg-cyan-500/10 border border-cyan-500/20 text-cyan-300 text-[11px] leading-relaxed">
+              🔑 Ingresa con cualquier cuenta registrada (Docente, Encargado de Orden o Administrador).
+            </div>
+
+            <div className="space-y-1.5">
+              <label className="text-xs font-semibold text-gray-300">Correo Institucional o Administrador</label>
+              <input
+                type="email"
+                placeholder="ejemplo@cecytebc.edu.mx o admin@admin.com"
+                value={credentialsEmail}
+                onChange={(e) => setCredentialsEmail(e.target.value)}
+                className="w-full glass-input py-2.5 px-3.5 rounded-xl text-xs text-white border border-white/10 focus:border-cyan-500 focus:outline-none"
+                required
+              />
+            </div>
+
+            <div className="space-y-1.5">
+              <label className="text-xs font-semibold text-gray-300">Contraseña</label>
+              <div className="relative">
+                <input
+                  type={showPassword ? 'text' : 'password'}
+                  placeholder="Tu contraseña asignada..."
+                  value={credentialsPass}
+                  onChange={(e) => setCredentialsPass(e.target.value)}
+                  className="w-full glass-input py-2.5 px-3.5 pr-10 rounded-xl text-xs text-white border border-white/10 focus:border-cyan-500 focus:outline-none font-mono"
+                  required
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowPassword(!showPassword)}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-white"
+                >
+                  {showPassword ? <EyeOff size={14} /> : <Eye size={14} />}
+                </button>
+              </div>
+            </div>
+
+            <button
+              type="submit"
+              className="w-full py-3 rounded-xl bg-gradient-to-r from-cyan-500 to-blue-600 text-white font-bold text-xs shadow-lg shadow-cyan-500/20 hover:opacity-95 transition-all flex items-center justify-center space-x-2 cursor-pointer pt-3"
+            >
+              <Key size={14} />
+              <span>Iniciar Sesión con Contraseña</span>
+            </button>
+          </form>
+        )}
+
+        {/* Tab 2: Google Institutional Login Form */}
         {tab === 'google' && (
           <form onSubmit={handleGoogleSubmit} className="space-y-4">
             <div className="space-y-1.5">
@@ -219,56 +270,17 @@ export default function LoginModal() {
           </form>
         )}
 
-        {/* Tab 2: Admin Direct Login Form */}
-        {tab === 'admin' && (
-          <form onSubmit={handleAdminSubmit} className="space-y-4">
-            <div className="p-3 rounded-xl bg-cyan-500/10 border border-cyan-500/20 text-cyan-300 text-[11px] leading-relaxed">
-              🔑 Acceso Directo de Superadministrador con Control Total.
-            </div>
-
-            <div className="space-y-1.5">
-              <label className="text-xs font-semibold text-gray-300">Correo de Administrador</label>
-              <input
-                type="email"
-                value={adminEmail}
-                onChange={(e) => setAdminEmail(e.target.value)}
-                className="w-full glass-input py-2.5 px-3.5 rounded-xl text-xs text-white border border-white/10 focus:border-cyan-500 focus:outline-none"
-                required
-              />
-            </div>
-
-            <div className="space-y-1.5">
-              <label className="text-xs font-semibold text-gray-300">Contraseña</label>
-              <input
-                type="password"
-                value={adminPass}
-                onChange={(e) => setAdminPass(e.target.value)}
-                className="w-full glass-input py-2.5 px-3.5 rounded-xl text-xs text-white border border-white/10 focus:border-cyan-500 focus:outline-none font-mono"
-                required
-              />
-            </div>
-
-            <button
-              type="submit"
-              className="w-full py-3 rounded-xl bg-gradient-to-r from-cyan-500 to-blue-600 text-white font-bold text-xs shadow-lg shadow-cyan-500/20 hover:opacity-95 transition-all flex items-center justify-center space-x-2 cursor-pointer"
-            >
-              <Shield size={14} />
-              <span>Iniciar Sesión como Administrador</span>
-            </button>
-          </form>
-        )}
-
-        {/* Tab 3: Quick Demo Role Switcher */}
+        {/* Tab 3: Quick Demo Credentials */}
         {tab === 'demo' && (
           <div className="space-y-3">
             <p className="text-xs text-amber-300 bg-amber-500/10 p-2.5 rounded-xl border border-amber-500/20 leading-relaxed text-center font-medium">
-              ⚡ Evaluador Senior: Haz clic en cualquiera de las siguientes cuentas pre-configuradas para probar la interfaz inmediatamente:
+              ⚡ Haz clic en cualquiera de las siguientes cuentas para ingresar de inmediato con su contraseña asignada:
             </p>
 
             <div className="space-y-2 pt-1">
               <button
                 type="button"
-                onClick={() => handleDemoLogin('admin@admin.com', 'Administrador General', 'administrador')}
+                onClick={() => handleDemoLogin('admin@admin.com', usersPasswordsMap['admin@admin.com'] || '12345678Cecyte')}
                 className="w-full p-3 rounded-xl glass-panel border border-amber-500/30 hover:bg-amber-500/10 transition-all flex items-center justify-between group text-left cursor-pointer"
               >
                 <div className="flex items-center space-x-3">
@@ -277,7 +289,7 @@ export default function LoginModal() {
                   </div>
                   <div>
                     <h4 className="text-xs font-bold text-white group-hover:text-amber-400">1. Administrador (Control Total)</h4>
-                    <p className="text-[10px] text-gray-400">admin@admin.com • Clave: 12345678Cecyte</p>
+                    <p className="text-[10px] text-gray-400">admin@admin.com • Clave: {usersPasswordsMap['admin@admin.com'] || '12345678Cecyte'}</p>
                   </div>
                 </div>
                 <UserCheck size={16} className="text-amber-400 opacity-0 group-hover:opacity-100 transition-opacity" />
@@ -285,7 +297,7 @@ export default function LoginModal() {
 
               <button
                 type="button"
-                onClick={() => handleDemoLogin('orden.general@cecytebc.edu.mx', 'Prefecto Juan', 'encargado_orden')}
+                onClick={() => handleDemoLogin('prefecto.juan@cecytebc.edu.mx', usersPasswordsMap['prefecto.juan@cecytebc.edu.mx'] || 'Cecyte2026!')}
                 className="w-full p-3 rounded-xl glass-panel border border-cyan-500/30 hover:bg-cyan-500/10 transition-all flex items-center justify-between group text-left cursor-pointer"
               >
                 <div className="flex items-center space-x-3">
@@ -294,7 +306,7 @@ export default function LoginModal() {
                   </div>
                   <div>
                     <h4 className="text-xs font-bold text-white group-hover:text-cyan-400">2. Encargado de Orden (Disciplinar)</h4>
-                    <p className="text-[10px] text-gray-400">orden.general@cecytebc.edu.mx • Escáner & Logs</p>
+                    <p className="text-[10px] text-gray-400">prefecto.juan@cecytebc.edu.mx • Clave: {usersPasswordsMap['prefecto.juan@cecytebc.edu.mx'] || 'Cecyte2026!'}</p>
                   </div>
                 </div>
                 <UserCheck size={16} className="text-cyan-400 opacity-0 group-hover:opacity-100 transition-opacity" />
@@ -302,7 +314,7 @@ export default function LoginModal() {
 
               <button
                 type="button"
-                onClick={() => handleDemoLogin('docente.marcos@cecytebc.edu.mx', 'Prof. Marcos Ramírez', 'docente')}
+                onClick={() => handleDemoLogin('docente.marcos@cecytebc.edu.mx', usersPasswordsMap['docente.marcos@cecytebc.edu.mx'] || 'Cecyte2026!')}
                 className="w-full p-3 rounded-xl glass-panel border border-emerald-500/30 hover:bg-emerald-500/10 transition-all flex items-center justify-between group text-left cursor-pointer"
               >
                 <div className="flex items-center space-x-3">
@@ -311,7 +323,7 @@ export default function LoginModal() {
                   </div>
                   <div>
                     <h4 className="text-xs font-bold text-white group-hover:text-emerald-400">3. Docente (Pase de Lista)</h4>
-                    <p className="text-[10px] text-gray-400">docente.marcos@cecytebc.edu.mx • Grupos 1°A, 2°B</p>
+                    <p className="text-[10px] text-gray-400">docente.marcos@cecytebc.edu.mx • Clave: {usersPasswordsMap['docente.marcos@cecytebc.edu.mx'] || 'Cecyte2026!'}</p>
                   </div>
                 </div>
                 <UserCheck size={16} className="text-emerald-400 opacity-0 group-hover:opacity-100 transition-opacity" />
