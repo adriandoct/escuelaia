@@ -78,7 +78,7 @@ export default function HeaderNav() {
                 className="hover:text-cyan-400 transition-colors py-1.5 px-3 rounded-lg hover:bg-white/5 flex items-center space-x-1.5"
               >
                 <Shield size={14} className="text-blue-400" />
-                <span>Panel {user?.role === 'encargado_orden' ? 'Disciplinar' : 'Admin'}</span>
+                <span>{user ? (user.role === 'encargado_orden' ? 'Panel Disciplinar' : 'Panel Admin') : 'Dashboard Principal'}</span>
               </Link>
             )}
 

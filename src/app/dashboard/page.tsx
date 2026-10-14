@@ -7,6 +7,7 @@ import Link from 'next/link';
 import { db, Alumno, Asistencia } from '@/lib/db';
 import { getWhatsAppLogs, WhatsAppLog, clearWhatsAppLogs } from '@/lib/whatsapp';
 import { useAuth } from '@/lib/auth';
+import BarcodeScannerHub from '@/components/BarcodeScannerHub';
 import { 
   Users, UserCheck, UserX, Clock, PhoneCall, Search, Filter, Download, RotateCcw, AlertTriangle, ArrowUpRight, Check, Send, BookOpen, Shield
 } from 'lucide-react';
@@ -230,11 +231,15 @@ export default function DashboardPage() {
         <div>
           <div className="flex items-center space-x-2">
             <h2 className="text-3xl font-extrabold text-white tracking-tight">
-              {user?.role === 'encargado_orden' ? 'Panel Disciplinar y de Asistencia' : 'Panel Administrativo General'}
+              {user 
+                ? (user.role === 'encargado_orden' ? 'Panel Disciplinar y de Asistencia' : 'Panel Administrativo General') 
+                : 'Terminal Principal de Control de Accesos & Asistencias'}
             </h2>
           </div>
           <p className="text-gray-400 text-sm mt-1">
-            Supervisión en tiempo real de ingresos, retardos y estado de notificaciones WhatsApp.
+            {user 
+              ? 'Supervisión en tiempo real de ingresos, retardos y estado de notificaciones WhatsApp.' 
+              : 'Terminal autónoma: escaneo inmediato con lector de código de barras USB/Bluetooth sin requerir inicio de sesión.'}
           </p>
         </div>
 
@@ -260,6 +265,9 @@ export default function DashboardPage() {
           </button>
         </div>
       </div>
+
+      {/* Barcode Scanner Hardware Hub (Global Physical Scanner Integration) */}
+      <BarcodeScannerHub onScanCompleted={loadData} />
 
       {/* Numerical Stats Widgets Cards */}
       <div className="grid grid-cols-2 md:grid-cols-5 gap-4">

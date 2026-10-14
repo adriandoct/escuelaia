@@ -11,6 +11,7 @@ import {
   Camera, AlertCircle, CheckCircle, RefreshCw, Smartphone, Volume2, ShieldAlert, UserCheck, Play, ArrowRight, UserX, BookOpen, Shield
 } from 'lucide-react';
 import confetti from 'canvas-confetti';
+import { useBarcodeScanner } from '@/lib/useBarcodeScanner';
 
 export default function ScannerPage() {
   const { user } = useAuth();
@@ -41,6 +42,14 @@ export default function ScannerPage() {
       stopCamera();
     };
   }, []);
+
+  // Physical Barcode Reader Listener for USB/Bluetooth handheld scanners
+  useBarcodeScanner({
+    onScan: async (code) => {
+      await processScanResult(code, 'Lector Código de Barras USB');
+    },
+    enabled: isClient
+  });
 
   const loadStudents = async () => {
     try {
@@ -152,7 +161,7 @@ export default function ScannerPage() {
   };
 
   // Master check-in logic
-  const processScanResult = async (matricula: string) => {
+  const processScanResult = async (matricula: string, customDevice = 'Cámara Escáner Web') => {
     try {
       if (scannerRef.current && scannerRef.current.isScanning) {
         await scannerRef.current.pause(true);
@@ -163,9 +172,9 @@ export default function ScannerPage() {
       const { asistencia, alumno, duplicateWarning } = await db.registrarAsistencia(
         matricula,
         overrideVal,
-        'Cámara Escáner Web',
+        customDevice,
         'Acceso Principal CECYTE',
-        user?.name || 'Encargado de Orden'
+        user?.name || 'Terminal de Acceso (Sin sesión)'
       );
 
       await sendWhatsAppNotification(alumno, asistencia);

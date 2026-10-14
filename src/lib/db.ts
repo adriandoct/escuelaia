@@ -296,9 +296,25 @@ export const db = {
   },
 
   getAlumnoByQR: async (qrCode: string): Promise<Alumno | null> => {
+    if (!qrCode) return null;
     initLocalStorage();
+    const clean = qrCode.trim().replace(/^[\r\n\s]+|[\r\n\s]+$/g, '');
+    const cleanUpper = clean.toUpperCase();
+    const cleanAlphanumeric = clean.replace(/[^a-zA-Z0-9]/g, '').toUpperCase();
+
     const list = await db.getAlumnos();
-    return list.find(a => a.qr_code === qrCode || a.matricula === qrCode) || null;
+    return (
+      list.find(a => 
+        (a.qr_code && a.qr_code.trim().toUpperCase() === cleanUpper) ||
+        (a.matricula && a.matricula.trim().toUpperCase() === cleanUpper) ||
+        (a.id && a.id.trim().toUpperCase() === cleanUpper)
+      ) ||
+      list.find(a => 
+        (a.matricula && a.matricula.replace(/[^a-zA-Z0-9]/g, '').toUpperCase() === cleanAlphanumeric) ||
+        (a.qr_code && a.qr_code.replace(/[^a-zA-Z0-9]/g, '').toUpperCase() === cleanAlphanumeric)
+      ) ||
+      null
+    );
   },
 
   addAlumno: async (alumno: Omit<Alumno, 'id' | 'created_at'>): Promise<Alumno> => {
