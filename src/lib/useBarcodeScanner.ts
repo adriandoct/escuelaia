@@ -141,6 +141,13 @@ export function playAudioFeedback(type: 'success' | 'duplicate' | 'error' | 'con
   }
 }
 
+export interface ConnectedScannerDevice {
+  name: string;
+  vendorId?: number;
+  productId?: number;
+  type: 'hid' | 'usb' | 'wedge';
+}
+
 export function useBarcodeScanner({
   onScan,
   enabled = true,
@@ -153,9 +160,12 @@ export function useBarcodeScanner({
   const [totalScansCount, setTotalScansCount] = useState<number>(0);
   const [soundEnabled, setSoundEnabled] = useState<boolean>(playSound);
   const [isReceivingSignal, setIsReceivingSignal] = useState<boolean>(false);
+  const [isHardwareScannerConnected, setIsHardwareScannerConnected] = useState<boolean>(false);
   const [isZktecoDetected, setIsZktecoDetected] = useState<boolean>(false);
+  const [detectedScannerName, setDetectedScannerName] = useState<string>('Lector ZKTeco / USB Barcode Listo');
   const [connectedHidDevices, setConnectedHidDevices] = useState<string[]>([]);
   const [hasWebHidSupport, setHasWebHidSupport] = useState<boolean>(false);
+  const [lastHardwareEvent, setLastHardwareEvent] = useState<{ type: 'connected' | 'disconnected'; name: string; timestamp: number } | null>(null);
 
   const bufferRef = useRef<string>('');
   const lastKeyTimeRef = useRef<number>(0);
@@ -168,37 +178,158 @@ export function useBarcodeScanner({
     onScanRef.current = onScan;
   }, [onScan]);
 
-  // Check WebHID support and query connected ZKTeco / HID devices
-  useEffect(() => {
-    if (typeof window !== 'undefined' && 'hid' in navigator) {
-      setHasWebHidSupport(true);
-      refreshConnectedHidDevices();
+  const identifyDeviceName = (d: any): { name: string; isZk: boolean } => {
+    const prod = (d?.productName || '').trim();
+    const vid = d?.vendorId;
+    const isZk = prod.toLowerCase().includes('zk') || 
+                 prod.toLowerCase().includes('teco') || 
+                 vid === 0x1b55 || 
+                 vid === 0x0483;
+
+    let friendly = prod;
+    if (!friendly) {
+      if (isZk) friendly = 'Lector ZKTeco Láser USB';
+      else if (vid === 0x0c2e) friendly = 'Lector Honeywell Barcode';
+      else if (vid === 0x05e0) friendly = 'Lector Zebra / Symbol USB';
+      else if (vid === 0x05f9) friendly = 'Lector Datalogic Scanner';
+      else friendly = vid ? `Lector Código de Barras USB (${vid.toString(16)})` : 'Escáner Código de Barras USB';
+    }
+    return { name: friendly, isZk };
+  };
+
+  const refreshConnectedHidDevices = useCallback(async () => {
+    try {
+      if (typeof window === 'undefined') return;
+      const deviceNames: string[] = [];
+      let foundZk = false;
+      let anyScanner = false;
+
+      // 1. Check WebHID devices
+      if ('hid' in navigator) {
+        const hidDevices = await (navigator as any).hid.getDevices();
+        hidDevices.forEach((d: any) => {
+          const { name, isZk } = identifyDeviceName(d);
+          deviceNames.push(name);
+          if (isZk) foundZk = true;
+          anyScanner = true;
+        });
+      }
+
+      // 2. Check WebUSB devices if available
+      if ('usb' in navigator) {
+        try {
+          const usbDevices = await (navigator as any).usb.getDevices();
+          usbDevices.forEach((d: any) => {
+            const { name, isZk } = identifyDeviceName(d);
+            if (!deviceNames.includes(name)) {
+              deviceNames.push(name);
+            }
+            if (isZk) foundZk = true;
+            anyScanner = true;
+          });
+        } catch {}
+      }
+
+      // 3. Check persistent localStorage flag for keyboard wedge scanners
+      const hasStoredHardware = localStorage.getItem('dojoia_hardware_scanner_detected') === 'true';
+      if (hasStoredHardware) {
+        anyScanner = true;
+        const storedName = localStorage.getItem('dojoia_hardware_scanner_name') || 'Lector ZKTeco / USB Barcode Conectado';
+        if (!deviceNames.includes(storedName)) {
+          deviceNames.push(storedName);
+        }
+      }
+
+      setConnectedHidDevices(deviceNames);
+      if (foundZk) setIsZktecoDetected(true);
+      if (anyScanner) {
+        setIsHardwareScannerConnected(true);
+        if (deviceNames.length > 0) {
+          setDetectedScannerName(deviceNames[0]);
+        }
+      }
+    } catch (e) {
+      console.warn('Error querying connected devices:', e);
     }
   }, []);
 
-  const refreshConnectedHidDevices = async () => {
-    try {
-      if (typeof window !== 'undefined' && 'hid' in navigator) {
-        const devices = await (navigator as any).hid.getDevices();
-        const names = devices.map((d: any) => {
-          const prod = d.productName || '';
-          const isZk = prod.toLowerCase().includes('zk') || 
-                       prod.toLowerCase().includes('teco') || 
-                       d.vendorId === 0x1b55 || 
-                       d.vendorId === 0x0483;
-          if (isZk) setIsZktecoDetected(true);
-          return prod || `Lector HID (${d.vendorId?.toString(16)})`;
-        });
-        setConnectedHidDevices(names);
-      }
-    } catch (e) {
-      console.warn('WebHID getDevices error:', e);
+  // Listen for WebHID & WebUSB connect and disconnect events in real-time
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+
+    if ('hid' in navigator) {
+      setHasWebHidSupport(true);
     }
-  };
+
+    refreshConnectedHidDevices();
+
+    const handleHidConnect = (e: any) => {
+      const dev = e.device;
+      const { name, isZk } = identifyDeviceName(dev);
+      setIsHardwareScannerConnected(true);
+      if (isZk) setIsZktecoDetected(true);
+      setDetectedScannerName(name);
+      setLastHardwareEvent({ type: 'connected', name, timestamp: Date.now() });
+      if (soundEnabled) playAudioFeedback('connect');
+      refreshConnectedHidDevices();
+    };
+
+    const handleHidDisconnect = (e: any) => {
+      const dev = e.device;
+      const { name } = identifyDeviceName(dev);
+      setLastHardwareEvent({ type: 'disconnected', name, timestamp: Date.now() });
+      refreshConnectedHidDevices();
+    };
+
+    const handleUsbConnect = (e: any) => {
+      const dev = e.device;
+      const { name, isZk } = identifyDeviceName(dev);
+      setIsHardwareScannerConnected(true);
+      if (isZk) setIsZktecoDetected(true);
+      setDetectedScannerName(name);
+      setLastHardwareEvent({ type: 'connected', name, timestamp: Date.now() });
+      if (soundEnabled) playAudioFeedback('connect');
+      refreshConnectedHidDevices();
+    };
+
+    const handleUsbDisconnect = (e: any) => {
+      const dev = e.device;
+      const { name } = identifyDeviceName(dev);
+      setLastHardwareEvent({ type: 'disconnected', name, timestamp: Date.now() });
+      refreshConnectedHidDevices();
+    };
+
+    if ('hid' in navigator) {
+      (navigator as any).hid.addEventListener('connect', handleHidConnect);
+      (navigator as any).hid.addEventListener('disconnect', handleHidDisconnect);
+    }
+
+    if ('usb' in navigator) {
+      try {
+        (navigator as any).usb.addEventListener('connect', handleUsbConnect);
+        (navigator as any).usb.addEventListener('disconnect', handleUsbDisconnect);
+      } catch {}
+    }
+
+    return () => {
+      if ('hid' in navigator) {
+        (navigator as any).hid.removeEventListener('connect', handleHidConnect);
+        (navigator as any).hid.removeEventListener('disconnect', handleHidDisconnect);
+      }
+      if ('usb' in navigator) {
+        try {
+          (navigator as any).usb.removeEventListener('connect', handleUsbConnect);
+          (navigator as any).usb.removeEventListener('disconnect', handleUsbDisconnect);
+        } catch {}
+      }
+    };
+  }, [refreshConnectedHidDevices, soundEnabled]);
 
   const connectWebHidScanner = async () => {
-    if (typeof window === 'undefined' || !('hid' in navigator)) {
-      alert('Tu navegador no soporta WebHID nativo, pero tu escáner ZKTeco funciona de forma automática y directa mediante el teclado virtual USB.');
+    if (typeof window === 'undefined') return;
+
+    if (!('hid' in navigator)) {
+      alert('Tu navegador no cuenta con WebHID nativo, pero tu escáner ZKTeco o USB funciona de manera automática y transparente como teclado USB (Keyboard Wedge). ¡Solo conecta y escanea!');
       return;
     }
 
@@ -206,8 +337,13 @@ export function useBarcodeScanner({
       // Request device with priority for barcode / POS filters
       const devices = await (navigator as any).hid.requestDevice({ filters: [] });
       if (devices && devices.length > 0) {
+        const { name, isZk } = identifyDeviceName(devices[0]);
+        setIsHardwareScannerConnected(true);
+        if (isZk) setIsZktecoDetected(true);
+        setDetectedScannerName(name);
+        localStorage.setItem('dojoia_hardware_scanner_detected', 'true');
+        localStorage.setItem('dojoia_hardware_scanner_name', name);
         await refreshConnectedHidDevices();
-        setIsZktecoDetected(true);
         if (soundEnabled) playAudioFeedback('connect');
       }
     } catch (err: any) {
@@ -230,12 +366,21 @@ export function useBarcodeScanner({
     setLastScanTimestamp(Date.now());
     setTotalScansCount(prev => prev + 1);
 
+    // If scanned via physical hardware gun / wedge, mark scanner as connected & verified!
+    if (source === 'hardware_scanner' || source === 'webhid') {
+      setIsHardwareScannerConnected(true);
+      const name = isZktecoDetected ? 'Lector ZKTeco Láser USB' : 'Lector de Código de Barras USB / Inalámbrico';
+      setDetectedScannerName(name);
+      localStorage.setItem('dojoia_hardware_scanner_detected', 'true');
+      localStorage.setItem('dojoia_hardware_scanner_name', name);
+    }
+
     try {
       await onScanRef.current(cleanCode, source);
     } catch (error) {
       console.error('Error handling scan:', error);
     }
-  }, [minBarcodeLength]);
+  }, [isZktecoDetected, minBarcodeLength]);
 
   // Master Global Keydown Listener for ZKTeco and physical Barcode Guns (Keyboard Wedge)
   useEffect(() => {
@@ -348,10 +493,15 @@ export function useBarcodeScanner({
     soundEnabled,
     setSoundEnabled,
     isReceivingSignal,
+    isHardwareScannerConnected,
     isZktecoDetected,
+    detectedScannerName,
     connectedHidDevices,
     hasWebHidSupport,
     connectWebHidScanner,
+    refreshConnectedHidDevices,
+    lastHardwareEvent,
+    clearHardwareEvent: () => setLastHardwareEvent(null),
     triggerManualScan: (code: string) => processBarcode(code, 'manual_input'),
     playAudioFeedback
   };
