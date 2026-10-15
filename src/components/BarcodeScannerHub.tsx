@@ -261,6 +261,7 @@ export default function BarcodeScannerHub({ onScanCompleted, className = '' }: B
 
     } finally {
       setIsProcessing(false);
+      setManualCode('');
     }
   };
 

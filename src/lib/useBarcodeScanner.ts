@@ -148,6 +148,20 @@ export interface ConnectedScannerDevice {
   type: 'hid' | 'usb' | 'wedge';
 }
 
+export function cleanBarcode(code: string): string {
+  if (!code) return '';
+  let clean = String(code)
+    .replace(/[\x00-\x1F\x7F-\x9F]/g, '')
+    .trim()
+    .replace(/^[\r\n\t\s]+|[\r\n\t\s]+$/g, '');
+
+  // Strip AIM Symbology Identifier prefix if present (e.g. "]C1", "]e0", "]E0", "]Q1")
+  if (/^\][a-zA-Z0-9]{2}/.test(clean)) {
+    clean = clean.substring(3).trim();
+  }
+  return clean;
+}
+
 export function useBarcodeScanner({
   onScan,
   enabled = true,
@@ -171,6 +185,7 @@ export function useBarcodeScanner({
   const lastKeyTimeRef = useRef<number>(0);
   const keyIntervalsRef = useRef<number[]>([]);
   const timeoutRef = useRef<any>(null);
+  const trailingBurstTimeoutRef = useRef<any>(null);
   const signalTimeoutRef = useRef<any>(null);
 
   const onScanRef = useRef(onScan);
@@ -354,11 +369,7 @@ export function useBarcodeScanner({
   };
 
   const processBarcode = useCallback(async (code: string, source: 'hardware_scanner' | 'manual_input' | 'webhid') => {
-    // Sanitize ZKTeco control prefixes and suffixes (STX, ETX, CR, LF, TAB)
-    const cleanCode = code
-      .replace(/[\x00-\x1F\x7F-\x9F]/g, '')
-      .trim()
-      .replace(/^[\r\n\t\s]+|[\r\n\t\s]+$/g, '');
+    const cleanCode = cleanBarcode(code);
 
     if (!cleanCode || cleanCode.length < minBarcodeLength) return;
 
@@ -406,18 +417,32 @@ export function useBarcodeScanner({
       );
 
       const isTargetManualBarcodeInput = target && target.getAttribute('data-barcode-input') === 'true';
+      const isPasswordOrModalInput = target && (
+        target.getAttribute('type') === 'password' || 
+        target.getAttribute('data-no-barcode') === 'true'
+      );
 
       // 1. Detect Terminator Key: Enter, NumpadEnter, Tab, or keyCode 13/9
       const isTerminator = e.key === 'Enter' || e.code === 'NumpadEnter' || e.key === 'Tab' || e.keyCode === 13 || e.keyCode === 9;
 
       if (isTerminator) {
-        const currentBuffer = bufferRef.current.trim();
+        if (trailingBurstTimeoutRef.current) clearTimeout(trailingBurstTimeoutRef.current);
+        if (timeoutRef.current) clearTimeout(timeoutRef.current);
+
+        let currentBuffer = bufferRef.current.trim();
+        const inputEl = isInputFocused && target ? (target as HTMLInputElement) : null;
+
+        // Fallback: if buffer was empty but the focused input has a value
+        if (!currentBuffer && inputEl && inputEl.value) {
+          currentBuffer = inputEl.value.trim();
+        }
+
         const intervals = keyIntervalsRef.current;
         const avgInterval = intervals.length > 0 
           ? intervals.reduce((a, b) => a + b, 0) / intervals.length 
           : 999;
 
-        const isLikelyScanner = intervals.length >= 2 && avgInterval <= maxKeyIntervalMs;
+        const isLikelyScanner = (intervals.length >= 2 && avgInterval <= maxKeyIntervalMs) || (currentBuffer.length >= 6 && avgInterval <= 140);
         const isNonInputScan = !isInputFocused && currentBuffer.length >= minBarcodeLength;
         const isManualBarcodeField = isTargetManualBarcodeInput && currentBuffer.length >= minBarcodeLength;
 
@@ -425,16 +450,12 @@ export function useBarcodeScanner({
           e.preventDefault();
           e.stopPropagation();
 
-          if (isInputFocused && !isTargetManualBarcodeInput && (target as HTMLInputElement)) {
-            const inputEl = target as HTMLInputElement;
-            if (inputEl.value && currentBuffer && inputEl.value.endsWith(currentBuffer)) {
-              inputEl.value = inputEl.value.slice(0, -currentBuffer.length);
-            }
+          if (inputEl) {
+            inputEl.value = '';
           }
 
           bufferRef.current = '';
           keyIntervalsRef.current = [];
-          if (timeoutRef.current) clearTimeout(timeoutRef.current);
 
           processBarcode(currentBuffer, isLikelyScanner ? 'hardware_scanner' : 'manual_input');
           return;
@@ -447,6 +468,7 @@ export function useBarcodeScanner({
 
       // Ignore Escape
       if (e.key === 'Escape') {
+        if (trailingBurstTimeoutRef.current) clearTimeout(trailingBurstTimeoutRef.current);
         bufferRef.current = '';
         keyIntervalsRef.current = [];
         return;
@@ -468,20 +490,89 @@ export function useBarcodeScanner({
 
         bufferRef.current += e.key;
 
-        // Auto-clear buffer if no terminator arrives within 1.6 seconds
+        // Calculate timing
+        const intervals = keyIntervalsRef.current;
+        const recentIntervals = intervals.slice(-4);
+        const avgRecentInterval = recentIntervals.length > 0
+          ? recentIntervals.reduce((a, b) => a + b, 0) / recentIntervals.length
+          : interval;
+
+        const isScannerSpeed = avgRecentInterval <= maxKeyIntervalMs;
+
+        // NO-TERMINATOR AUTO-FLUSH:
+        // Many barcode scanners do NOT send Enter or Tab suffix from the factory.
+        // If rapid scanner burst is detected or target is the barcode box, arm trailing auto-flush (95ms)
+        if (trailingBurstTimeoutRef.current) clearTimeout(trailingBurstTimeoutRef.current);
+
+        if (
+          bufferRef.current.length >= minBarcodeLength && 
+          (isScannerSpeed || isTargetManualBarcodeInput || !isInputFocused) && 
+          !isPasswordOrModalInput
+        ) {
+          trailingBurstTimeoutRef.current = setTimeout(() => {
+            const pendingCode = bufferRef.current.trim();
+            const pendingIntervals = keyIntervalsRef.current;
+            const avgTotal = pendingIntervals.length > 0
+              ? pendingIntervals.reduce((a, b) => a + b, 0) / pendingIntervals.length
+              : 999;
+
+            const confirmedScanner = (pendingIntervals.length >= 2 && avgTotal <= maxKeyIntervalMs) || !isInputFocused || isTargetManualBarcodeInput;
+
+            if (pendingCode.length >= minBarcodeLength && confirmedScanner) {
+              bufferRef.current = '';
+              keyIntervalsRef.current = [];
+
+              if (target && (target as HTMLInputElement).value !== undefined) {
+                (target as HTMLInputElement).value = '';
+              }
+
+              processBarcode(pendingCode, 'hardware_scanner');
+            }
+          }, 95);
+        }
+
+        // Global buffer auto-clear if idle for 2 seconds
         if (timeoutRef.current) clearTimeout(timeoutRef.current);
         timeoutRef.current = setTimeout(() => {
           bufferRef.current = '';
           keyIntervalsRef.current = [];
-        }, 1600);
+        }, 2000);
+      }
+    };
+
+    // Paste handler for barcode scanners that emulate clipboard paste
+    const handlePaste = (e: ClipboardEvent) => {
+      const target = e.target as HTMLElement | null;
+      const isPassword = target && target.getAttribute('type') === 'password';
+      if (isPassword) return;
+
+      const pastedText = e.clipboardData?.getData('text') || '';
+      const clean = cleanBarcode(pastedText);
+
+      if (clean && clean.length >= minBarcodeLength) {
+        const isTargetManualBarcodeInput = target && target.getAttribute('data-barcode-input') === 'true';
+        const isInputFocused = target && (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA');
+
+        if (isTargetManualBarcodeInput || !isInputFocused) {
+          e.preventDefault();
+          if (target && (target as HTMLInputElement).value !== undefined) {
+            (target as HTMLInputElement).value = '';
+          }
+          bufferRef.current = '';
+          keyIntervalsRef.current = [];
+          processBarcode(clean, 'hardware_scanner');
+        }
       }
     };
 
     window.addEventListener('keydown', handleKeyDown, true);
+    window.addEventListener('paste', handlePaste, true);
 
     return () => {
       window.removeEventListener('keydown', handleKeyDown, true);
+      window.removeEventListener('paste', handlePaste, true);
       if (timeoutRef.current) clearTimeout(timeoutRef.current);
+      if (trailingBurstTimeoutRef.current) clearTimeout(trailingBurstTimeoutRef.current);
       if (signalTimeoutRef.current) clearTimeout(signalTimeoutRef.current);
     };
   }, [enabled, maxKeyIntervalMs, minBarcodeLength, processBarcode]);

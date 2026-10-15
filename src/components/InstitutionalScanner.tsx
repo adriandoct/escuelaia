@@ -256,8 +256,16 @@ export default function InstitutionalScanner() {
 
     } finally {
       setIsProcessing(false);
+      setManualMatricula('');
+      if (scannerInputRef.current) {
+        scannerInputRef.current.value = '';
+      }
       // Re-focus scanner input
-      setTimeout(() => scannerInputRef.current?.focus(), 200);
+      setTimeout(() => {
+        if (!unregisteredModal?.isOpen) {
+          scannerInputRef.current?.focus();
+        }
+      }, 200);
     }
   };
 
@@ -470,9 +478,11 @@ export default function InstitutionalScanner() {
 
   const handleManualSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!manualMatricula.trim()) return;
-    triggerManualScan(manualMatricula.trim());
+    const code = (manualMatricula || scannerInputRef.current?.value || '').trim();
+    if (!code) return;
+    triggerManualScan(code);
     setManualMatricula('');
+    if (scannerInputRef.current) scannerInputRef.current.value = '';
   };
 
   const handleSimulatedScan = () => {
@@ -727,7 +737,40 @@ export default function InstitutionalScanner() {
                         type="text"
                         data-barcode-input="true"
                         value={manualMatricula}
-                        onChange={(e) => setManualMatricula(e.target.value)}
+                        onChange={(e) => {
+                          const val = e.target.value;
+                          if (val.includes('\n') || val.includes('\r')) {
+                            const clean = val.replace(/[\r\n]/g, '').trim();
+                            if (clean.length >= 3) {
+                              triggerManualScan(clean);
+                              setManualMatricula('');
+                              if (scannerInputRef.current) scannerInputRef.current.value = '';
+                              return;
+                            }
+                          }
+                          setManualMatricula(val);
+                        }}
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter') {
+                            e.preventDefault();
+                            e.stopPropagation();
+                            const code = (manualMatricula || e.currentTarget.value).trim();
+                            if (code.length >= 3) {
+                              triggerManualScan(code);
+                              setManualMatricula('');
+                              e.currentTarget.value = '';
+                            }
+                          }
+                        }}
+                        onPaste={(e) => {
+                          const pasted = e.clipboardData?.getData('text')?.trim() || '';
+                          if (pasted.length >= 3) {
+                            e.preventDefault();
+                            triggerManualScan(pasted);
+                            setManualMatricula('');
+                            if (scannerInputRef.current) scannerInputRef.current.value = '';
+                          }
+                        }}
                         placeholder="Esperando señal del escáner..."
                         className="w-full bg-black/70 border-2 border-cyan-500/50 focus:border-cyan-400 rounded-2xl py-3 pl-11 pr-4 text-sm font-mono text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-cyan-500/30 transition-all shadow-inner"
                       />
