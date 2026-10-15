@@ -199,11 +199,13 @@ export function useBarcodeScanner({
     const isZk = prod.toLowerCase().includes('zk') || 
                  prod.toLowerCase().includes('teco') || 
                  vid === 0x1b55 || 
-                 vid === 0x0483;
+                 vid === 0x0483 ||
+                 vid === 0x0416; // Nuvoton Winbond (Used in ZKTeco Barcode Reader engines)
 
     let friendly = prod;
     if (!friendly) {
-      if (isZk) friendly = 'Lector ZKTeco Láser USB';
+      if (vid === 0x0416) friendly = 'Lector ZKTeco Láser USB (0416:5020)';
+      else if (isZk) friendly = 'Lector ZKTeco Láser USB';
       else if (vid === 0x0c2e) friendly = 'Lector Honeywell Barcode';
       else if (vid === 0x05e0) friendly = 'Lector Zebra / Symbol USB';
       else if (vid === 0x05f9) friendly = 'Lector Datalogic Scanner';
@@ -222,12 +224,12 @@ export function useBarcodeScanner({
       // 1. Check WebHID devices
       if ('hid' in navigator) {
         const hidDevices = await (navigator as any).hid.getDevices();
-        hidDevices.forEach((d: any) => {
+        for (const d of hidDevices) {
           const { name, isZk } = identifyDeviceName(d);
           deviceNames.push(name);
           if (isZk) foundZk = true;
           anyScanner = true;
-        });
+        }
       }
 
       // 2. Check WebUSB devices if available
@@ -352,12 +354,36 @@ export function useBarcodeScanner({
       // Request device with priority for barcode / POS filters
       const devices = await (navigator as any).hid.requestDevice({ filters: [] });
       if (devices && devices.length > 0) {
-        const { name, isZk } = identifyDeviceName(devices[0]);
-        setIsHardwareScannerConnected(true);
-        if (isZk) setIsZktecoDetected(true);
-        setDetectedScannerName(name);
-        localStorage.setItem('dojoia_hardware_scanner_detected', 'true');
-        localStorage.setItem('dojoia_hardware_scanner_name', name);
+        for (const dev of devices) {
+          const { name, isZk } = identifyDeviceName(dev);
+          setIsHardwareScannerConnected(true);
+          if (isZk) setIsZktecoDetected(true);
+          setDetectedScannerName(name);
+          localStorage.setItem('dojoia_hardware_scanner_detected', 'true');
+          localStorage.setItem('dojoia_hardware_scanner_name', name);
+
+          // Open device and attach raw report listener
+          try {
+            if (!dev.opened) {
+              await dev.open();
+            }
+            dev.oninputreport = (event: any) => {
+              const { data } = event;
+              const bytes: number[] = [];
+              for (let i = 0; i < data.byteLength; i++) {
+                const b = data.getUint8(i);
+                if (b >= 32 && b <= 126) bytes.push(b);
+              }
+              const decoded = String.fromCharCode(...bytes).trim();
+              const clean = cleanBarcode(decoded);
+              if (clean.length >= minBarcodeLength) {
+                processBarcode(clean, 'webhid');
+              }
+            };
+          } catch (e) {
+            console.warn('Error opening WebHID device:', e);
+          }
+        }
         await refreshConnectedHidDevices();
         if (soundEnabled) playAudioFeedback('connect');
       }
