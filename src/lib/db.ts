@@ -204,19 +204,48 @@ export const db = {
     // Map to hold master student records by matricula
     const studentMap = new Map<string, Alumno>();
 
+    const safeNormalizeStudent = (s: any): Alumno | null => {
+      if (!s || s.matricula === undefined || s.matricula === null) return null;
+      const matStr = String(s.matricula).trim();
+      if (!matStr) return null;
+      const qrStr = s.qr_code !== undefined && s.qr_code !== null ? String(s.qr_code).trim() : matStr;
+      return {
+        ...s,
+        id: s.id ? String(s.id) : `student-${matStr}`,
+        matricula: matStr,
+        qr_code: qrStr,
+        nombre: String(s.nombre || ''),
+        apellido_paterno: String(s.apellido_paterno || ''),
+        apellido_materno: String(s.apellido_materno || ''),
+        grado: String(s.grado || '1°'),
+        grupo: String(s.grupo || 'A'),
+        tutor: String(s.tutor || 'No asignado'),
+        telefono: String(s.telefono || '+52'),
+        foto_url: s.foto_url || `https://api.dicebear.com/7.x/bottts/svg?seed=${matStr}`
+      };
+    };
+
     // Layer 1: Load from localStorage (primary client cache + permanent Excel backup)
     if (typeof window !== 'undefined') {
       try {
         const raw = localStorage.getItem('dojoia_alumnos');
         if (raw) {
-          const list: Alumno[] = JSON.parse(raw);
-          list.forEach(s => { if (s && s.matricula) studentMap.set(s.matricula, s); });
+          const list: any[] = JSON.parse(raw);
+          list.forEach(s => {
+            const normalized = safeNormalizeStudent(s);
+            if (normalized) studentMap.set(normalized.matricula, normalized);
+          });
         }
         // Also check immutable imported backup key
         const rawBackup = localStorage.getItem('dojoia_alumnos_excel_imported');
         if (rawBackup) {
-          const importedList: Alumno[] = JSON.parse(rawBackup);
-          importedList.forEach(s => { if (s && s.matricula && !studentMap.has(s.matricula)) studentMap.set(s.matricula, s); });
+          const importedList: any[] = JSON.parse(rawBackup);
+          importedList.forEach(s => {
+            const normalized = safeNormalizeStudent(s);
+            if (normalized && !studentMap.has(normalized.matricula)) {
+              studentMap.set(normalized.matricula, normalized);
+            }
+          });
         }
       } catch (e) {
         console.warn('Error leyendo alumnos de localStorage:', e);
@@ -234,9 +263,10 @@ export const db = {
         if (res.ok) {
           const json = await res.json();
           if (json && json.success && Array.isArray(json.data)) {
-            json.data.forEach((s: Alumno) => {
-              if (s && s.matricula && !studentMap.has(s.matricula)) {
-                studentMap.set(s.matricula, s);
+            json.data.forEach((s: any) => {
+              const normalized = safeNormalizeStudent(s);
+              if (normalized && !studentMap.has(normalized.matricula)) {
+                studentMap.set(normalized.matricula, normalized);
               }
             });
           }
@@ -262,10 +292,10 @@ export const db = {
 
         const result: any = await Promise.race([supabasePromise, timeoutPromise]);
         if (result && !result.error && Array.isArray(result.data)) {
-          result.data.forEach((s: Alumno) => {
-            // MERGE: Nunca sobreescribir alumnos existentes
-            if (s && s.matricula && !studentMap.has(s.matricula)) {
-              studentMap.set(s.matricula, s);
+          result.data.forEach((s: any) => {
+            const normalized = safeNormalizeStudent(s);
+            if (normalized && !studentMap.has(normalized.matricula)) {
+              studentMap.set(normalized.matricula, normalized);
             }
           });
         }
@@ -276,7 +306,10 @@ export const db = {
 
     // Fallback seed if completely empty
     if (studentMap.size === 0) {
-      MOCK_ALUMNOS.forEach(s => studentMap.set(s.matricula, s));
+      MOCK_ALUMNOS.forEach(s => {
+        const normalized = safeNormalizeStudent(s);
+        if (normalized) studentMap.set(normalized.matricula, normalized);
+      });
     }
 
     const finalList = Array.from(studentMap.values()).sort((a, b) => {
@@ -296,25 +329,66 @@ export const db = {
   },
 
   getAlumnoByQR: async (qrCode: string): Promise<Alumno | null> => {
-    if (!qrCode) return null;
+    if (qrCode === undefined || qrCode === null) return null;
     initLocalStorage();
-    const clean = qrCode.trim().replace(/^[\r\n\s]+|[\r\n\s]+$/g, '');
+
+    // 1. Sanitize incoming barcode/QR string (strip non-printables and control chars)
+    const rawStr = String(qrCode).replace(/[\x00-\x1F\x7F-\x9F]/g, '').trim();
+    const clean = rawStr.replace(/^[\r\n\t\s]+|[\r\n\t\s]+$/g, '');
+    if (!clean) return null;
+
     const cleanUpper = clean.toUpperCase();
     const cleanAlphanumeric = clean.replace(/[^a-zA-Z0-9]/g, '').toUpperCase();
+    const cleanDigitsOnly = clean.replace(/\D/g, '');
 
     const list = await db.getAlumnos();
-    return (
-      list.find(a => 
-        (a.qr_code && a.qr_code.trim().toUpperCase() === cleanUpper) ||
-        (a.matricula && a.matricula.trim().toUpperCase() === cleanUpper) ||
-        (a.id && a.id.trim().toUpperCase() === cleanUpper)
-      ) ||
-      list.find(a => 
-        (a.matricula && a.matricula.replace(/[^a-zA-Z0-9]/g, '').toUpperCase() === cleanAlphanumeric) ||
-        (a.qr_code && a.qr_code.replace(/[^a-zA-Z0-9]/g, '').toUpperCase() === cleanAlphanumeric)
-      ) ||
-      null
+
+    const normalize = (val: any) => String(val ?? '').trim().toUpperCase();
+    const normalizeAlpha = (val: any) => String(val ?? '').replace(/[^a-zA-Z0-9]/g, '').toUpperCase();
+    const normalizeDigits = (val: any) => String(val ?? '').replace(/\D/g, '');
+
+    // Priority 1: Exact match on matricula, qr_code, or id
+    let match = list.find(a => 
+      normalize(a.matricula) === cleanUpper ||
+      normalize(a.qr_code) === cleanUpper ||
+      normalize(a.id) === cleanUpper
     );
+    if (match) return match;
+
+    // Priority 2: Alphanumeric match (ignoring hyphens, spaces, dots)
+    match = list.find(a => 
+      normalizeAlpha(a.matricula) === cleanAlphanumeric ||
+      normalizeAlpha(a.qr_code) === cleanAlphanumeric
+    );
+    if (match) return match;
+
+    // Priority 3: Numerical match (for numeric IDs like 6647666608)
+    if (cleanDigitsOnly.length >= 5) {
+      match = list.find(a => {
+        const matDigits = normalizeDigits(a.matricula);
+        const qrDigits = normalizeDigits(a.qr_code);
+        return (
+          (matDigits && (matDigits === cleanDigitsOnly || matDigits.endsWith(cleanDigitsOnly) || cleanDigitsOnly.endsWith(matDigits))) ||
+          (qrDigits && (qrDigits === cleanDigitsOnly || qrDigits.endsWith(cleanDigitsOnly) || cleanDigitsOnly.endsWith(qrDigits)))
+        );
+      });
+      if (match) return match;
+    }
+
+    // Priority 4: Substring containment for longer barcodes (e.g. barcodes with prefixes or check digits)
+    if (cleanAlphanumeric.length >= 6) {
+      match = list.find(a => {
+        const matAlpha = normalizeAlpha(a.matricula);
+        const qrAlpha = normalizeAlpha(a.qr_code);
+        return (
+          (matAlpha.length >= 6 && (cleanAlphanumeric.includes(matAlpha) || matAlpha.includes(cleanAlphanumeric))) ||
+          (qrAlpha.length >= 6 && (cleanAlphanumeric.includes(qrAlpha) || qrAlpha.includes(cleanAlphanumeric)))
+        );
+      });
+      if (match) return match;
+    }
+
+    return null;
   },
 
   addAlumno: async (alumno: Omit<Alumno, 'id' | 'created_at'>): Promise<Alumno> => {

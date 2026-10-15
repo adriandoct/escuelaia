@@ -53,16 +53,22 @@ export async function POST(req: Request) {
 
     // Index existing
     existing.forEach((st) => {
-      if (st && st.matricula) map.set(st.matricula, st);
+      if (st && st.matricula !== undefined && st.matricula !== null) {
+        const matKey = String(st.matricula).trim();
+        if (matKey) map.set(matKey, { ...st, matricula: matKey });
+      }
     });
 
     // Merge incoming without erasing
     incoming.forEach((st) => {
-      if (st && st.matricula) {
-        if (!map.has(st.matricula)) {
-          map.set(st.matricula, {
+      if (st && st.matricula !== undefined && st.matricula !== null) {
+        const matKey = String(st.matricula).trim();
+        if (matKey && !map.has(matKey)) {
+          map.set(matKey, {
             ...st,
-            id: st.id || `student-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
+            id: st.id ? String(st.id) : `student-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
+            matricula: matKey,
+            qr_code: st.qr_code ? String(st.qr_code).trim() : matKey,
             created_at: st.created_at || new Date().toISOString()
           });
         }
