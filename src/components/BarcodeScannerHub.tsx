@@ -22,8 +22,13 @@ import {
   ShieldCheck,
   Zap,
   Activity,
-  Maximize2,
-  RefreshCw
+  UserPlus,
+  ShieldAlert,
+  Award,
+  BookOpen,
+  Crown,
+  Shield,
+  HelpCircle
 } from 'lucide-react';
 import confetti from 'canvas-confetti';
 import { db, Alumno, Asistencia } from '@/lib/db';
@@ -35,6 +40,8 @@ interface BarcodeScannerHubProps {
   onScanCompleted?: () => void;
   className?: string;
 }
+
+export type AuthRoleType = 'docente' | 'administrador' | 'encargado_orden';
 
 export default function BarcodeScannerHub({ onScanCompleted, className = '' }: BarcodeScannerHubProps) {
   const { user } = useAuth();
@@ -51,7 +58,7 @@ export default function BarcodeScannerHub({ onScanCompleted, className = '' }: B
   const html5ScannerRef = useRef<any>(null);
   const videoElementId = 'dashboard-camera-scanner-viewport';
 
-  // Input ref for physical reader autofocus
+  // Input ref for physical ZKTeco reader autofocus
   const manualInputRef = useRef<HTMLInputElement>(null);
 
   // Active Scan Card Result Modal / HUD
@@ -63,6 +70,26 @@ export default function BarcodeScannerHub({ onScanCompleted, className = '' }: B
     duplicate?: boolean;
     source?: 'hardware_scanner' | 'manual_input' | 'webhid' | 'camera_scanner';
   } | null>(null);
+
+  // =========================================================================
+  // UNREGISTERED CODE AUTHORIZATION MODAL STATE (ZKTECO / BARCODE)
+  // =========================================================================
+  const [unregisteredModal, setUnregisteredModal] = useState<{
+    isOpen: boolean;
+    code: string;
+    source: 'hardware_scanner' | 'manual_input' | 'webhid' | 'camera_scanner';
+  } | null>(null);
+
+  const [selectedRole, setSelectedRole] = useState<AuthRoleType>('encargado_orden');
+  const [registrationMode, setRegistrationMode] = useState<'full' | 'quick'>('full');
+  const [regNombre, setRegNombre] = useState('');
+  const [regApellidos, setRegApellidos] = useState('');
+  const [regGrado, setRegGrado] = useState('1°');
+  const [regGrupo, setRegGrupo] = useState('A');
+  const [regTutor, setRegTutor] = useState('');
+  const [regTelefono, setRegTelefono] = useState('');
+  const [regPassType, setRegPassType] = useState<'entrada' | 'salida'>('entrada');
+  const [isSubmittingAuth, setIsSubmittingAuth] = useState(false);
 
   // Load sample students for quick testing buttons
   useEffect(() => {
@@ -81,7 +108,7 @@ export default function BarcodeScannerHub({ onScanCompleted, className = '' }: B
     };
   }, []);
 
-  // Process any barcode detected by physical scanner, camera or manual input
+  // Process any barcode detected by ZKTeco physical scanner, camera or manual input
   const handleBarcodeDetected = async (code: string, source: 'hardware_scanner' | 'manual_input' | 'webhid' | 'camera_scanner') => {
     if (isProcessing) return;
     setIsProcessing(true);
@@ -89,7 +116,7 @@ export default function BarcodeScannerHub({ onScanCompleted, className = '' }: B
     try {
       const overrideVal = activeTab === 'auto' ? undefined : activeTab;
       const deviceName = source === 'hardware_scanner' 
-        ? 'Lector Código de Barras USB' 
+        ? 'Lector ZKTeco / USB Barcode' 
         : source === 'camera_scanner'
           ? 'Cámara Escáner Dashboard'
           : source === 'webhid' 
@@ -98,7 +125,7 @@ export default function BarcodeScannerHub({ onScanCompleted, className = '' }: B
 
       const operatorName = user?.name || 'Terminal de Acceso Autónomo (Sin sesión)';
 
-      // 1. Register attendance in database
+      // 1. Try to register attendance in database
       const { asistencia, alumno, duplicateWarning } = await db.registrarAsistencia(
         code,
         overrideVal,
@@ -161,30 +188,159 @@ export default function BarcodeScannerHub({ onScanCompleted, className = '' }: B
       }, 4500);
 
     } catch (err: any) {
-      if (soundEnabled) playAudioFeedback('error');
-      setActiveScan({
-        success: false,
-        msg: err.message || `No se encontró ningún estudiante con el código o matrícula '${code}'.`,
+      // CODE NOT FOUND IN DATABASE!
+      // Requirement: "SINO LO ENCUENTRA QUE REGISTRE EN EL DASHBOARD PREGUNTANDO EL ACCESO COMO DOCENTE, ADMINISTRADOR O ENCARGADO DE ORDEN"
+      if (soundEnabled) playAudioFeedback('prompt');
+
+      // Pause camera while modal is open
+      if (isCameraActive && html5ScannerRef.current) {
+        try {
+          await html5ScannerRef.current.pause(true);
+        } catch {}
+      }
+
+      // Pre-fill default pass type
+      setRegPassType(activeTab === 'salida' ? 'salida' : 'entrada');
+      setRegNombre('');
+      setRegApellidos('');
+      setRegTutor('');
+      setRegTelefono('');
+
+      // Auto-select role based on logged user if available, default to encargado_orden
+      if (user?.role === 'docente') {
+        setSelectedRole('docente');
+      } else if (user?.role === 'administrador') {
+        setSelectedRole('administrador');
+      } else {
+        setSelectedRole('encargado_orden');
+      }
+
+      // Open Authorization & Registration Modal
+      setUnregisteredModal({
+        isOpen: true,
+        code,
         source
       });
 
-      if (isCameraActive && html5ScannerRef.current) {
-        setTimeout(async () => {
-          try {
-            await html5ScannerRef.current.resume();
-          } catch {}
-        }, 2500);
-      }
-
-      setTimeout(() => {
-        setActiveScan(null);
-      }, 4000);
     } finally {
       setIsProcessing(false);
     }
   };
 
-  // Connect barcode hook
+  // Submit and register access for unregistered scanned code
+  const handleConfirmAuthorization = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!unregisteredModal) return;
+
+    setIsSubmittingAuth(true);
+
+    try {
+      const code = unregisteredModal.code;
+      const roleLabels: Record<AuthRoleType, string> = {
+        docente: 'Docente',
+        administrador: 'Administrador',
+        encargado_orden: 'Encargado de Orden'
+      };
+
+      const roleLabel = roleLabels[selectedRole];
+      const authorizedBy = `Autorizado por ${roleLabel}${user?.name ? ` (${user.name})` : ' en Turno'}`;
+
+      let alumnoCreado: Alumno;
+
+      if (registrationMode === 'full') {
+        const parts = regApellidos.trim().split(' ');
+        const pat = parts[0] || 'Desconocido';
+        const mat = parts.slice(1).join(' ') || '';
+
+        alumnoCreado = await db.addAlumno({
+          matricula: code,
+          qr_code: code,
+          nombre: regNombre.trim() || `Alumno (${code})`,
+          apellido_paterno: pat,
+          apellido_materno: mat,
+          grado: regGrado,
+          grupo: regGrupo,
+          tutor: regTutor.trim() || 'Tutor Responsable',
+          telefono: regTelefono.trim() || '+525500000000',
+          foto_url: `https://api.dicebear.com/7.x/bottts/svg?seed=${encodeURIComponent(code)}`
+        });
+      } else {
+        alumnoCreado = await db.addAlumno({
+          matricula: code,
+          qr_code: code,
+          nombre: regNombre.trim() || `Pase Rápido (${code})`,
+          apellido_paterno: `[${roleLabel}]`,
+          apellido_materno: '',
+          grado: 'General',
+          grupo: 'A',
+          tutor: 'Dirección Escolar',
+          telefono: '',
+          foto_url: `https://api.dicebear.com/7.x/bottts/svg?seed=${encodeURIComponent(code)}`
+        });
+      }
+
+      // Register attendance in database
+      const { asistencia, alumno } = await db.registrarAsistencia(
+        alumnoCreado.matricula,
+        regPassType,
+        'Lector ZKTeco Código de Barras',
+        'Acceso Principal CECYTE',
+        authorizedBy
+      );
+
+      // WhatsApp notify if valid telephone was entered
+      if (alumno.telefono && alumno.telefono !== '+525500000000' && alumno.telefono.length >= 10) {
+        await sendWhatsAppNotification(alumno, asistencia);
+      }
+
+      if (soundEnabled) playAudioFeedback('success');
+      try {
+        confetti({
+          particleCount: 65,
+          spread: 70,
+          origin: { y: 0.6 }
+        });
+      } catch {}
+
+      // Close Authorization Modal
+      setUnregisteredModal(null);
+
+      // Resume camera if it was open
+      if (isCameraActive && html5ScannerRef.current) {
+        setTimeout(async () => {
+          try {
+            await html5ScannerRef.current.resume();
+          } catch {}
+        }, 1500);
+      }
+
+      // Refresh Dashboard stats and tables
+      if (onScanCompleted) {
+        onScanCompleted();
+      }
+
+      // Show instant HUD result
+      setActiveScan({
+        success: true,
+        student: alumno,
+        asistencia,
+        msg: `¡Acceso Autorizado como ${roleLabel}! El alumno quedó vinculado a este código ZKTeco y registrado en el Dashboard.`,
+        duplicate: false,
+        source: unregisteredModal.source
+      });
+
+      setTimeout(() => {
+        setActiveScan(null);
+      }, 4500);
+
+    } catch (err: any) {
+      alert(`Error al registrar el acceso: ${err.message || err}`);
+    } finally {
+      setIsSubmittingAuth(false);
+    }
+  };
+
+  // Connect barcode hook with ZKTeco handling
   const {
     lastScannedBarcode,
     lastScanTimestamp,
@@ -192,6 +348,7 @@ export default function BarcodeScannerHub({ onScanCompleted, className = '' }: B
     soundEnabled,
     setSoundEnabled,
     isReceivingSignal,
+    isZktecoDetected,
     connectedHidDevices,
     hasWebHidSupport,
     connectWebHidScanner,
@@ -281,10 +438,10 @@ export default function BarcodeScannerHub({ onScanCompleted, className = '' }: B
           <div className="space-y-1.5">
             <div className="flex flex-wrap items-center gap-2.5">
               
-              {/* Hardware Scanner Live Indicator */}
-              <span className={`inline-flex items-center space-x-1.5 px-3 py-1 rounded-full border text-xs font-black tracking-wide transition-colors ${
+              {/* Hardware ZKTeco & USB Scanner Live Indicator */}
+              <span className={`inline-flex items-center space-x-1.5 px-3 py-1 rounded-full border text-xs font-black tracking-wide transition-all ${
                 isReceivingSignal
-                  ? 'bg-cyan-500/20 border-cyan-400 text-cyan-300 shadow-[0_0_12px_rgba(6,182,212,0.5)]'
+                  ? 'bg-cyan-500/25 border-cyan-400 text-cyan-300 shadow-[0_0_15px_rgba(6,182,212,0.6)] animate-pulse'
                   : 'bg-emerald-500/10 border-emerald-500/30 text-emerald-400'
               }`}>
                 <span className="flex h-2 w-2 relative">
@@ -292,8 +449,18 @@ export default function BarcodeScannerHub({ onScanCompleted, className = '' }: B
                   <span className={`relative inline-flex rounded-full h-2 w-2 ${isReceivingSignal ? 'bg-cyan-400' : 'bg-emerald-500'}`}></span>
                 </span>
                 <Barcode size={14} className={isReceivingSignal ? 'text-cyan-300 animate-bounce' : 'text-emerald-400'} />
-                <span>{isReceivingSignal ? '⚡ RECIBIENDO CÓDIGO...' : 'LECTOR DE CÓDIGO DE BARRAS ACTIVO'}</span>
+                <span>
+                  {isReceivingSignal ? '⚡ LEYENDO CÓDIGO ZKTECO...' : 'LECTOR ZKTECO / CÓDIGO DE BARRAS ACTIVO'}
+                </span>
               </span>
+
+              {/* ZKTeco Specific Device Pill */}
+              {isZktecoDetected && (
+                <span className="text-[11px] font-bold px-2.5 py-0.5 rounded-lg bg-indigo-500/15 text-indigo-300 border border-indigo-500/30 flex items-center space-x-1">
+                  <Award size={12} />
+                  <span>Hardware ZKTeco Sincronizado</span>
+                </span>
+              )}
 
               {/* Camera State Badge */}
               <span className={`text-[11px] font-bold px-2.5 py-0.5 rounded-lg border flex items-center space-x-1 ${
@@ -317,7 +484,7 @@ export default function BarcodeScannerHub({ onScanCompleted, className = '' }: B
             </div>
 
             <p className="text-xs text-gray-300">
-              Escanea con tu <strong className="text-white">pistola/lector USB</strong> en cualquier momento, o <strong className="text-cyan-400">activa la cámara web</strong> para lectura óptica directa desde este panel sin entrar a ningún usuario.
+              Escanea credenciales con tu <strong className="text-white">lector ZKTeco</strong> o pistola USB en cualquier momento. Si el código no está registrado, se abrirá la ventana para autorizar el acceso como <strong className="text-emerald-400">Docente</strong>, <strong className="text-amber-400">Administrador</strong> o <strong className="text-cyan-400">Encargado de Orden</strong>.
             </p>
           </div>
 
@@ -393,10 +560,10 @@ export default function BarcodeScannerHub({ onScanCompleted, className = '' }: B
                 type="button"
                 onClick={connectWebHidScanner}
                 className="flex items-center space-x-1.5 px-3 py-1.5 rounded-xl bg-white/5 hover:bg-white/10 border border-white/10 text-gray-300 text-xs font-semibold transition-all cursor-pointer"
-                title="Vincular lector de código de barras USB directamente (Opcional)"
+                title="Vincular lector ZKTeco / USB directamente por WebHID"
               >
                 <Usb size={14} className="text-cyan-400" />
-                <span>{connectedHidDevices.length > 0 ? 'USB Vinculado' : 'Detectar USB'}</span>
+                <span>{connectedHidDevices.length > 0 ? 'Lector Vinculado' : 'Detectar ZKTeco USB'}</span>
               </button>
             )}
 
@@ -425,7 +592,7 @@ export default function BarcodeScannerHub({ onScanCompleted, className = '' }: B
                 <span className="h-2 w-2 rounded-full bg-emerald-400 animate-pulse"></span>
                 <span>Enfoca la credencial frente al lente</span>
               </span>
-              <span className="font-mono text-cyan-400">QR / Códigos de Barra 1D</span>
+              <span className="font-mono text-cyan-400">QR / Códigos de Barra ZKTeco</span>
             </div>
 
           </div>
@@ -452,7 +619,7 @@ export default function BarcodeScannerHub({ onScanCompleted, className = '' }: B
                 data-barcode-input="true"
                 value={manualCode}
                 onChange={(e) => setManualCode(e.target.value)}
-                placeholder="Escanear o escribir matrícula (Ej: DOJ-2026-001)..."
+                placeholder="Escanear con ZKTeco o escribir código (Ej: DOJ-2026-001)..."
                 className="w-full bg-black/50 border border-cyan-500/30 focus:border-cyan-400 rounded-xl py-2 pl-9 pr-3 text-xs font-mono text-white placeholder-gray-500 focus:outline-none transition-colors"
               />
             </div>
@@ -491,11 +658,303 @@ export default function BarcodeScannerHub({ onScanCompleted, className = '' }: B
         {isProcessing && (
           <div className="mt-3 flex items-center space-x-2 text-xs text-cyan-400 animate-pulse">
             <Activity size={14} className="animate-spin" />
-            <span>Procesando código de barras y enviando notificación de WhatsApp...</span>
+            <span>Procesando código de barras con ZKTeco y verificando base de datos...</span>
           </div>
         )}
 
       </div>
+
+      {/* ========================================================================= */}
+      {/* MODAL: AUTORIZACIÓN Y REGISTRO DE CÓDIGO NO ENCONTRADO (ZKTECO)           */}
+      {/* ========================================================================= */}
+      {unregisteredModal && unregisteredModal.isOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/85 backdrop-blur-md animate-fadeIn">
+          <div className="relative max-w-lg w-full rounded-3xl p-6 border border-cyan-500/40 bg-gradient-to-b from-[#09111e] via-[#060c16] to-[#040810] shadow-2xl shadow-cyan-500/20 text-white space-y-5">
+            
+            {/* Top Close Button */}
+            <button
+              type="button"
+              onClick={() => setUnregisteredModal(null)}
+              className="absolute top-4 right-4 text-gray-400 hover:text-white p-1 rounded-lg hover:bg-white/10 transition-colors cursor-pointer"
+            >
+              <X size={18} />
+            </button>
+
+            {/* Modal Header */}
+            <div className="space-y-1.5 text-center">
+              <div className="inline-flex items-center space-x-2 px-3 py-1 rounded-full bg-amber-500/15 border border-amber-500/30 text-amber-300 text-xs font-black tracking-wide">
+                <ShieldAlert size={14} />
+                <span>CÓDIGO NO REGISTRADO EN EL SISTEMA</span>
+              </div>
+
+              <h3 className="text-xl font-extrabold text-white">
+                Autorización de Acceso y Registro
+              </h3>
+
+              <p className="text-xs text-gray-300 max-w-md mx-auto">
+                El escáner ZKTeco detectó el código <span className="font-mono text-cyan-400 font-bold bg-cyan-500/10 px-2 py-0.5 rounded border border-cyan-500/30">{unregisteredModal.code}</span>. Selecciona quién autoriza este acceso para registrarlo en el Dashboard.
+              </p>
+            </div>
+
+            {/* Form */}
+            <form onSubmit={handleConfirmAuthorization} className="space-y-4">
+              
+              {/* STEP 1: PREGUNTAR QUIÉN AUTORIZA EL ACCESO (Docente, Administrador, Encargado de Orden) */}
+              <div className="space-y-2">
+                <label className="text-xs font-bold text-cyan-300 flex items-center space-x-1.5">
+                  <ShieldCheck size={14} />
+                  <span>1. ¿Cómo se autoriza este acceso? (Rol que autoriza):</span>
+                </label>
+
+                <div className="grid grid-cols-3 gap-2.5">
+                  
+                  {/* Rol 1: Docente */}
+                  <button
+                    type="button"
+                    onClick={() => setSelectedRole('docente')}
+                    className={`p-3 rounded-2xl border text-left transition-all cursor-pointer flex flex-col justify-between ${
+                      selectedRole === 'docente'
+                        ? 'bg-emerald-500/20 border-emerald-400 text-emerald-300 shadow-[0_0_15px_rgba(16,185,129,0.3)] ring-1 ring-emerald-400'
+                        : 'bg-white/5 border-white/10 text-gray-400 hover:bg-white/10 hover:text-white'
+                    }`}
+                  >
+                    <div className="flex items-center justify-between w-full">
+                      <BookOpen size={18} className={selectedRole === 'docente' ? 'text-emerald-400' : 'text-gray-400'} />
+                      {selectedRole === 'docente' && <Check size={14} className="text-emerald-400" />}
+                    </div>
+                    <div className="mt-2">
+                      <span className="block text-xs font-black uppercase tracking-wider">Docente</span>
+                      <span className="text-[10px] text-gray-400 leading-tight">Profesor de aula</span>
+                    </div>
+                  </button>
+
+                  {/* Rol 2: Administrador */}
+                  <button
+                    type="button"
+                    onClick={() => setSelectedRole('administrador')}
+                    className={`p-3 rounded-2xl border text-left transition-all cursor-pointer flex flex-col justify-between ${
+                      selectedRole === 'administrador'
+                        ? 'bg-amber-500/20 border-amber-400 text-amber-300 shadow-[0_0_15px_rgba(245,158,11,0.3)] ring-1 ring-amber-400'
+                        : 'bg-white/5 border-white/10 text-gray-400 hover:bg-white/10 hover:text-white'
+                    }`}
+                  >
+                    <div className="flex items-center justify-between w-full">
+                      <Crown size={18} className={selectedRole === 'administrador' ? 'text-amber-400' : 'text-gray-400'} />
+                      {selectedRole === 'administrador' && <Check size={14} className="text-amber-400" />}
+                    </div>
+                    <div className="mt-2">
+                      <span className="block text-xs font-black uppercase tracking-wider">Administrador</span>
+                      <span className="text-[10px] text-gray-400 leading-tight">Dirección / Admin</span>
+                    </div>
+                  </button>
+
+                  {/* Rol 3: Encargado de Orden */}
+                  <button
+                    type="button"
+                    onClick={() => setSelectedRole('encargado_orden')}
+                    className={`p-3 rounded-2xl border text-left transition-all cursor-pointer flex flex-col justify-between ${
+                      selectedRole === 'encargado_orden'
+                        ? 'bg-cyan-500/20 border-cyan-400 text-cyan-300 shadow-[0_0_15px_rgba(6,182,212,0.3)] ring-1 ring-cyan-400'
+                        : 'bg-white/5 border-white/10 text-gray-400 hover:bg-white/10 hover:text-white'
+                    }`}
+                  >
+                    <div className="flex items-center justify-between w-full">
+                      <Shield size={18} className={selectedRole === 'encargado_orden' ? 'text-cyan-400' : 'text-gray-400'} />
+                      {selectedRole === 'encargado_orden' && <Check size={14} className="text-cyan-400" />}
+                    </div>
+                    <div className="mt-2">
+                      <span className="block text-xs font-black uppercase tracking-wider">Encargado Orden</span>
+                      <span className="text-[10px] text-gray-400 leading-tight">Prefecto / Caseta</span>
+                    </div>
+                  </button>
+
+                </div>
+              </div>
+
+              {/* Pass Direction: Entrada vs Salida */}
+              <div className="flex items-center justify-between bg-black/40 p-2.5 rounded-2xl border border-white/10 text-xs">
+                <span className="text-gray-300 font-semibold">Tipo de Acceso a Registrar:</span>
+                <div className="flex items-center space-x-1 bg-white/5 p-1 rounded-xl">
+                  <button
+                    type="button"
+                    onClick={() => setRegPassType('entrada')}
+                    className={`px-3 py-1 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                      regPassType === 'entrada' ? 'bg-emerald-500 text-black shadow-md' : 'text-gray-400 hover:text-white'
+                    }`}
+                  >
+                    🟢 Entrada
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setRegPassType('salida')}
+                    className={`px-3 py-1 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                      regPassType === 'salida' ? 'bg-blue-500 text-black shadow-md' : 'text-gray-400 hover:text-white'
+                    }`}
+                  >
+                    🚪 Salida
+                  </button>
+                </div>
+              </div>
+
+              {/* Registration Mode Tabs */}
+              <div className="flex border-b border-white/10 pb-2 gap-4 text-xs">
+                <button
+                  type="button"
+                  onClick={() => setRegistrationMode('full')}
+                  className={`pb-1 font-bold cursor-pointer transition-colors ${
+                    registrationMode === 'full' ? 'text-cyan-400 border-b-2 border-cyan-400' : 'text-gray-400 hover:text-white'
+                  }`}
+                >
+                  📝 Alta Completa de Alumno
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setRegistrationMode('quick')}
+                  className={`pb-1 font-bold cursor-pointer transition-colors ${
+                    registrationMode === 'quick' ? 'text-cyan-400 border-b-2 border-cyan-400' : 'text-gray-400 hover:text-white'
+                  }`}
+                >
+                  ⚡ Pase Rápido / Emergencia
+                </button>
+              </div>
+
+              {/* Form Fields: Mode Full */}
+              {registrationMode === 'full' ? (
+                <div className="space-y-3 text-xs">
+                  <div className="grid grid-cols-2 gap-2.5">
+                    <div>
+                      <label className="text-[11px] text-gray-400 block mb-1">Nombre(s) *</label>
+                      <input
+                        type="text"
+                        required
+                        value={regNombre}
+                        onChange={(e) => setRegNombre(e.target.value)}
+                        placeholder="Ej. Juan Carlos"
+                        className="w-full bg-black/60 border border-white/15 focus:border-cyan-400 rounded-xl px-3 py-2 text-white text-xs outline-none"
+                      />
+                    </div>
+                    <div>
+                      <label className="text-[11px] text-gray-400 block mb-1">Apellidos *</label>
+                      <input
+                        type="text"
+                        required
+                        value={regApellidos}
+                        onChange={(e) => setRegApellidos(e.target.value)}
+                        placeholder="Ej. Pérez Gómez"
+                        className="w-full bg-black/60 border border-white/15 focus:border-cyan-400 rounded-xl px-3 py-2 text-white text-xs outline-none"
+                      />
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-2.5">
+                    <div>
+                      <label className="text-[11px] text-gray-400 block mb-1">Grado</label>
+                      <select
+                        value={regGrado}
+                        onChange={(e) => setRegGrado(e.target.value)}
+                        className="w-full bg-[#0a101b] border border-white/15 focus:border-cyan-400 rounded-xl px-3 py-2 text-white text-xs outline-none"
+                      >
+                        <option value="1°">1° Semestre</option>
+                        <option value="2°">2° Semestre</option>
+                        <option value="3°">3° Semestre</option>
+                        <option value="4°">4° Semestre</option>
+                        <option value="5°">5° Semestre</option>
+                        <option value="6°">6° Semestre</option>
+                      </select>
+                    </div>
+                    <div>
+                      <label className="text-[11px] text-gray-400 block mb-1">Grupo</label>
+                      <select
+                        value={regGrupo}
+                        onChange={(e) => setRegGrupo(e.target.value)}
+                        className="w-full bg-[#0a101b] border border-white/15 focus:border-cyan-400 rounded-xl px-3 py-2 text-white text-xs outline-none"
+                      >
+                        <option value="A">Grupo A</option>
+                        <option value="B">Grupo B</option>
+                        <option value="C">Grupo C</option>
+                        <option value="D">Grupo D</option>
+                        <option value="E">Grupo E</option>
+                        <option value="F">Grupo F</option>
+                      </select>
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-2.5">
+                    <div>
+                      <label className="text-[11px] text-gray-400 block mb-1">Nombre Tutor</label>
+                      <input
+                        type="text"
+                        value={regTutor}
+                        onChange={(e) => setRegTutor(e.target.value)}
+                        placeholder="Ej. Sra. Carmen Pérez"
+                        className="w-full bg-black/60 border border-white/15 focus:border-cyan-400 rounded-xl px-3 py-2 text-white text-xs outline-none"
+                      />
+                    </div>
+                    <div>
+                      <label className="text-[11px] text-gray-400 block mb-1">Teléfono WhatsApp</label>
+                      <input
+                        type="text"
+                        value={regTelefono}
+                        onChange={(e) => setRegTelefono(e.target.value)}
+                        placeholder="Ej. +526641234567"
+                        className="w-full bg-black/60 border border-white/15 focus:border-cyan-400 rounded-xl px-3 py-2 text-white text-xs outline-none font-mono"
+                      />
+                    </div>
+                  </div>
+                </div>
+              ) : (
+                <div className="space-y-3 text-xs">
+                  <div>
+                    <label className="text-[11px] text-gray-400 block mb-1">Nombre o Motivo del Pase Especial</label>
+                    <input
+                      type="text"
+                      required
+                      value={regNombre}
+                      onChange={(e) => setRegNombre(e.target.value)}
+                      placeholder="Ej. Alumno credencial nueva / Visita / Practicante"
+                      className="w-full bg-black/60 border border-white/15 focus:border-cyan-400 rounded-xl px-3 py-2 text-white text-xs outline-none"
+                    />
+                  </div>
+                  <p className="text-[11px] text-gray-400 leading-relaxed bg-black/30 p-2.5 rounded-xl border border-white/5">
+                    💡 Se registrará el acceso de inmediato en el Dashboard con la firma de autorización del <strong className="text-white">{selectedRole.toUpperCase()}</strong>.
+                  </p>
+                </div>
+              )}
+
+              {/* Action Buttons */}
+              <div className="pt-2 flex items-center justify-end space-x-3">
+                <button
+                  type="button"
+                  onClick={() => setUnregisteredModal(null)}
+                  className="px-4 py-2.5 rounded-xl text-xs text-gray-400 hover:text-white hover:bg-white/5 transition-all cursor-pointer"
+                >
+                  Cancelar
+                </button>
+
+                <button
+                  type="submit"
+                  disabled={isSubmittingAuth}
+                  className="px-5 py-2.5 rounded-xl bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-400 hover:to-blue-500 text-black font-bold text-xs flex items-center space-x-1.5 shadow-lg shadow-cyan-500/20 transition-all cursor-pointer disabled:opacity-50"
+                >
+                  {isSubmittingAuth ? (
+                    <>
+                      <Activity size={14} className="animate-spin" />
+                      <span>Guardando y Autorizando...</span>
+                    </>
+                  ) : (
+                    <>
+                      <CheckCircle size={15} />
+                      <span>Autorizar y Registrar en Dashboard</span>
+                    </>
+                  )}
+                </button>
+              </div>
+
+            </form>
+
+          </div>
+        </div>
+      )}
 
       {/* ========================================================================= */}
       {/* FLOATING HUD SCAN RESULT OVERLAY MODAL                                    */}
@@ -579,17 +1038,21 @@ export default function BarcodeScannerHub({ onScanCompleted, className = '' }: B
                       <span className="text-gray-400 text-[11px]">{activeScan.asistencia.fecha}</span>
                     </div>
 
-                    <div className="pt-2 border-t border-white/5 flex items-center justify-between text-[11px] text-emerald-400 font-semibold">
-                      <span className="flex items-center space-x-1.5">
-                        <Smartphone size={13} />
-                        <span>WhatsApp enviado a {activeScan.student.tutor}</span>
-                      </span>
-                      <Check size={14} />
-                    </div>
+                    {activeScan.asistencia.escaneado_por && (
+                      <div className="text-[10px] text-cyan-300 font-semibold text-left border-t border-white/5 pt-1.5">
+                        🛡️ {activeScan.asistencia.escaneado_por}
+                      </div>
+                    )}
 
-                    <div className="text-[10px] text-gray-500 text-left font-mono truncate">
-                      Destino: {activeScan.student.telefono}
-                    </div>
+                    {activeScan.student.telefono && activeScan.student.telefono !== '+525500000000' && (
+                      <div className="pt-2 border-t border-white/5 flex items-center justify-between text-[11px] text-emerald-400 font-semibold">
+                        <span className="flex items-center space-x-1.5">
+                          <Smartphone size={13} />
+                          <span>WhatsApp enviado a {activeScan.student.tutor}</span>
+                        </span>
+                        <Check size={14} />
+                      </div>
+                    )}
                   </div>
 
                 </div>

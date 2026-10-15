@@ -12,7 +12,7 @@ export interface BarcodeScannerOptions {
   playSound?: boolean;
 }
 
-export function playAudioFeedback(type: 'success' | 'duplicate' | 'error' | 'connect') {
+export function playAudioFeedback(type: 'success' | 'duplicate' | 'error' | 'connect' | 'prompt') {
   try {
     if (typeof window === 'undefined') return;
     const AudioContextClass = window.AudioContext || (window as any).webkitAudioContext;
@@ -45,6 +45,33 @@ export function playAudioFeedback(type: 'success' | 'duplicate' | 'error' | 'con
           osc2.stop(ctx2.currentTime + 0.16);
         } catch {}
       }, 110);
+
+    } else if (type === 'prompt') {
+      // Prompt/attention chord for unregistered access
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.connect(gain);
+      gain.connect(ctx.destination);
+      osc.type = 'triangle';
+      osc.frequency.setValueAtTime(587.33, ctx.currentTime); // D5
+      gain.gain.setValueAtTime(0.1, ctx.currentTime);
+      osc.start();
+      osc.stop(ctx.currentTime + 0.18);
+
+      setTimeout(() => {
+        try {
+          const ctx2 = new AudioContextClass();
+          const osc2 = ctx2.createOscillator();
+          const gain2 = ctx2.createGain();
+          osc2.connect(gain2);
+          gain2.connect(ctx2.destination);
+          osc2.type = 'sine';
+          osc2.frequency.setValueAtTime(783.99, ctx2.currentTime); // G5
+          gain2.gain.setValueAtTime(0.1, ctx2.currentTime);
+          osc2.start();
+          osc2.stop(ctx2.currentTime + 0.22);
+        } catch {}
+      }, 120);
 
     } else if (type === 'duplicate') {
       const osc = ctx.createOscillator();
@@ -118,7 +145,7 @@ export function useBarcodeScanner({
   onScan,
   enabled = true,
   minBarcodeLength = 3,
-  maxKeyIntervalMs = 120, // Generous tolerance for wireless/Bluetooth/USB scanners
+  maxKeyIntervalMs = 120, // Generous tolerance for wireless/Bluetooth/USB ZKTeco scanners
   playSound = true
 }: BarcodeScannerOptions) {
   const [lastScannedBarcode, setLastScannedBarcode] = useState<string | null>(null);
@@ -126,6 +153,7 @@ export function useBarcodeScanner({
   const [totalScansCount, setTotalScansCount] = useState<number>(0);
   const [soundEnabled, setSoundEnabled] = useState<boolean>(playSound);
   const [isReceivingSignal, setIsReceivingSignal] = useState<boolean>(false);
+  const [isZktecoDetected, setIsZktecoDetected] = useState<boolean>(false);
   const [connectedHidDevices, setConnectedHidDevices] = useState<string[]>([]);
   const [hasWebHidSupport, setHasWebHidSupport] = useState<boolean>(false);
 
@@ -140,7 +168,7 @@ export function useBarcodeScanner({
     onScanRef.current = onScan;
   }, [onScan]);
 
-  // Check WebHID support
+  // Check WebHID support and query connected ZKTeco / HID devices
   useEffect(() => {
     if (typeof window !== 'undefined' && 'hid' in navigator) {
       setHasWebHidSupport(true);
@@ -152,7 +180,15 @@ export function useBarcodeScanner({
     try {
       if (typeof window !== 'undefined' && 'hid' in navigator) {
         const devices = await (navigator as any).hid.getDevices();
-        const names = devices.map((d: any) => d.productName || `Lector HID (${d.vendorId?.toString(16)})`);
+        const names = devices.map((d: any) => {
+          const prod = d.productName || '';
+          const isZk = prod.toLowerCase().includes('zk') || 
+                       prod.toLowerCase().includes('teco') || 
+                       d.vendorId === 0x1b55 || 
+                       d.vendorId === 0x0483;
+          if (isZk) setIsZktecoDetected(true);
+          return prod || `Lector HID (${d.vendorId?.toString(16)})`;
+        });
         setConnectedHidDevices(names);
       }
     } catch (e) {
@@ -162,14 +198,16 @@ export function useBarcodeScanner({
 
   const connectWebHidScanner = async () => {
     if (typeof window === 'undefined' || !('hid' in navigator)) {
-      alert('Tu navegador no soporta WebHID nativo, pero el escáner funciona de forma automática mediante teclado virtual USB.');
+      alert('Tu navegador no soporta WebHID nativo, pero tu escáner ZKTeco funciona de forma automática y directa mediante el teclado virtual USB.');
       return;
     }
 
     try {
+      // Request device with priority for barcode / POS filters
       const devices = await (navigator as any).hid.requestDevice({ filters: [] });
       if (devices && devices.length > 0) {
         await refreshConnectedHidDevices();
+        setIsZktecoDetected(true);
         if (soundEnabled) playAudioFeedback('connect');
       }
     } catch (err: any) {
@@ -180,7 +218,12 @@ export function useBarcodeScanner({
   };
 
   const processBarcode = useCallback(async (code: string, source: 'hardware_scanner' | 'manual_input' | 'webhid') => {
-    const cleanCode = code.trim().replace(/^[\r\n\s]+|[\r\n\s]+$/g, '');
+    // Sanitize ZKTeco control prefixes and suffixes (STX, ETX, CR, LF, TAB)
+    const cleanCode = code
+      .replace(/[\x00-\x1F\x7F-\x9F]/g, '')
+      .trim()
+      .replace(/^[\r\n\t\s]+|[\r\n\t\s]+$/g, '');
+
     if (!cleanCode || cleanCode.length < minBarcodeLength) return;
 
     setLastScannedBarcode(cleanCode);
@@ -194,7 +237,7 @@ export function useBarcodeScanner({
     }
   }, [minBarcodeLength]);
 
-  // Master Global Keydown Listener for physical Barcode Guns (Keyboard Wedge)
+  // Master Global Keydown Listener for ZKTeco and physical Barcode Guns (Keyboard Wedge)
   useEffect(() => {
     if (!enabled || typeof window === 'undefined') return;
 
@@ -208,7 +251,7 @@ export function useBarcodeScanner({
       if (signalTimeoutRef.current) clearTimeout(signalTimeoutRef.current);
       signalTimeoutRef.current = setTimeout(() => {
         setIsReceivingSignal(false);
-      }, 350);
+      }, 400);
 
       const target = e.target as HTMLElement | null;
       const isInputFocused = target && (
@@ -257,7 +300,7 @@ export function useBarcodeScanner({
         return;
       }
 
-      // Ignore modifiers and Escape
+      // Ignore Escape
       if (e.key === 'Escape') {
         bufferRef.current = '';
         keyIntervalsRef.current = [];
@@ -272,20 +315,20 @@ export function useBarcodeScanner({
           keyIntervalsRef.current = [];
         }
 
-        // If too much idle time passed between characters (> 900ms), start fresh buffer
-        if (interval > 900 && bufferRef.current.length > 0) {
+        // If too much idle time passed between characters (> 950ms), start fresh buffer
+        if (interval > 950 && bufferRef.current.length > 0) {
           bufferRef.current = '';
           keyIntervalsRef.current = [];
         }
 
         bufferRef.current += e.key;
 
-        // Auto-clear buffer if no terminator arrives within 1.5 seconds
+        // Auto-clear buffer if no terminator arrives within 1.6 seconds
         if (timeoutRef.current) clearTimeout(timeoutRef.current);
         timeoutRef.current = setTimeout(() => {
           bufferRef.current = '';
           keyIntervalsRef.current = [];
-        }, 1500);
+        }, 1600);
       }
     };
 
@@ -305,6 +348,7 @@ export function useBarcodeScanner({
     soundEnabled,
     setSoundEnabled,
     isReceivingSignal,
+    isZktecoDetected,
     connectedHidDevices,
     hasWebHidSupport,
     connectWebHidScanner,
