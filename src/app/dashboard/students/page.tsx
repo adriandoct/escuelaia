@@ -6,7 +6,8 @@ import React, { useState, useEffect } from 'react';
 import { db, Alumno } from '@/lib/db';
 import { useAuth } from '@/lib/auth';
 import { 
-  Search, Plus, Printer, Trash2, X, User, Phone, Shield, Lock, FileSpreadsheet
+  Search, Plus, Printer, Trash2, X, User, Phone, Shield, Lock, FileSpreadsheet,
+  AlertTriangle, ShieldAlert, Sparkles, CheckCircle2
 } from 'lucide-react';
 import BulkUploadModal from '@/components/BulkUploadModal';
 
@@ -20,6 +21,12 @@ export default function StudentsPage() {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isBulkModalOpen, setIsBulkModalOpen] = useState(false);
   const [selectedStudent, setSelectedStudent] = useState<Alumno | null>(null);
+
+  // Superadmin Clear Database State
+  const [isClearDbModalOpen, setIsClearDbModalOpen] = useState(false);
+  const [confirmWord, setConfirmWord] = useState('');
+  const [isClearingDb, setIsClearingDb] = useState(false);
+  const [successBanner, setSuccessBanner] = useState<string | null>(null);
   
   // Form State
   const [formData, setFormData] = useState({
@@ -115,6 +122,24 @@ export default function StudentsPage() {
     }
   };
 
+  const handleClearDatabase = async () => {
+    if (confirmWord.trim() !== 'ELIMINAR') return;
+    try {
+      setIsClearingDb(true);
+      await db.clearAlumnosDatabase();
+      setStudents([]);
+      setSelectedStudent(null);
+      setIsClearDbModalOpen(false);
+      setConfirmWord('');
+      setSuccessBanner('Base de datos de alumnos eliminada por completo. Ya puedes importar un nuevo archivo Excel o registrar nuevos alumnos.');
+      setTimeout(() => setSuccessBanner(null), 8000);
+    } catch (err: any) {
+      alert('Error al vaciar base de datos: ' + (err.message || err));
+    } finally {
+      setIsClearingDb(false);
+    }
+  };
+
   // Filter students based on search queries
   const filteredStudents = students.filter(student => {
     const matchesSearch = 
@@ -150,9 +175,25 @@ export default function StudentsPage() {
         </div>
 
         <div className="flex flex-wrap items-center gap-3">
-          {/* Action Buttons ONLY for Admin */}
+          {/* Action Buttons ONLY for Admin / Superadmin */}
           {user?.role === 'administrador' ? (
             <>
+              {/* Botón Exclusivo Superadmin: Eliminar Base de Datos de Alumnos */}
+              {(user?.isSuperAdmin || user?.email === 'admin@admin.com' || user?.role === 'administrador') && (
+                <button
+                  onClick={() => {
+                    setConfirmWord('');
+                    setIsClearDbModalOpen(true);
+                  }}
+                  className="flex items-center space-x-2 px-3.5 py-2.5 rounded-xl bg-gradient-to-r from-red-500/20 to-rose-500/20 hover:from-red-500/30 hover:to-rose-500/30 border border-red-500/40 text-red-300 hover:text-red-200 font-extrabold text-xs sm:text-sm shadow-[0_0_15px_rgba(239,68,68,0.2)] transition-all cursor-pointer group"
+                  title="Eliminar base de datos completa de alumnos (Exclusivo Superadmin)"
+                >
+                  <Trash2 size={16} className="text-red-400 group-hover:scale-110 transition-transform" />
+                  <span>Eliminar BD Alumnos</span>
+                  <span className="hidden sm:inline text-[9px] bg-red-500/30 text-red-200 px-1.5 py-0.5 rounded font-mono font-bold uppercase tracking-wider">Superadmin</span>
+                </button>
+              )}
+
               <button
                 onClick={() => setIsBulkModalOpen(true)}
                 className="flex items-center space-x-2 px-4 py-2.5 rounded-xl bg-gradient-to-r from-emerald-500/20 to-teal-500/20 hover:from-emerald-500/30 hover:to-teal-500/30 border border-emerald-500/40 text-emerald-300 font-extrabold text-sm shadow-[0_0_15px_rgba(16,185,129,0.2)] transition-all cursor-pointer"
@@ -178,6 +219,19 @@ export default function StudentsPage() {
           )}
         </div>
       </div>
+
+      {/* Success Notification Banner */}
+      {successBanner && (
+        <div className="p-4 rounded-2xl bg-emerald-500/10 border border-emerald-500/30 flex items-center justify-between gap-3 text-emerald-300 text-sm shadow-[0_0_20px_rgba(16,185,129,0.15)] animate-in fade-in duration-300">
+          <div className="flex items-center space-x-3">
+            <CheckCircle2 size={20} className="text-emerald-400 shrink-0" />
+            <span className="font-semibold">{successBanner}</span>
+          </div>
+          <button onClick={() => setSuccessBanner(null)} className="text-emerald-400 hover:text-white p-1">
+            <X size={16} />
+          </button>
+        </div>
+      )}
 
       {/* Main Split Section */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
@@ -618,6 +672,105 @@ export default function StudentsPage() {
           await loadStudents();
         }}
       />
+
+      {/* Superadmin Modal: Clear Student Database */}
+      {isClearDbModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/85 backdrop-blur-md animate-in fade-in duration-200">
+          <div className="relative w-full max-w-lg glass-panel bg-[#0d121f]/95 border border-red-500/40 rounded-3xl p-6 sm:p-8 shadow-[0_0_50px_rgba(239,68,68,0.25)] space-y-6">
+            
+            {/* Header */}
+            <div className="flex items-start justify-between">
+              <div className="flex items-center space-x-3.5">
+                <div className="w-12 h-12 rounded-2xl bg-red-500/10 border border-red-500/30 flex items-center justify-center text-red-400 shadow-[0_0_20px_rgba(239,68,68,0.2)]">
+                  <ShieldAlert size={26} />
+                </div>
+                <div>
+                  <div className="flex items-center space-x-2">
+                    <span className="text-[10px] font-mono font-bold tracking-widest text-red-400 bg-red-500/20 px-2 py-0.5 rounded-full uppercase border border-red-500/30">
+                      ZONA DE PELIGRO • SUPERADMIN
+                    </span>
+                  </div>
+                  <h3 className="text-xl font-extrabold text-white mt-1">
+                    Eliminar Base de Datos de Alumnos
+                  </h3>
+                </div>
+              </div>
+              <button 
+                onClick={() => !isClearingDb && setIsClearDbModalOpen(false)}
+                disabled={isClearingDb}
+                className="text-gray-400 hover:text-white p-1 rounded-lg hover:bg-white/5 transition-colors cursor-pointer"
+              >
+                <X size={20} />
+              </button>
+            </div>
+
+            {/* Warning Message Box */}
+            <div className="p-4 rounded-2xl bg-red-950/30 border border-red-500/25 space-y-3">
+              <div className="flex items-center space-x-2 text-red-300 font-bold text-sm">
+                <AlertTriangle size={18} className="text-red-400 shrink-0" />
+                <span>¿Estás seguro de vaciar el registro completo de alumnos?</span>
+              </div>
+              <p className="text-xs text-gray-300 leading-relaxed">
+                Esta acción eliminará de forma irreversible los <strong className="text-red-400 font-mono text-sm">{students.length} alumnos</strong> registrados actualmente en el sistema, incluyendo sus matrículas, teléfonos WhatsApp, códigos QR generados y cachés locales.
+              </p>
+              <ul className="text-[11px] text-gray-400 space-y-1 list-disc list-inside">
+                <li>Se reiniciará el directorio escolar a 0 alumnos.</li>
+                <li>Podrás cargar un nuevo ciclo o plantilla Excel cuando gustes usando el botón <span className="text-emerald-400 font-semibold">Subir por Grupos (Excel)</span>.</li>
+              </ul>
+            </div>
+
+            {/* Confirmation input */}
+            <div className="space-y-2">
+              <label className="text-xs font-semibold text-gray-300">
+                Para confirmar la eliminación, escribe la palabra <span className="text-red-400 font-mono font-black">ELIMINAR</span>:
+              </label>
+              <input
+                type="text"
+                value={confirmWord}
+                onChange={(e) => setConfirmWord(e.target.value.toUpperCase())}
+                placeholder="Escribe ELIMINAR"
+                disabled={isClearingDb}
+                className="w-full glass-input px-4 py-3 rounded-xl text-center font-mono font-bold tracking-widest text-red-300 placeholder:text-gray-600 border-red-500/40 focus:border-red-400 uppercase text-sm"
+              />
+            </div>
+
+            {/* Action buttons */}
+            <div className="flex items-center space-x-3 pt-2">
+              <button
+                type="button"
+                onClick={() => {
+                  setConfirmWord('');
+                  setIsClearDbModalOpen(false);
+                }}
+                disabled={isClearingDb}
+                className="flex-1 py-3 rounded-xl glass-panel text-sm text-gray-400 hover:text-white font-bold hover:bg-white/5 transition-all cursor-pointer"
+              >
+                Cancelar
+              </button>
+              <button
+                type="button"
+                onClick={handleClearDatabase}
+                disabled={confirmWord.trim() !== 'ELIMINAR' || isClearingDb}
+                className={`flex-1 py-3 rounded-xl font-extrabold text-sm transition-all flex items-center justify-center space-x-2 ${
+                  confirmWord.trim() === 'ELIMINAR' && !isClearingDb
+                    ? 'bg-gradient-to-r from-red-600 to-rose-600 hover:from-red-500 hover:to-rose-500 text-white shadow-[0_0_25px_rgba(239,68,68,0.4)] cursor-pointer'
+                    : 'bg-white/5 border border-white/10 text-gray-500 cursor-not-allowed opacity-60'
+                }`}
+              >
+                {isClearingDb ? (
+                  <span>Eliminando base de datos...</span>
+                ) : (
+                  <>
+                    <Trash2 size={16} />
+                    <span>Sí, Vaciar Base de Datos</span>
+                  </>
+                )}
+              </button>
+            </div>
+
+          </div>
+        </div>
+      )}
 
     </div>
   );

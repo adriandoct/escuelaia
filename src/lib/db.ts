@@ -119,7 +119,11 @@ const initLocalStorage = () => {
   if (typeof window === 'undefined') return;
 
   if (!localStorage.getItem('dojoia_alumnos')) {
-    localStorage.setItem('dojoia_alumnos', JSON.stringify(MOCK_ALUMNOS));
+    if (localStorage.getItem('dojoia_alumnos_cleared') === 'true') {
+      localStorage.setItem('dojoia_alumnos', JSON.stringify([]));
+    } else {
+      localStorage.setItem('dojoia_alumnos', JSON.stringify(MOCK_ALUMNOS));
+    }
   }
 
   if (!localStorage.getItem('dojoia_asistencias')) {
@@ -304,8 +308,9 @@ export const db = {
       }
     }
 
-    // Fallback seed if completely empty
-    if (studentMap.size === 0) {
+    // Fallback seed if completely empty AND not intentionally cleared
+    const isExplicitlyCleared = typeof window !== 'undefined' && localStorage.getItem('dojoia_alumnos_cleared') === 'true';
+    if (studentMap.size === 0 && !isExplicitlyCleared) {
       MOCK_ALUMNOS.forEach(s => {
         const normalized = safeNormalizeStudent(s);
         if (normalized) studentMap.set(normalized.matricula, normalized);
@@ -403,6 +408,7 @@ export const db = {
 
     // Save to localStorage
     if (typeof window !== 'undefined') {
+      localStorage.removeItem('dojoia_alumnos_cleared');
       localStorage.setItem('dojoia_alumnos', JSON.stringify(list));
       try {
         const rawBackup = localStorage.getItem('dojoia_alumnos_excel_imported');
@@ -460,6 +466,7 @@ export const db = {
 
     // 1. Save to localStorage active list AND permanent Excel backup key
     if (typeof window !== 'undefined') {
+      localStorage.removeItem('dojoia_alumnos_cleared');
       localStorage.setItem('dojoia_alumnos', JSON.stringify(fullList));
 
       try {
@@ -565,6 +572,31 @@ export const db = {
     }
 
     return list.length < initialLen;
+  },
+
+  // Completely wipe student database across all storage layers (Exclusivo Superadmin)
+  clearAlumnosDatabase: async (): Promise<boolean> => {
+    if (typeof window !== 'undefined') {
+      localStorage.setItem('dojoia_alumnos_cleared', 'true');
+      localStorage.setItem('dojoia_alumnos', JSON.stringify([]));
+      localStorage.setItem('dojoia_alumnos_excel_imported', JSON.stringify([]));
+
+      try {
+        await fetch('/api/alumnos?all=true', { method: 'DELETE' });
+      } catch (e) {
+        console.warn('Error borrando en api/alumnos:', e);
+      }
+    }
+
+    if (supabase) {
+      try {
+        await supabase.from('alumnos').delete().neq('id', 'purged_dummy_placeholder');
+      } catch (e) {
+        console.warn('Supabase delete all falló:', e);
+      }
+    }
+
+    return true;
   },
 
   // Asistencia operations

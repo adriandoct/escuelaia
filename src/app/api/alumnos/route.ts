@@ -107,7 +107,14 @@ export async function DELETE(req: Request) {
   try {
     const { searchParams } = new URL(req.url);
     const id = searchParams.get('id');
-    if (!id) return NextResponse.json({ error: 'Missing ID' }, { status: 400 });
+    const all = searchParams.get('all');
+
+    if (all === 'true') {
+      writeLocalData([]);
+      return NextResponse.json({ success: true, count: 0, message: 'Base de datos de alumnos vaciada con éxito' });
+    }
+
+    if (!id) return NextResponse.json({ error: 'Missing ID or parameter all=true' }, { status: 400 });
 
     const existing = readLocalData();
     const filtered = existing.filter(s => s.id !== id);
@@ -118,3 +125,4 @@ export async function DELETE(req: Request) {
     return NextResponse.json({ success: false, error: err.message }, { status: 500 });
   }
 }
+
