@@ -62,6 +62,7 @@ export default function InstitutionalScanner() {
 
   // Manual input ref for physical scanner autofocus
   const scannerInputRef = useRef<HTMLInputElement>(null);
+  const autoScanTimeoutRef = useRef<any>(null);
 
   // Active Scan Result HUD / Card
   const [activeScan, setActiveScan] = useState<{
@@ -739,6 +740,11 @@ export default function InstitutionalScanner() {
                         value={manualMatricula}
                         onChange={(e) => {
                           const val = e.target.value;
+                          setManualMatricula(val);
+
+                          if (autoScanTimeoutRef.current) clearTimeout(autoScanTimeoutRef.current);
+
+                          // 1. If scanner appended newline or return
                           if (val.includes('\n') || val.includes('\r')) {
                             const clean = val.replace(/[\r\n]/g, '').trim();
                             if (clean.length >= 3) {
@@ -748,13 +754,25 @@ export default function InstitutionalScanner() {
                               return;
                             }
                           }
-                          setManualMatricula(val);
+
+                          // 2. Auto-scan debounce (300ms) for any scanner without Enter
+                          if (val.trim().length >= 4) {
+                            autoScanTimeoutRef.current = setTimeout(() => {
+                              const finalCode = (scannerInputRef.current?.value || val).trim();
+                              if (finalCode.length >= 3) {
+                                triggerManualScan(finalCode);
+                                setManualMatricula('');
+                                if (scannerInputRef.current) scannerInputRef.current.value = '';
+                              }
+                            }, 300);
+                          }
                         }}
                         onKeyDown={(e) => {
                           if (e.key === 'Enter') {
                             e.preventDefault();
                             e.stopPropagation();
-                            const code = (manualMatricula || e.currentTarget.value).trim();
+                            if (autoScanTimeoutRef.current) clearTimeout(autoScanTimeoutRef.current);
+                            const code = (e.currentTarget.value || manualMatricula).trim();
                             if (code.length >= 3) {
                               triggerManualScan(code);
                               setManualMatricula('');
@@ -766,6 +784,7 @@ export default function InstitutionalScanner() {
                           const pasted = e.clipboardData?.getData('text')?.trim() || '';
                           if (pasted.length >= 3) {
                             e.preventDefault();
+                            if (autoScanTimeoutRef.current) clearTimeout(autoScanTimeoutRef.current);
                             triggerManualScan(pasted);
                             setManualMatricula('');
                             if (scannerInputRef.current) scannerInputRef.current.value = '';

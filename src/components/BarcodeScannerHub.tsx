@@ -39,7 +39,7 @@ import {
 import confetti from 'canvas-confetti';
 import { db, Alumno, Asistencia } from '@/lib/db';
 import { sendWhatsAppNotification } from '@/lib/whatsapp';
-import { useBarcodeScanner, playAudioFeedback } from '@/lib/useBarcodeScanner';
+import { useBarcodeScanner, playAudioFeedback, cleanBarcode } from '@/lib/useBarcodeScanner';
 import { useAuth } from '@/lib/auth';
 
 interface BarcodeScannerHubProps {
@@ -100,6 +100,9 @@ export default function BarcodeScannerHub({ onScanCompleted, className = '' }: B
   const [regTelefono, setRegTelefono] = useState('');
   const [regPassType, setRegPassType] = useState<'entrada' | 'salida'>('entrada');
   const [isSubmittingAuth, setIsSubmittingAuth] = useState(false);
+  const autoScanTimeoutRef = useRef<any>(null);
+  const [showDiagnosticModal, setShowDiagnosticModal] = useState(false);
+  const [diagnosticCode, setDiagnosticCode] = useState('');
 
   // Helper to obtain authorized accounts for each role
   const getAccountsForRole = useCallback((role: AuthRoleType): string[] => {
@@ -494,11 +497,14 @@ export default function BarcodeScannerHub({ onScanCompleted, className = '' }: B
     setIsCameraActive(false);
   };
 
-  const handleManualFormSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!manualCode.trim()) return;
-    triggerManualScan(manualCode.trim());
+  const handleManualFormSubmit = (e?: React.FormEvent) => {
+    if (e) e.preventDefault();
+    if (autoScanTimeoutRef.current) clearTimeout(autoScanTimeoutRef.current);
+    const code = cleanBarcode(manualInputRef.current?.value || manualCode);
+    if (!code) return;
+    handleBarcodeDetected(code, 'manual_input');
     setManualCode('');
+    if (manualInputRef.current) manualInputRef.current.value = '';
   };
 
   return (
@@ -684,6 +690,17 @@ export default function BarcodeScannerHub({ onScanCompleted, className = '' }: B
               <span>{isHardwareScannerConnected ? 'Revisar Escáner USB' : 'Detectar Escáner USB'}</span>
             </button>
 
+            {/* Quick Diagnostic / Hardware Mode Help Button */}
+            <button
+              type="button"
+              onClick={() => setShowDiagnosticModal(true)}
+              className="flex items-center space-x-1 px-3 py-1.5 rounded-xl bg-amber-500/10 hover:bg-amber-500/20 border border-amber-500/30 text-amber-300 text-xs font-semibold transition-all cursor-pointer"
+              title="¿Tu escáner pita pero no detecta la matrícula? Haz clic aquí para diagnóstico rápido"
+            >
+              <HelpCircle size={14} />
+              <span>¿Suena pero no detecta?</span>
+            </button>
+
           </div>
 
         </div>
@@ -735,7 +752,59 @@ export default function BarcodeScannerHub({ onScanCompleted, className = '' }: B
                 type="text"
                 data-barcode-input="true"
                 value={manualCode}
-                onChange={(e) => setManualCode(e.target.value)}
+                onChange={(e) => {
+                  const val = e.target.value;
+                  setManualCode(val);
+
+                  if (autoScanTimeoutRef.current) clearTimeout(autoScanTimeoutRef.current);
+
+                  // 1. If scanner appended newline, return, or tab
+                  if (val.includes('\n') || val.includes('\r') || val.includes('\t')) {
+                    const clean = cleanBarcode(val);
+                    if (clean.length >= 3) {
+                      handleBarcodeDetected(clean, 'hardware_scanner');
+                      setManualCode('');
+                      if (manualInputRef.current) manualInputRef.current.value = '';
+                      return;
+                    }
+                  }
+
+                  // 2. Auto-scan debounce (300ms) for any scanner without Enter suffix
+                  if (val.trim().length >= 4) {
+                    autoScanTimeoutRef.current = setTimeout(() => {
+                      const finalCode = cleanBarcode(manualInputRef.current?.value || val);
+                      if (finalCode.length >= 3) {
+                        handleBarcodeDetected(finalCode, 'hardware_scanner');
+                        setManualCode('');
+                        if (manualInputRef.current) manualInputRef.current.value = '';
+                      }
+                    }, 300);
+                  }
+                }}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    if (autoScanTimeoutRef.current) clearTimeout(autoScanTimeoutRef.current);
+                    const code = cleanBarcode(manualInputRef.current?.value || manualCode);
+                    if (code.length >= 3) {
+                      handleBarcodeDetected(code, 'hardware_scanner');
+                      setManualCode('');
+                      if (manualInputRef.current) manualInputRef.current.value = '';
+                    }
+                  }
+                }}
+                onPaste={(e) => {
+                  const pasted = e.clipboardData?.getData('text') || '';
+                  const clean = cleanBarcode(pasted);
+                  if (clean.length >= 3) {
+                    e.preventDefault();
+                    if (autoScanTimeoutRef.current) clearTimeout(autoScanTimeoutRef.current);
+                    handleBarcodeDetected(clean, 'hardware_scanner');
+                    setManualCode('');
+                    if (manualInputRef.current) manualInputRef.current.value = '';
+                  }
+                }}
                 placeholder="Escanear con ZKTeco o escribir código (Ej: DOJ-2026-001)..."
                 className="w-full bg-black/50 border border-cyan-500/30 focus:border-cyan-400 rounded-xl py-2 pl-9 pr-3 text-xs font-mono text-white placeholder-gray-500 focus:outline-none transition-colors"
               />
@@ -1270,6 +1339,89 @@ export default function BarcodeScannerHub({ onScanCompleted, className = '' }: B
 
             </div>
 
+          </div>
+        </div>
+      )}
+
+      {/* DIAGNOSTIC MODAL: WHY SCANNER BEEPS BUT DOESN'T DETECT */}
+      {showDiagnosticModal && (
+        <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-md flex items-center justify-center p-4 animate-fadeIn">
+          <div className="relative w-full max-w-lg rounded-3xl bg-[#090d16] border border-cyan-500/40 p-6 shadow-2xl space-y-5">
+            <div className="flex items-center justify-between pb-3 border-b border-white/10">
+              <div className="flex items-center space-x-2.5">
+                <span className="p-2 rounded-xl bg-amber-500/15 text-amber-400">
+                  <Usb size={20} />
+                </span>
+                <div>
+                  <h3 className="text-base font-extrabold text-white">¿Tu escáner pita pero no detecta la matrícula?</h3>
+                  <p className="text-xs text-gray-400">Diagnóstico rápido de hardware y modo USB</p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowDiagnosticModal(false)}
+                className="text-gray-400 hover:text-white p-1 rounded-lg hover:bg-white/10 transition-colors cursor-pointer"
+              >
+                <X size={18} />
+              </button>
+            </div>
+
+            <div className="space-y-3.5 text-xs text-gray-300 leading-relaxed">
+              <div className="p-3.5 rounded-2xl bg-amber-500/10 border border-amber-500/25 space-y-1.5">
+                <p className="font-bold text-amber-300 flex items-center space-x-1.5">
+                  <span>💡</span>
+                  <span>Causa Principal: El escáner está en modo &quot;Serial Virtual COM&quot; en lugar de &quot;Teclado USB (HID)&quot;</span>
+                </p>
+                <p className="text-[11px] text-gray-300">
+                  Cuando la pistola lectora pita, su láser físico leyó el código correctamente, pero si está en modo Serial, la pistola <strong>no envía pulsaciones de teclado a Windows</strong>.
+                </p>
+                <p className="text-[11px] text-cyan-300 font-semibold pt-1">
+                  👉 <strong>Solución:</strong> En el manual o guía rápida que venía en la caja de tu escáner, escanea con el láser el código que dice <strong className="underline">&quot;USB HID Mode&quot;</strong> o <strong className="underline">&quot;Modo Teclado USB&quot;</strong>. Al hacerlo, tu lector comenzará a escribir en automático.
+                </p>
+              </div>
+
+              <div className="p-3.5 rounded-2xl bg-blue-500/10 border border-blue-500/25 space-y-1.5">
+                <p className="font-bold text-blue-300 flex items-center space-x-1.5">
+                  <span>🎯</span>
+                  <span>Prueba en Vivo en esta Pantalla</span>
+                </p>
+                <p className="text-[11px] text-gray-300">
+                  Haz clic en el recuadro de abajo y dispara el escáner hacia cualquier credencial:
+                </p>
+                <input
+                  type="text"
+                  value={diagnosticCode}
+                  onChange={(e) => setDiagnosticCode(e.target.value)}
+                  placeholder="Haz clic aquí y dispara el escáner..."
+                  className="w-full bg-black/70 border border-cyan-400/50 rounded-xl py-2 px-3 text-xs font-mono text-cyan-300 placeholder-gray-500 focus:outline-none focus:ring-1 focus:ring-cyan-400"
+                />
+                {diagnosticCode ? (
+                  <p className="text-[11px] text-emerald-400 font-bold flex items-center space-x-1">
+                    <span>✅</span>
+                    <span>¡Excelente! Tu escáner está enviando texto: <code>{diagnosticCode}</code></span>
+                  </p>
+                ) : (
+                  <p className="text-[10px] text-gray-400">
+                    Si disparas y pita pero aquí no aparece ninguna letra, tu escáner requiere configurar el modo Teclado USB en su manual.
+                  </p>
+                )}
+              </div>
+            </div>
+
+            <div className="pt-2 flex justify-end">
+              <button
+                type="button"
+                onClick={() => {
+                  if (diagnosticCode.trim()) {
+                    handleBarcodeDetected(cleanBarcode(diagnosticCode), 'hardware_scanner');
+                  }
+                  setShowDiagnosticModal(false);
+                }}
+                className="px-5 py-2.5 rounded-xl bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-400 hover:to-blue-500 text-black font-extrabold text-xs transition-all cursor-pointer shadow-lg shadow-cyan-500/20"
+              >
+                {diagnosticCode.trim() ? 'Procesar Asistencia con este Código' : 'Entendido, Cerrar'}
+              </button>
+            </div>
           </div>
         </div>
       )}

@@ -500,8 +500,8 @@ export function useBarcodeScanner({
           ? intervals.reduce((a, b) => a + b, 0) / intervals.length
           : 999;
 
-        // A genuine hardware scanner burst has high speed (average interval <= 85ms)
-        const isHardwareBurst = intervals.length >= 3 && avgInterval <= 85;
+        // A genuine hardware scanner burst: fast key rate or at least one sub-75ms interval
+        const isHardwareBurst = (intervals.length >= 2 && avgInterval <= 140) || (intervals.some(i => i <= 75));
 
         // Reset any pending trailing timer
         if (trailingBurstTimeoutRef.current) clearTimeout(trailingBurstTimeoutRef.current);
