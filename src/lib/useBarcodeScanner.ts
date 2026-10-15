@@ -429,12 +429,16 @@ export function useBarcodeScanner({
         if (trailingBurstTimeoutRef.current) clearTimeout(trailingBurstTimeoutRef.current);
         if (timeoutRef.current) clearTimeout(timeoutRef.current);
 
-        let currentBuffer = bufferRef.current.trim();
         const inputEl = isInputFocused && target ? (target as HTMLInputElement) : null;
+        const inputValue = inputEl && inputEl.value !== undefined ? inputEl.value.trim() : '';
+        const bufferVal = bufferRef.current.trim();
 
-        // Fallback: if buffer was empty but the focused input has a value
-        if (!currentBuffer && inputEl && inputEl.value) {
-          currentBuffer = inputEl.value.trim();
+        // Use whichever is more complete / longer
+        let currentBuffer = bufferVal;
+        if (inputValue.length > bufferVal.length) {
+          currentBuffer = inputValue;
+        } else if (!currentBuffer && inputValue) {
+          currentBuffer = inputValue;
         }
 
         const intervals = keyIntervalsRef.current;
@@ -442,7 +446,7 @@ export function useBarcodeScanner({
           ? intervals.reduce((a, b) => a + b, 0) / intervals.length 
           : 999;
 
-        const isLikelyScanner = (intervals.length >= 2 && avgInterval <= maxKeyIntervalMs) || (currentBuffer.length >= 6 && avgInterval <= 140);
+        const isLikelyScanner = (intervals.length >= 2 && avgInterval <= maxKeyIntervalMs) || (currentBuffer.length >= 5 && avgInterval <= 140);
         const isNonInputScan = !isInputFocused && currentBuffer.length >= minBarcodeLength;
         const isManualBarcodeField = isTargetManualBarcodeInput && currentBuffer.length >= minBarcodeLength;
 
@@ -492,43 +496,37 @@ export function useBarcodeScanner({
 
         // Calculate timing
         const intervals = keyIntervalsRef.current;
-        const recentIntervals = intervals.slice(-4);
-        const avgRecentInterval = recentIntervals.length > 0
-          ? recentIntervals.reduce((a, b) => a + b, 0) / recentIntervals.length
-          : interval;
+        const avgInterval = intervals.length > 0
+          ? intervals.reduce((a, b) => a + b, 0) / intervals.length
+          : 999;
 
-        const isScannerSpeed = avgRecentInterval <= maxKeyIntervalMs;
+        // A genuine hardware scanner burst has high speed (average interval <= 85ms)
+        const isHardwareBurst = intervals.length >= 3 && avgInterval <= 85;
 
-        // NO-TERMINATOR AUTO-FLUSH:
-        // Many barcode scanners do NOT send Enter or Tab suffix from the factory.
-        // If rapid scanner burst is detected or target is the barcode box, arm trailing auto-flush (95ms)
+        // Reset any pending trailing timer
         if (trailingBurstTimeoutRef.current) clearTimeout(trailingBurstTimeoutRef.current);
 
-        if (
-          bufferRef.current.length >= minBarcodeLength && 
-          (isScannerSpeed || isTargetManualBarcodeInput || !isInputFocused) && 
-          !isPasswordOrModalInput
-        ) {
+        // NO-TERMINATOR AUTO-FLUSH:
+        // ONLY auto-flush on genuine hardware scanner burst after a safe 260ms quiet period,
+        // NEVER on human manual typing so we don't truncate codes.
+        if (bufferRef.current.length >= 5 && isHardwareBurst && !isPasswordOrModalInput) {
           trailingBurstTimeoutRef.current = setTimeout(() => {
-            const pendingCode = bufferRef.current.trim();
-            const pendingIntervals = keyIntervalsRef.current;
-            const avgTotal = pendingIntervals.length > 0
-              ? pendingIntervals.reduce((a, b) => a + b, 0) / pendingIntervals.length
-              : 999;
+            const inputEl = isInputFocused && target ? (target as HTMLInputElement) : null;
+            const inputVal = inputEl && inputEl.value !== undefined ? inputEl.value.trim() : '';
+            const bufVal = bufferRef.current.trim();
+            const codeToFlush = inputVal.length > bufVal.length ? inputVal : bufVal;
 
-            const confirmedScanner = (pendingIntervals.length >= 2 && avgTotal <= maxKeyIntervalMs) || !isInputFocused || isTargetManualBarcodeInput;
+            bufferRef.current = '';
+            keyIntervalsRef.current = [];
 
-            if (pendingCode.length >= minBarcodeLength && confirmedScanner) {
-              bufferRef.current = '';
-              keyIntervalsRef.current = [];
-
-              if (target && (target as HTMLInputElement).value !== undefined) {
-                (target as HTMLInputElement).value = '';
-              }
-
-              processBarcode(pendingCode, 'hardware_scanner');
+            if (inputEl) {
+              inputEl.value = '';
             }
-          }, 95);
+
+            if (codeToFlush && codeToFlush.length >= minBarcodeLength) {
+              processBarcode(codeToFlush, 'hardware_scanner');
+            }
+          }, 260);
         }
 
         // Global buffer auto-clear if idle for 2 seconds

@@ -308,9 +308,8 @@ export const db = {
       }
     }
 
-    // Fallback seed if completely empty AND not intentionally cleared
-    const isExplicitlyCleared = typeof window !== 'undefined' && localStorage.getItem('dojoia_alumnos_cleared') === 'true';
-    if (studentMap.size === 0 && !isExplicitlyCleared) {
+    // Fallback seed if completely empty
+    if (studentMap.size === 0) {
       MOCK_ALUMNOS.forEach(s => {
         const normalized = safeNormalizeStudent(s);
         if (normalized) studentMap.set(normalized.matricula, normalized);
