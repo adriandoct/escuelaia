@@ -21,7 +21,6 @@ export function playAudioFeedback(type: 'success' | 'duplicate' | 'error' | 'con
     const ctx = new AudioContextClass();
 
     if (type === 'success') {
-      // High pleasant futuristic double chime
       const osc1 = ctx.createOscillator();
       const gain1 = ctx.createGain();
       osc1.connect(gain1);
@@ -40,7 +39,7 @@ export function playAudioFeedback(type: 'success' | 'duplicate' | 'error' | 'con
           osc2.connect(gain2);
           gain2.connect(ctx2.destination);
           osc2.type = 'sine';
-          osc2.frequency.setValueAtTime(1174, ctx2.currentTime); // D6 note
+          osc2.frequency.setValueAtTime(1174, ctx2.currentTime);
           gain2.gain.setValueAtTime(0.08, ctx2.currentTime);
           osc2.start();
           osc2.stop(ctx2.currentTime + 0.16);
@@ -48,7 +47,6 @@ export function playAudioFeedback(type: 'success' | 'duplicate' | 'error' | 'con
       }, 110);
 
     } else if (type === 'duplicate') {
-      // Warning double tone
       const osc = ctx.createOscillator();
       const gain = ctx.createGain();
       osc.connect(gain);
@@ -75,7 +73,6 @@ export function playAudioFeedback(type: 'success' | 'duplicate' | 'error' | 'con
       }, 150);
 
     } else if (type === 'connect') {
-      // Hardware detected chirp
       const osc = ctx.createOscillator();
       const gain = ctx.createGain();
       osc.connect(gain);
@@ -102,7 +99,6 @@ export function playAudioFeedback(type: 'success' | 'duplicate' | 'error' | 'con
       }, 70);
 
     } else {
-      // Error low buzz
       const osc = ctx.createOscillator();
       const gain = ctx.createGain();
       osc.connect(gain);
@@ -122,22 +118,22 @@ export function useBarcodeScanner({
   onScan,
   enabled = true,
   minBarcodeLength = 3,
-  maxKeyIntervalMs = 65, // Standard physical barcode readers type between 10ms - 40ms per key
+  maxKeyIntervalMs = 120, // Generous tolerance for wireless/Bluetooth/USB scanners
   playSound = true
 }: BarcodeScannerOptions) {
   const [lastScannedBarcode, setLastScannedBarcode] = useState<string | null>(null);
   const [lastScanTimestamp, setLastScanTimestamp] = useState<number | null>(null);
   const [totalScansCount, setTotalScansCount] = useState<number>(0);
   const [soundEnabled, setSoundEnabled] = useState<boolean>(playSound);
-  const [isHardwareActive, setIsHardwareActive] = useState<boolean>(true);
+  const [isReceivingSignal, setIsReceivingSignal] = useState<boolean>(false);
   const [connectedHidDevices, setConnectedHidDevices] = useState<string[]>([]);
   const [hasWebHidSupport, setHasWebHidSupport] = useState<boolean>(false);
 
-  // Buffer state stored in refs to avoid re-renders during high-speed typing
   const bufferRef = useRef<string>('');
   const lastKeyTimeRef = useRef<number>(0);
   const keyIntervalsRef = useRef<number[]>([]);
   const timeoutRef = useRef<any>(null);
+  const signalTimeoutRef = useRef<any>(null);
 
   const onScanRef = useRef(onScan);
   useEffect(() => {
@@ -156,7 +152,7 @@ export function useBarcodeScanner({
     try {
       if (typeof window !== 'undefined' && 'hid' in navigator) {
         const devices = await (navigator as any).hid.getDevices();
-        const names = devices.map((d: any) => d.productName || `Dispositivo HID USB (${d.vendorId?.toString(16)})`);
+        const names = devices.map((d: any) => d.productName || `Lector HID (${d.vendorId?.toString(16)})`);
         setConnectedHidDevices(names);
       }
     } catch (e) {
@@ -166,7 +162,7 @@ export function useBarcodeScanner({
 
   const connectWebHidScanner = async () => {
     if (typeof window === 'undefined' || !('hid' in navigator)) {
-      alert('Tu navegador no soporta la API WebHID directa, pero el escáner funciona de forma automática y transparente mediante teclado virtual USB.');
+      alert('Tu navegador no soporta WebHID nativo, pero el escáner funciona de forma automática mediante teclado virtual USB.');
       return;
     }
 
@@ -178,7 +174,7 @@ export function useBarcodeScanner({
       }
     } catch (err: any) {
       if (err.name !== 'NotFoundError') {
-        console.warn('WebHID requestDevice cancelled or failed:', err);
+        console.warn('WebHID requestDevice error:', err);
       }
     }
   };
@@ -207,6 +203,13 @@ export function useBarcodeScanner({
       const interval = now - lastKeyTimeRef.current;
       lastKeyTimeRef.current = now;
 
+      // Active visual signal on keystroke
+      setIsReceivingSignal(true);
+      if (signalTimeoutRef.current) clearTimeout(signalTimeoutRef.current);
+      signalTimeoutRef.current = setTimeout(() => {
+        setIsReceivingSignal(false);
+      }, 350);
+
       const target = e.target as HTMLElement | null;
       const isInputFocused = target && (
         target.tagName === 'INPUT' || 
@@ -214,20 +217,19 @@ export function useBarcodeScanner({
         target.isContentEditable
       );
 
-      // Check if target is a designated manual barcode input
       const isTargetManualBarcodeInput = target && target.getAttribute('data-barcode-input') === 'true';
 
-      // 1. Enter key: end of barcode scan transmission
-      if (e.key === 'Enter') {
-        // Evaluate if buffer contains a barcode
+      // 1. Detect Terminator Key: Enter, NumpadEnter, Tab, or keyCode 13/9
+      const isTerminator = e.key === 'Enter' || e.code === 'NumpadEnter' || e.key === 'Tab' || e.keyCode === 13 || e.keyCode === 9;
+
+      if (isTerminator) {
         const currentBuffer = bufferRef.current.trim();
         const intervals = keyIntervalsRef.current;
         const avgInterval = intervals.length > 0 
           ? intervals.reduce((a, b) => a + b, 0) / intervals.length 
           : 999;
 
-        // A physical barcode reader typically averages < 50ms per key
-        const isLikelyScanner = intervals.length >= 3 && avgInterval <= maxKeyIntervalMs;
+        const isLikelyScanner = intervals.length >= 2 && avgInterval <= maxKeyIntervalMs;
         const isNonInputScan = !isInputFocused && currentBuffer.length >= minBarcodeLength;
         const isManualBarcodeField = isTargetManualBarcodeInput && currentBuffer.length >= minBarcodeLength;
 
@@ -235,11 +237,9 @@ export function useBarcodeScanner({
           e.preventDefault();
           e.stopPropagation();
 
-          // If another unrelated input (like search box) was focused, clean out the barcode from it
           if (isInputFocused && !isTargetManualBarcodeInput && (target as HTMLInputElement)) {
             const inputEl = target as HTMLInputElement;
-            // Remove barcode characters that were just typed rapidly
-            if (inputEl.value.endsWith(currentBuffer)) {
+            if (inputEl.value && currentBuffer && inputEl.value.endsWith(currentBuffer)) {
               inputEl.value = inputEl.value.slice(0, -currentBuffer.length);
             }
           }
@@ -252,43 +252,41 @@ export function useBarcodeScanner({
           return;
         }
 
-        // Reset buffer on Enter if not processed
         bufferRef.current = '';
         keyIntervalsRef.current = [];
         return;
       }
 
-      // Ignore modifiers and function keys
-      if (e.key.length !== 1) {
-        if (e.key === 'Escape') {
+      // Ignore modifiers and Escape
+      if (e.key === 'Escape') {
+        bufferRef.current = '';
+        keyIntervalsRef.current = [];
+        return;
+      }
+
+      // Collect single character keys
+      if (e.key.length === 1) {
+        if (bufferRef.current.length > 0) {
+          keyIntervalsRef.current.push(interval);
+        } else {
+          keyIntervalsRef.current = [];
+        }
+
+        // If too much idle time passed between characters (> 900ms), start fresh buffer
+        if (interval > 900 && bufferRef.current.length > 0) {
           bufferRef.current = '';
           keyIntervalsRef.current = [];
         }
-        return;
+
+        bufferRef.current += e.key;
+
+        // Auto-clear buffer if no terminator arrives within 1.5 seconds
+        if (timeoutRef.current) clearTimeout(timeoutRef.current);
+        timeoutRef.current = setTimeout(() => {
+          bufferRef.current = '';
+          keyIntervalsRef.current = [];
+        }, 1500);
       }
-
-      // 2. Single printable character
-      // Track timing interval
-      if (bufferRef.current.length > 0) {
-        keyIntervalsRef.current.push(interval);
-      } else {
-        keyIntervalsRef.current = [];
-      }
-
-      // If too much time passed between characters (> 750ms), reset buffer
-      if (interval > 750 && bufferRef.current.length > 0) {
-        bufferRef.current = '';
-        keyIntervalsRef.current = [];
-      }
-
-      bufferRef.current += e.key;
-
-      // Keep buffer auto-clearing after 1.2 seconds of silence
-      if (timeoutRef.current) clearTimeout(timeoutRef.current);
-      timeoutRef.current = setTimeout(() => {
-        bufferRef.current = '';
-        keyIntervalsRef.current = [];
-      }, 1200);
     };
 
     window.addEventListener('keydown', handleKeyDown, true);
@@ -296,6 +294,7 @@ export function useBarcodeScanner({
     return () => {
       window.removeEventListener('keydown', handleKeyDown, true);
       if (timeoutRef.current) clearTimeout(timeoutRef.current);
+      if (signalTimeoutRef.current) clearTimeout(signalTimeoutRef.current);
     };
   }, [enabled, maxKeyIntervalMs, minBarcodeLength, processBarcode]);
 
@@ -305,8 +304,7 @@ export function useBarcodeScanner({
     totalScansCount,
     soundEnabled,
     setSoundEnabled,
-    isHardwareActive,
-    setIsHardwareActive,
+    isReceivingSignal,
     connectedHidDevices,
     hasWebHidSupport,
     connectWebHidScanner,

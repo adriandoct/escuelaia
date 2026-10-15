@@ -2,9 +2,11 @@
 
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { 
   Barcode, 
+  Camera, 
+  CameraOff,
   CheckCircle, 
   AlertTriangle, 
   Volume2, 
@@ -19,7 +21,9 @@ import {
   Smartphone,
   ShieldCheck,
   Zap,
-  Activity
+  Activity,
+  Maximize2,
+  RefreshCw
 } from 'lucide-react';
 import confetti from 'canvas-confetti';
 import { db, Alumno, Asistencia } from '@/lib/db';
@@ -40,6 +44,16 @@ export default function BarcodeScannerHub({ onScanCompleted, className = '' }: B
   const [isProcessing, setIsProcessing] = useState(false);
   const [sampleStudents, setSampleStudents] = useState<Alumno[]>([]);
   
+  // Camera Scanner States (Webcam / Optical USB scanner)
+  const [isCameraActive, setIsCameraActive] = useState(false);
+  const [cameraLoading, setCameraLoading] = useState(false);
+  const [cameraError, setCameraError] = useState<string | null>(null);
+  const html5ScannerRef = useRef<any>(null);
+  const videoElementId = 'dashboard-camera-scanner-viewport';
+
+  // Input ref for physical reader autofocus
+  const manualInputRef = useRef<HTMLInputElement>(null);
+
   // Active Scan Card Result Modal / HUD
   const [activeScan, setActiveScan] = useState<{
     success: boolean;
@@ -47,7 +61,7 @@ export default function BarcodeScannerHub({ onScanCompleted, className = '' }: B
     asistencia?: Asistencia;
     msg: string;
     duplicate?: boolean;
-    source?: 'hardware_scanner' | 'manual_input' | 'webhid';
+    source?: 'hardware_scanner' | 'manual_input' | 'webhid' | 'camera_scanner';
   } | null>(null);
 
   // Load sample students for quick testing buttons
@@ -61,20 +75,26 @@ export default function BarcodeScannerHub({ onScanCompleted, className = '' }: B
       }
     }
     loadSamples();
+
+    return () => {
+      stopCameraScanner();
+    };
   }, []);
 
-  // Process any barcode detected by physical scanner or manual input
-  const handleBarcodeDetected = async (code: string, source: 'hardware_scanner' | 'manual_input' | 'webhid') => {
+  // Process any barcode detected by physical scanner, camera or manual input
+  const handleBarcodeDetected = async (code: string, source: 'hardware_scanner' | 'manual_input' | 'webhid' | 'camera_scanner') => {
     if (isProcessing) return;
     setIsProcessing(true);
 
     try {
       const overrideVal = activeTab === 'auto' ? undefined : activeTab;
       const deviceName = source === 'hardware_scanner' 
-        ? 'Lector Código de Barras USB/HID' 
-        : source === 'webhid' 
-          ? 'Lector USB WebHID' 
-          : 'Ingreso Rápido Dashboard';
+        ? 'Lector Código de Barras USB' 
+        : source === 'camera_scanner'
+          ? 'Cámara Escáner Dashboard'
+          : source === 'webhid' 
+            ? 'Lector USB WebHID' 
+            : 'Entrada Manual Dashboard';
 
       const operatorName = user?.name || 'Terminal de Acceso Autónomo (Sin sesión)';
 
@@ -105,8 +125,8 @@ export default function BarcodeScannerHub({ onScanCompleted, className = '' }: B
         if (soundEnabled) playAudioFeedback('success');
         try {
           confetti({
-            particleCount: 45,
-            spread: 55,
+            particleCount: 50,
+            spread: 60,
             origin: { y: 0.6 }
           });
         } catch {}
@@ -126,6 +146,15 @@ export default function BarcodeScannerHub({ onScanCompleted, className = '' }: B
         onScanCompleted();
       }
 
+      // Resume camera after short pause if it was scanning
+      if (isCameraActive && html5ScannerRef.current) {
+        setTimeout(async () => {
+          try {
+            await html5ScannerRef.current.resume();
+          } catch {}
+        }, 3000);
+      }
+
       // Auto dismiss modal after 4.5 seconds
       setTimeout(() => {
         setActiveScan(null);
@@ -138,6 +167,14 @@ export default function BarcodeScannerHub({ onScanCompleted, className = '' }: B
         msg: err.message || `No se encontró ningún estudiante con el código o matrícula '${code}'.`,
         source
       });
+
+      if (isCameraActive && html5ScannerRef.current) {
+        setTimeout(async () => {
+          try {
+            await html5ScannerRef.current.resume();
+          } catch {}
+        }, 2500);
+      }
 
       setTimeout(() => {
         setActiveScan(null);
@@ -154,14 +191,75 @@ export default function BarcodeScannerHub({ onScanCompleted, className = '' }: B
     totalScansCount,
     soundEnabled,
     setSoundEnabled,
+    isReceivingSignal,
     connectedHidDevices,
     hasWebHidSupport,
     connectWebHidScanner,
     triggerManualScan
   } = useBarcodeScanner({
-    onScan: handleBarcodeDetected,
+    onScan: (code, src) => handleBarcodeDetected(code, src),
     enabled: true
   });
+
+  // Camera scanner handlers
+  const startCameraScanner = async () => {
+    setCameraLoading(true);
+    setCameraError(null);
+
+    try {
+      const { Html5Qrcode } = await import('html5-qrcode');
+
+      if (html5ScannerRef.current) {
+        await stopCameraScanner();
+      }
+
+      const html5QrCode = new Html5Qrcode(videoElementId);
+      html5ScannerRef.current = html5QrCode;
+
+      const config = { 
+        fps: 12, 
+        qrbox: { width: 280, height: 180 },
+        aspectRatio: 1.777
+      };
+
+      await html5QrCode.start(
+        { facingMode: 'environment' },
+        config,
+        async (decodedText) => {
+          if (html5ScannerRef.current && html5ScannerRef.current.isScanning) {
+            try {
+              await html5ScannerRef.current.pause(true);
+            } catch {}
+          }
+          await handleBarcodeDetected(decodedText, 'camera_scanner');
+        },
+        () => {}
+      );
+
+      setIsCameraActive(true);
+      if (soundEnabled) playAudioFeedback('connect');
+    } catch (err: any) {
+      console.error('Error starting camera on dashboard:', err);
+      setCameraError('No se pudo acceder a la cámara. Asegúrate de otorgar permisos o conectar tu webcam USB.');
+      setIsCameraActive(false);
+    } finally {
+      setCameraLoading(false);
+    }
+  };
+
+  const stopCameraScanner = async () => {
+    if (html5ScannerRef.current) {
+      try {
+        if (html5ScannerRef.current.isScanning) {
+          await html5ScannerRef.current.stop();
+        }
+      } catch (e) {
+        console.warn('Error stopping camera:', e);
+      }
+      html5ScannerRef.current = null;
+    }
+    setIsCameraActive(false);
+  };
 
   const handleManualFormSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -173,7 +271,7 @@ export default function BarcodeScannerHub({ onScanCompleted, className = '' }: B
   return (
     <div className={`space-y-4 ${className}`}>
       {/* Main Barcode Hardware Hub Card */}
-      <div className="relative overflow-hidden rounded-2xl glass-panel border border-cyan-500/20 bg-[#060a12]/90 p-5 shadow-2xl backdrop-blur-xl">
+      <div className="relative overflow-hidden rounded-2xl glass-panel border border-cyan-500/25 bg-[#060a12]/95 p-5 shadow-2xl backdrop-blur-xl">
         {/* Glowing top line */}
         <div className="absolute top-0 inset-x-0 h-[2px] bg-gradient-to-r from-transparent via-cyan-400 to-transparent"></div>
 
@@ -182,17 +280,33 @@ export default function BarcodeScannerHub({ onScanCompleted, className = '' }: B
           {/* Status Left Side */}
           <div className="space-y-1.5">
             <div className="flex flex-wrap items-center gap-2.5">
-              <span className="inline-flex items-center space-x-1.5 px-3 py-1 rounded-full bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 text-xs font-black tracking-wide">
+              
+              {/* Hardware Scanner Live Indicator */}
+              <span className={`inline-flex items-center space-x-1.5 px-3 py-1 rounded-full border text-xs font-black tracking-wide transition-colors ${
+                isReceivingSignal
+                  ? 'bg-cyan-500/20 border-cyan-400 text-cyan-300 shadow-[0_0_12px_rgba(6,182,212,0.5)]'
+                  : 'bg-emerald-500/10 border-emerald-500/30 text-emerald-400'
+              }`}>
                 <span className="flex h-2 w-2 relative">
-                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
-                  <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
+                  <span className={`animate-ping absolute inline-flex h-full w-full rounded-full opacity-75 ${isReceivingSignal ? 'bg-cyan-400' : 'bg-emerald-400'}`}></span>
+                  <span className={`relative inline-flex rounded-full h-2 w-2 ${isReceivingSignal ? 'bg-cyan-400' : 'bg-emerald-500'}`}></span>
                 </span>
-                <Barcode size={14} className="text-emerald-400" />
-                <span>LECTOR DE CÓDIGO DE BARRAS ACTIVO</span>
+                <Barcode size={14} className={isReceivingSignal ? 'text-cyan-300 animate-bounce' : 'text-emerald-400'} />
+                <span>{isReceivingSignal ? '⚡ RECIBIENDO CÓDIGO...' : 'LECTOR DE CÓDIGO DE BARRAS ACTIVO'}</span>
+              </span>
+
+              {/* Camera State Badge */}
+              <span className={`text-[11px] font-bold px-2.5 py-0.5 rounded-lg border flex items-center space-x-1 ${
+                isCameraActive 
+                  ? 'bg-cyan-500/15 text-cyan-300 border-cyan-500/30' 
+                  : 'bg-white/5 text-gray-400 border-white/5'
+              }`}>
+                <Camera size={12} />
+                <span>{isCameraActive ? 'Cámara Web Activa' : 'Cámara Web en Pausa'}</span>
               </span>
 
               <span className="text-[11px] font-semibold text-gray-400 bg-white/5 px-2.5 py-0.5 rounded-lg border border-white/5">
-                Modo Autónomo (Sin sesión requerida)
+                Modo Quiosco Autónomo (Sin sesión)
               </span>
 
               {totalScansCount > 0 && (
@@ -203,13 +317,44 @@ export default function BarcodeScannerHub({ onScanCompleted, className = '' }: B
             </div>
 
             <p className="text-xs text-gray-300">
-              Conecta tu lector o pistola de códigos de barra USB/Bluetooth y escanea credenciales <strong className="text-white">directamente en esta pantalla</strong> sin necesidad de dar clics ni entrar a ningún usuario.
+              Escanea con tu <strong className="text-white">pistola/lector USB</strong> en cualquier momento, o <strong className="text-cyan-400">activa la cámara web</strong> para lectura óptica directa desde este panel sin entrar a ningún usuario.
             </p>
           </div>
 
           {/* Controls Right Side */}
           <div className="flex flex-wrap items-center gap-2">
             
+            {/* Camera Activation Button */}
+            {!isCameraActive ? (
+              <button
+                type="button"
+                onClick={startCameraScanner}
+                disabled={cameraLoading}
+                className="px-3.5 py-1.5 rounded-xl bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-400 hover:to-blue-500 text-black font-bold text-xs flex items-center space-x-1.5 shadow-lg shadow-cyan-500/15 transition-all cursor-pointer disabled:opacity-50"
+              >
+                {cameraLoading ? (
+                  <>
+                    <Activity size={14} className="animate-spin" />
+                    <span>Iniciando Cámara...</span>
+                  </>
+                ) : (
+                  <>
+                    <Camera size={14} />
+                    <span>Activar Cámara / Escáner Web</span>
+                  </>
+                )}
+              </button>
+            ) : (
+              <button
+                type="button"
+                onClick={stopCameraScanner}
+                className="px-3 py-1.5 rounded-xl bg-red-500/15 hover:bg-red-500/25 border border-red-500/30 text-red-300 font-bold text-xs flex items-center space-x-1.5 transition-all cursor-pointer"
+              >
+                <CameraOff size={14} />
+                <span>Pausar Cámara</span>
+              </button>
+            )}
+
             {/* Mode selection tabs */}
             <div className="bg-black/40 border border-white/10 rounded-xl p-1 flex">
               {(['auto', 'entrada', 'salida'] as const).map((tab) => (
@@ -223,7 +368,7 @@ export default function BarcodeScannerHub({ onScanCompleted, className = '' }: B
                       : 'text-gray-400 hover:text-white'
                   }`}
                 >
-                  {tab === 'auto' ? '✨ Auto (Entr/Sal)' : tab === 'entrada' ? '🟢 Entrada' : '🚪 Salida'}
+                  {tab === 'auto' ? '✨ Auto' : tab === 'entrada' ? '🟢 Entrada' : '🚪 Salida'}
                 </button>
               ))}
             </div>
@@ -259,14 +404,50 @@ export default function BarcodeScannerHub({ onScanCompleted, className = '' }: B
 
         </div>
 
+        {/* Live Video Camera Viewport (When camera is active) */}
+        <div className={`${isCameraActive ? 'block mt-4' : 'hidden'}`}>
+          <div className="relative mx-auto max-w-xl rounded-2xl overflow-hidden border-2 border-cyan-500/40 bg-black/80 shadow-[0_0_25px_rgba(6,182,212,0.2)]">
+            
+            {/* HTML5 QR Code Mount Element */}
+            <div id={videoElementId} className="w-full min-h-[220px]"></div>
+
+            {/* Neon scanner target frame and laser line overlay */}
+            <div className="pointer-events-none absolute inset-0 flex items-center justify-center">
+              <div className="relative w-64 h-36 border-2 border-cyan-400/60 rounded-xl corner-border">
+                <span></span>
+                <div className="scanner-laser"></div>
+              </div>
+            </div>
+
+            {/* Camera bottom status info */}
+            <div className="absolute bottom-2 inset-x-2 bg-black/70 backdrop-blur-md px-3 py-1.5 rounded-xl border border-white/10 flex items-center justify-between text-[11px] text-gray-300">
+              <span className="flex items-center space-x-1.5">
+                <span className="h-2 w-2 rounded-full bg-emerald-400 animate-pulse"></span>
+                <span>Enfoca la credencial frente al lente</span>
+              </span>
+              <span className="font-mono text-cyan-400">QR / Códigos de Barra 1D</span>
+            </div>
+
+          </div>
+        </div>
+
+        {/* Camera error message if any */}
+        {cameraError && (
+          <div className="mt-3 p-3 rounded-xl bg-red-500/10 border border-red-500/20 text-xs text-red-300 flex items-center space-x-2">
+            <AlertTriangle size={15} className="shrink-0" />
+            <span>{cameraError}</span>
+          </div>
+        )}
+
         {/* Quick input bar & Test samples */}
         <div className="mt-4 pt-3.5 border-t border-white/5 flex flex-col md:flex-row items-center justify-between gap-3">
           
-          {/* Manual input form */}
+          {/* Manual / Barcode Gun Landing Input */}
           <form onSubmit={handleManualFormSubmit} className="w-full md:w-auto flex-1 max-w-md flex items-center gap-2">
             <div className="relative flex-1">
               <Barcode className="absolute left-3 top-1/2 -translate-y-1/2 text-cyan-400" size={16} />
               <input
+                ref={manualInputRef}
                 type="text"
                 data-barcode-input="true"
                 value={manualCode}
