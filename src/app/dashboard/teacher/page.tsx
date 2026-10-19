@@ -25,6 +25,8 @@ import {
   formatDateShort,
   getStoredClassDates,
   saveStoredClassDates,
+  getMateriaWebhooksMap,
+  setMateriaWebhook,
   GOOGLE_APPS_SCRIPT_TEMPLATE
 } from '@/lib/spreadsheet';
 
@@ -74,6 +76,8 @@ export default function TeacherDashboardPage() {
   // Google Drive Backup Modal
   const [isDriveModalOpen, setIsDriveModalOpen] = useState(false);
   const [googleWebhookUrl, setGoogleWebhookUrl] = useState<string>('');
+  const [materiaWebhooksMap, setMateriaWebhooksMap] = useState<Record<string, string>>({});
+  const [modalMateriaTarget, setModalMateriaTarget] = useState<string>('all');
   const [copiedScript, setCopiedScript] = useState(false);
 
   // Initial load
@@ -82,6 +86,7 @@ export default function TeacherDashboardPage() {
     if (typeof window !== 'undefined') {
       const savedWh = localStorage.getItem('dojoia_google_sheets_webhook') || '';
       setGoogleWebhookUrl(savedWh);
+      setMateriaWebhooksMap(getMateriaWebhooksMap());
     }
   }, []);
 
@@ -202,16 +207,100 @@ export default function TeacherDashboardPage() {
     }
   };
 
-  // Cycle attendance on Matriz Sabana cell click: A -> R -> F -> J -> A
-  const handleCycleAttendance = (studentId: string, currentCode: 'A' | 'R' | 'F' | 'J') => {
-    const cycleMap: Record<string, 'presente' | 'retardo' | 'ausente' | 'justificado'> = {
-      'A': 'retardo',
-      'R': 'ausente',
-      'F': 'justificado',
-      'J': 'presente'
-    };
-    const nextStatus = cycleMap[currentCode] || 'presente';
-    handleSetAttendance(studentId, nextStatus);
+  // Cycle code in Matriz Sábana: A -> Ap -> App -> Rp -> J. -> '' -> A (per date and materia)
+  const handleCycleCodeForDate = (studentId: string, dateStr: string, currentCode: string) => {
+    let nextStatus: 'presente' | 'retardo' | 'ausente' | 'justificado' = 'presente';
+    let nextPart = 0;
+
+    const trimmed = (currentCode || '').trim();
+    if (trimmed === 'A') {
+      nextStatus = 'presente';
+      nextPart = 1; // 'Ap'
+    } else if (trimmed === 'Ap') {
+      nextStatus = 'presente';
+      nextPart = 2; // 'App'
+    } else if (trimmed.startsWith('App')) {
+      nextStatus = 'retardo';
+      nextPart = 1; // 'Rp'
+    } else if (trimmed === 'Rp' || trimmed === 'R') {
+      nextStatus = 'justificado';
+      nextPart = 0; // 'J.'
+    } else if (trimmed === 'J.' || trimmed === 'J') {
+      nextStatus = 'ausente';
+      nextPart = 0; // ''
+    } else {
+      nextStatus = 'presente';
+      nextPart = 0; // 'A'
+    }
+
+    if (dateStr === selectedDate) {
+      handleSetAttendance(studentId, nextStatus);
+
+      if (selectedMateria === 'all') {
+        setParticipaciones(prev => ({ ...prev, [studentId]: nextPart }));
+        setParticipacionesPorMateria(prev => {
+          const next = { ...prev };
+          MATERIAS_DEFAULT.forEach(m => {
+            next[m] = { ...(next[m] || {}), [studentId]: nextPart };
+          });
+          return next;
+        });
+      } else {
+        setParticipacionesPorMateria(prev => ({
+          ...prev,
+          [selectedMateria]: {
+            ...(prev[selectedMateria] || {}),
+            [studentId]: nextPart
+          }
+        }));
+      }
+    } else {
+      // Historical date editing
+      const all = getStoredDailyRecords();
+      let record = all.find(r => r.fecha === dateStr && r.grado === selectedGrade && r.grupo === selectedGroup);
+      if (!record) {
+        record = {
+          fecha: dateStr,
+          grado: selectedGrade,
+          grupo: selectedGroup,
+          docente: user?.name || 'Profesor Titular',
+          updatedAt: new Date().toISOString(),
+          participaciones: {},
+          asistenciasOverride: {},
+          participacionesPorMateria: {},
+          asistenciasPorMateria: {}
+        };
+        all.push(record);
+      }
+
+      if (selectedMateria === 'all') {
+        record.asistenciasOverride = record.asistenciasOverride || {};
+        record.participaciones = record.participaciones || {};
+        record.asistenciasOverride[studentId] = nextStatus;
+        record.participaciones[studentId] = nextPart;
+        record.asistenciasPorMateria = record.asistenciasPorMateria || {};
+        record.participacionesPorMateria = record.participacionesPorMateria || {};
+        MATERIAS_DEFAULT.forEach(m => {
+          record!.asistenciasPorMateria![m] = { ...(record!.asistenciasPorMateria![m] || {}), [studentId]: nextStatus };
+          record!.participacionesPorMateria![m] = { ...(record!.participacionesPorMateria![m] || {}), [studentId]: nextPart };
+        });
+      } else {
+        record.asistenciasPorMateria = record.asistenciasPorMateria || {};
+        record.participacionesPorMateria = record.participacionesPorMateria || {};
+        record.asistenciasPorMateria[selectedMateria] = {
+          ...(record.asistenciasPorMateria[selectedMateria] || {}),
+          [studentId]: nextStatus
+        };
+        record.participacionesPorMateria[selectedMateria] = {
+          ...(record.participacionesPorMateria[selectedMateria] || {}),
+          [studentId]: nextPart
+        };
+      }
+
+      record.updatedAt = new Date().toISOString();
+      localStorage.setItem('dojoia_docente_diario', JSON.stringify(all));
+      setLastSavedTime(new Date().toLocaleTimeString());
+    }
   };
 
   // Handle modifying participation count
@@ -329,9 +418,12 @@ export default function TeacherDashboardPage() {
       selectedDate,
       participaciones,
       asistenciasOverride,
-      allDailyRecords
+      allDailyRecords,
+      selectedMateria,
+      participacionesPorMateria,
+      asistenciasPorMateria
     );
-  }, [classStudents, classDates, todayLogs, selectedDate, participaciones, asistenciasOverride, allDailyRecords]);
+  }, [classStudents, classDates, todayLogs, selectedDate, participaciones, asistenciasOverride, allDailyRecords, selectedMateria, participacionesPorMateria, asistenciasPorMateria]);
 
   // MAIN ACTION 1: GUARDAR EL DÍA
   const handleSaveDay = async () => {
@@ -341,6 +433,7 @@ export default function TeacherDashboardPage() {
         fecha: selectedDate,
         grado: selectedGrade,
         grupo: selectedGroup,
+        materia: selectedMateria !== 'all' ? selectedMateria : undefined,
         docente: user?.name || 'Profesor Titular',
         updatedAt: new Date().toISOString(),
         participaciones,
@@ -394,6 +487,7 @@ export default function TeacherDashboardPage() {
         fecha: selectedDate,
         grado: selectedGrade,
         grupo: selectedGroup,
+        materia: selectedMateria !== 'all' ? selectedMateria : undefined,
         docente: user?.name || 'Profesor Titular',
         updatedAt: new Date().toISOString(),
         participaciones,
@@ -433,7 +527,7 @@ export default function TeacherDashboardPage() {
 
         classDates.forEach(d => {
           const label = formatDateShort(d);
-          rowObj[label] = r.fechas[d]?.status || 'A';
+          rowObj[label] = r.fechas[d]?.code || '';
         });
 
         rowObj['ASIST (A)'] = r.asistenciasTotal;
@@ -446,13 +540,18 @@ export default function TeacherDashboardPage() {
         return rowObj;
       });
 
+      const currentMateriaWebhooks = getMateriaWebhooksMap();
+      const targetWebhook = (selectedMateria !== 'all' && currentMateriaWebhooks[selectedMateria]) || googleWebhookUrl;
+      const targetMateriaName = selectedMateria !== 'all' ? selectedMateria : 'Todas las materias';
+
       const payload = {
         fecha: selectedDate,
         grado: selectedGrade,
         grupo: selectedGroup,
+        materia: targetMateriaName,
         docente: user?.name || 'Docente',
         rows: exportRows,
-        webhookUrl: googleWebhookUrl
+        webhookUrl: targetWebhook
       };
 
       // 2. Post to Drive Backup API
@@ -472,18 +571,18 @@ export default function TeacherDashboardPage() {
         origin: { y: 0.6 }
       });
 
-      let detailsMsg = `Se generó el respaldo de la Matriz Sábana con ${classStudents.length} alumnos y ${classDates.length} fechas de clase.`;
-      if (googleWebhookUrl && data.webhookResult?.ok) {
-        detailsMsg += ' ¡Se sincronizó exitosamente con tu Google Sheet en Google Drive!';
-      } else if (googleWebhookUrl) {
-        detailsMsg += ' Se transmitió la solicitud a tu Webhook de Google Sheets.';
+      let detailsMsg = `Se generó el respaldo de la Matriz Sábana para "${targetMateriaName}" (${classStudents.length} alumnos, ${classDates.length} fechas).`;
+      if (targetWebhook && data.webhookResult?.ok) {
+        detailsMsg += ` ¡Se sincronizó exitosamente con tu Google Sheet de "${targetMateriaName}" en Google Drive!`;
+      } else if (targetWebhook) {
+        detailsMsg += ` Se transmitió la solicitud a tu Webhook de Google Sheets para "${targetMateriaName}".`;
       } else {
         detailsMsg += ' Para enlace directo a tu Google Sheet en Drive, configura tu Webhook en el botón de ajustes.';
       }
 
       setFeedbackBanner({
         type: 'success',
-        message: '☁️ ¡Respaldo subido a Google Drive con éxito!',
+        message: `☁️ ¡Respaldo subido a Google Drive para ${targetMateriaName}!`,
         details: detailsMsg
       });
 
@@ -492,6 +591,88 @@ export default function TeacherDashboardPage() {
       }, 8000);
     } catch (err: any) {
       alert(`Error al subir respaldo a Google Drive: ${err.message || err}`);
+    } finally {
+      setIsUploadingDrive(false);
+    }
+  };
+
+  // SUBIR RESPALDO DE TODAS LAS MATERIAS (6 HOJAS) A GOOGLE DRIVE
+  const handleUploadAllMateriasToGoogleDrive = async () => {
+    setIsUploadingDrive(true);
+    try {
+      const currentMateriaWebhooks = getMateriaWebhooksMap();
+      let syncedCount = 0;
+
+      for (const mat of MATERIAS_DEFAULT) {
+        const rowsForMateria = buildMatrizSabanaRows(
+          classStudents,
+          classDates,
+          todayLogs,
+          selectedDate,
+          participaciones,
+          asistenciasOverride,
+          allDailyRecords,
+          mat,
+          participacionesPorMateria,
+          asistenciasPorMateria
+        );
+
+        const exportRows = rowsForMateria.map(r => {
+          const rowObj: Record<string, any> = {
+            'NO.': r.index,
+            'MATRÍCULA': r.matricula,
+            'NOMBRE DEL ALUMNO': r.nombre
+          };
+          classDates.forEach(d => {
+            const label = formatDateShort(d);
+            rowObj[label] = r.fechas[d]?.code || '';
+          });
+          rowObj['ASIST (A)'] = r.asistenciasTotal;
+          rowObj['RET (R)'] = r.retardosTotal;
+          rowObj['FALT (F)'] = r.faltasTotal;
+          rowObj['PART. TOTAL'] = r.participacionesTotal;
+          rowObj['PUNTOS (PTS)'] = r.puntosTotal;
+          rowObj['% ASISTENCIA'] = `${r.porcentajeAsistencia}%`;
+          return rowObj;
+        });
+
+        const targetWebhook = currentMateriaWebhooks[mat] || googleWebhookUrl;
+        await fetch('/api/drive-backup', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            fecha: selectedDate,
+            grado: selectedGrade,
+            grupo: selectedGroup,
+            materia: mat,
+            docente: user?.name || 'Docente',
+            rows: exportRows,
+            webhookUrl: targetWebhook
+          })
+        });
+        syncedCount++;
+      }
+
+      const timeNow = new Date().toLocaleTimeString();
+      setLastDriveBackupTime(timeNow);
+
+      confetti({
+        particleCount: 80,
+        spread: 70,
+        origin: { y: 0.6 }
+      });
+
+      setFeedbackBanner({
+        type: 'success',
+        message: `☁️ ¡Respaldo completado para las ${syncedCount} materias en Google Drive!`,
+        details: `Se generaron y actualizaron las hojas de cálculo individuales para cada materia (${MATERIAS_DEFAULT.join(', ')}) con la fecha ${formatDateShort(selectedDate)}.`
+      });
+
+      setTimeout(() => {
+        setFeedbackBanner(null);
+      }, 8000);
+    } catch (err: any) {
+      alert(`Error al subir respaldo de todas las materias: ${err.message || err}`);
     } finally {
       setIsUploadingDrive(false);
     }
@@ -1045,8 +1226,9 @@ export default function TeacherDashboardPage() {
 
                       {/* DATES BADGES */}
                       {classDates.map(dateStr => {
-                        const cellData = row.fechas[dateStr] || { status: 'A', participaciones: 0 };
+                        const cellData = row.fechas[dateStr] || { code: '', status: 'A', participaciones: 0 };
                         const isToday = dateStr === selectedDate;
+                        const code = cellData.code;
 
                         return (
                           <td 
@@ -1055,28 +1237,21 @@ export default function TeacherDashboardPage() {
                               isToday ? 'bg-emerald-500/5 border-x border-emerald-500/10' : ''
                             }`}
                           >
-                            <div className="flex flex-col items-center justify-center space-y-0.5">
-                              <button
-                                type="button"
-                                onClick={() => handleCycleAttendance(row.alumnoId, cellData.status)}
-                                className={`w-6 h-6 rounded-md font-black text-[11px] transition-all cursor-pointer flex items-center justify-center ${
-                                  cellData.status === 'A' ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/40 hover:bg-emerald-500/30' :
-                                  cellData.status === 'R' ? 'bg-amber-500/20 text-amber-400 border border-amber-500/40 hover:bg-amber-500/30' :
-                                  cellData.status === 'J' ? 'bg-cyan-500/20 text-cyan-400 border border-cyan-500/40 hover:bg-cyan-500/30' :
-                                  'bg-red-500/20 text-red-400 border border-red-500/40 hover:bg-red-500/30'
-                                }`}
-                                title={`Haga clic para alternar: ${cellData.status === 'A' ? 'Presente' : cellData.status === 'R' ? 'Retardo' : cellData.status === 'J' ? 'Justificado' : 'Falta'}`}
-                              >
-                                {cellData.status}
-                              </button>
-
-                              {/* Participations badge if > 0 on this date */}
-                              {cellData.participaciones > 0 && (
-                                <span className="text-[9px] font-bold text-purple-400 leading-none">
-                                  ★{cellData.participaciones}
-                                </span>
-                              )}
-                            </div>
+                            <button
+                              type="button"
+                              onClick={() => handleCycleCodeForDate(row.alumnoId, dateStr, code)}
+                              className={`min-w-[32px] h-7 px-1 rounded-md font-mono font-bold text-xs transition-all cursor-pointer inline-flex items-center justify-center ${
+                                code.startsWith('App') ? 'bg-purple-500/25 text-purple-300 border border-purple-500/40 shadow-sm' :
+                                code.startsWith('Ap') ? 'bg-teal-500/25 text-teal-300 border border-teal-500/40 shadow-sm' :
+                                code === 'A' ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30' :
+                                code.startsWith('R') ? 'bg-amber-500/20 text-amber-400 border border-amber-500/30' :
+                                code.startsWith('J') ? 'bg-cyan-500/20 text-cyan-400 border border-cyan-500/30' :
+                                'bg-transparent text-gray-600 hover:bg-white/5 border border-transparent'
+                              }`}
+                              title={`Clic para alternar en ${formatDateShort(dateStr)}: ${code || 'Falta'} (A, Ap, App, Rp, J.)`}
+                            >
+                              {code || '—'}
+                            </button>
                           </td>
                         );
                       })}
@@ -1340,33 +1515,72 @@ export default function TeacherDashboardPage() {
 
             <div className="space-y-2 text-xs text-gray-300">
               <p>
-                Cada vez que haces clic en <strong className="text-emerald-400">&quot;Guardar el Día&quot;</strong> o <strong className="text-cyan-400">&quot;Subir a Drive&quot;</strong>, el sistema genera la copia de respaldo completa de la <strong>Matriz Sábana</strong> con todas las fechas de clase y materias.
+                Cada vez que haces clic en <strong className="text-emerald-400">&quot;Guardar el Día&quot;</strong> o <strong className="text-cyan-400">&quot;Subir a Drive&quot;</strong>, el sistema actualiza la <strong>hoja de cálculo de la materia en tu Google Drive</strong> con la fecha de la clase (por ejemplo hoy, columna N) registrando asistencias y participaciones (<span className="text-emerald-400 font-mono">A, Ap, App, Rp, J.</span>).
               </p>
               <p>
-                Si tienes una hoja de cálculo en tu Google Drive donde llevas el control escolar, puedes conectarla mediante un Webhook de Google Apps Script para que se actualice sola en tiempo real.
+                Puedes tener una hoja de cálculo individual para cada materia o una hoja compartida. Configura el enlace de cada una a continuación:
               </p>
             </div>
 
-            {/* Webhook Input */}
-            <div className="space-y-1.5 p-4 rounded-2xl bg-black/40 border border-white/10">
+            {/* Materia Selector in Drive Modal */}
+            <div className="space-y-2.5 p-4 rounded-2xl bg-black/40 border border-white/10">
               <label className="text-xs font-bold text-white flex items-center justify-between">
-                <span>URL de tu Webhook / Apps Script de Google Sheets:</span>
-                {googleWebhookUrl ? (
-                  <span className="text-[10px] font-bold text-emerald-400">● Conexión Configurada</span>
-                ) : (
-                  <span className="text-[10px] text-gray-400 font-normal">Opcional</span>
-                )}
+                <span>Configurar Hoja de Cálculo de:</span>
+                <span className="text-[10px] text-cyan-400 font-semibold font-mono">
+                  {modalMateriaTarget === 'all' ? '⭐ Todas las Materias (General)' : modalMateriaTarget}
+                </span>
               </label>
-              <input
-                type="url"
-                placeholder="https://script.google.com/macros/s/.../exec"
-                value={googleWebhookUrl}
-                onChange={(e) => setGoogleWebhookUrl(e.target.value)}
-                className="w-full glass-input py-2 px-3 rounded-xl text-xs text-white font-mono"
-              />
-              <span className="text-[10px] text-gray-400 block mt-1">
-                Al guardar o pulsar &quot;Subir a Drive&quot;, la matriz sábana se transmitirá de inmediato a este enlace en tu Google Drive.
-              </span>
+
+              <div className="flex items-center flex-wrap gap-1.5 pb-2">
+                <button
+                  type="button"
+                  onClick={() => setModalMateriaTarget('all')}
+                  className={`px-2.5 py-1 rounded-lg text-[11px] font-bold cursor-pointer transition-all ${
+                    modalMateriaTarget === 'all'
+                      ? 'bg-cyan-500 text-black font-extrabold shadow-sm'
+                      : 'glass-panel text-gray-400 hover:text-white'
+                  }`}
+                >
+                  ⭐ General
+                </button>
+                {MATERIAS_DEFAULT.map(mat => (
+                  <button
+                    key={mat}
+                    type="button"
+                    onClick={() => setModalMateriaTarget(mat)}
+                    className={`px-2.5 py-1 rounded-lg text-[11px] font-semibold cursor-pointer transition-all ${
+                      modalMateriaTarget === mat
+                        ? 'bg-emerald-500 text-black font-bold shadow-sm'
+                        : 'glass-panel text-gray-400 hover:text-white'
+                    }`}
+                  >
+                    {mat}
+                  </button>
+                ))}
+              </div>
+
+              <div className="space-y-1">
+                <label className="text-[11px] font-semibold text-gray-300">
+                  URL del Webhook de Google Sheets para &quot;{modalMateriaTarget === 'all' ? 'Todas las Materias' : modalMateriaTarget}&quot;:
+                </label>
+                <input
+                  type="url"
+                  placeholder="https://script.google.com/macros/s/.../exec"
+                  value={modalMateriaTarget === 'all' ? googleWebhookUrl : (materiaWebhooksMap[modalMateriaTarget] || '')}
+                  onChange={(e) => {
+                    const val = e.target.value;
+                    if (modalMateriaTarget === 'all') {
+                      setGoogleWebhookUrl(val);
+                    } else {
+                      setMateriaWebhooksMap(prev => ({ ...prev, [modalMateriaTarget]: val }));
+                    }
+                  }}
+                  className="w-full glass-input py-2 px-3 rounded-xl text-xs text-white font-mono"
+                />
+                <span className="text-[10px] text-gray-400 block mt-1">
+                  Al pulsar &quot;Guardar el Día&quot; o &quot;Subir a Drive&quot;, los registros se sincronizarán directamente en la hoja de esta materia en tu Google Drive.
+                </span>
+              </div>
             </div>
 
             {/* Google Apps Script Helper Accordion */}
@@ -1386,12 +1600,12 @@ export default function TeacherDashboardPage() {
               </div>
 
               <ol className="text-[11px] text-gray-400 list-decimal list-inside space-y-1 pt-1">
-                <li>Abre tu hoja de cálculo en <strong>Google Drive</strong>.</li>
+                <li>Abre la hoja de cálculo de tu materia en <strong>Google Drive</strong>.</li>
                 <li>Haz clic en el menú <strong>Extensiones &gt; Apps Script</strong>.</li>
                 <li>Borra lo que haya, pega el código copiado con el botón de arriba y presiona <strong>Guardar</strong>.</li>
                 <li>Haz clic en <strong>Implementar &gt; Nueva Implementación &gt; Aplicación Web</strong>.</li>
                 <li>En <em>&quot;Quién tiene acceso&quot;</em> selecciona <strong>Cualquier usuario</strong> y haz clic en <em>Implementar</em>.</li>
-                <li>Copia la URL que te da Google y pégala en el campo de arriba.</li>
+                <li>Copia la URL que te da Google y pégala en el campo de arriba de esa materia.</li>
               </ol>
 
               <div className="pt-2 flex items-center justify-between">
@@ -1417,18 +1631,34 @@ export default function TeacherDashboardPage() {
             </div>
 
             {/* Modal Actions */}
-            <div className="flex items-center justify-between pt-2">
-              <button
-                onClick={() => {
-                  handleUploadToGoogleDrive();
-                  setIsDriveModalOpen(false);
-                }}
-                disabled={isUploadingDrive}
-                className="px-4 py-2.5 rounded-xl bg-gradient-to-r from-blue-600 to-cyan-600 hover:from-blue-500 hover:to-cyan-500 text-white font-bold text-xs transition-all cursor-pointer flex items-center space-x-1.5"
-              >
-                <CloudUpload size={15} />
-                <span>Subir Respaldo Ahora</span>
-              </button>
+            <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-2.5 pt-2">
+              <div className="flex items-center flex-wrap gap-2">
+                <button
+                  onClick={() => {
+                    handleUploadToGoogleDrive();
+                    setIsDriveModalOpen(false);
+                  }}
+                  disabled={isUploadingDrive}
+                  className="px-3.5 py-2.5 rounded-xl bg-gradient-to-r from-blue-600 to-cyan-600 hover:from-blue-500 hover:to-cyan-500 text-white font-bold text-xs transition-all cursor-pointer flex items-center space-x-1.5"
+                  title="Subir la matriz de la materia seleccionada actualmente"
+                >
+                  <CloudUpload size={14} />
+                  <span>Subir Materia Seleccionada</span>
+                </button>
+
+                <button
+                  onClick={() => {
+                    handleUploadAllMateriasToGoogleDrive();
+                    setIsDriveModalOpen(false);
+                  }}
+                  disabled={isUploadingDrive}
+                  className="px-3.5 py-2.5 rounded-xl bg-emerald-500/20 border border-emerald-500/40 hover:bg-emerald-500/30 text-emerald-300 font-bold text-xs transition-all cursor-pointer flex items-center space-x-1.5"
+                  title="Actualizar y respaldar las hojas de cálculo de cada una de las 6 materias"
+                >
+                  <Layers size={14} />
+                  <span>Subir TODAS las Materias (6 Hojas)</span>
+                </button>
+              </div>
 
               <div className="flex items-center space-x-2">
                 <button
@@ -1441,13 +1671,16 @@ export default function TeacherDashboardPage() {
                   onClick={() => {
                     if (typeof window !== 'undefined') {
                       localStorage.setItem('dojoia_google_sheets_webhook', googleWebhookUrl.trim());
+                      Object.entries(materiaWebhooksMap).forEach(([mat, url]) => {
+                        setMateriaWebhook(mat, url);
+                      });
                     }
                     setIsDriveModalOpen(false);
-                    alert('Configuración guardada.');
+                    alert('Configuraciones de Google Sheets guardadas con éxito.');
                   }}
                   className="px-4 py-2 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-black font-bold text-xs transition-all cursor-pointer"
                 >
-                  Guardar Enlace
+                  Guardar Enlaces
                 </button>
               </div>
             </div>

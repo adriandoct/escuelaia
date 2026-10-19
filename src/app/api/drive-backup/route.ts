@@ -35,15 +35,16 @@ export async function POST(req: Request) {
   try {
     ensureBackupDir();
     const body = await req.json();
-    const { fecha, grado, grupo, rows, webhookUrl } = body;
+    const { fecha, grado, grupo, materia, rows, webhookUrl } = body;
 
     const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
-    const backupFile = path.join(BACKUP_DIR, `respaldo_${grado}_${grupo}_${fecha || 'hoy'}_${timestamp}.json`);
+    const cleanMateria = materia ? materia.replace(/\s+/g, '_') : 'General';
+    const backupFile = path.join(BACKUP_DIR, `respaldo_${cleanMateria}_${grado}_${grupo}_${fecha || 'hoy'}_${timestamp}.json`);
     
     fs.writeFileSync(backupFile, JSON.stringify(body, null, 2), 'utf-8');
 
     // Also update current latest snapshot
-    const latestFile = path.join(BACKUP_DIR, `latest_${grado}_${grupo}.json`);
+    const latestFile = path.join(BACKUP_DIR, `latest_${cleanMateria}_${grado}_${grupo}.json`);
     fs.writeFileSync(latestFile, JSON.stringify(body, null, 2), 'utf-8');
 
     // Forward to remote Google Drive / Apps Script Webhook if configured
@@ -55,7 +56,8 @@ export async function POST(req: Request) {
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             event: 'respaldo_google_drive',
-            sheetName: 'Matriz Sábana',
+            sheetName: materia || 'Matriz Sábana',
+            materia: materia || 'General',
             fecha,
             grado,
             grupo,
