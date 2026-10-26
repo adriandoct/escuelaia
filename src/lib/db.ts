@@ -40,149 +40,10 @@ export const supabase = isSupabaseConfigured
   ? createClient(supabaseUrl, supabaseAnonKey)
   : null;
 
-// Initial pre-seeded mock students with Unsplash avatars
-const MOCK_ALUMNOS: Alumno[] = [
-  {
-    id: 'student-buitimea',
-    matricula: '261131570-1',
-    nombre: 'Dayanna Gissel',
-    apellido_paterno: 'Buitimea',
-    apellido_materno: 'Garma',
-    grado: '1°',
-    grupo: 'A',
-    tutor: 'Tutor Buitimea',
-    telefono: '+526641234501',
-    foto_url: 'https://api.dicebear.com/7.x/bottts/svg?seed=DayannaBuitimea',
-    qr_code: '261131570-1',
-    created_at: new Date().toISOString()
-  },
-  {
-    id: 'student-diaz',
-    matricula: '261082840-1',
-    nombre: 'Astrid Cristina',
-    apellido_paterno: 'Diaz',
-    apellido_materno: 'Moreno',
-    grado: '1°',
-    grupo: 'A',
-    tutor: 'Tutor Diaz',
-    telefono: '+526641234502',
-    foto_url: 'https://api.dicebear.com/7.x/bottts/svg?seed=AstridDiaz',
-    qr_code: '261082840-1',
-    created_at: new Date().toISOString()
-  },
-  {
-    id: 'student-hernandez',
-    matricula: '261118410-1',
-    nombre: 'Julibeth',
-    apellido_paterno: 'Hernandez',
-    apellido_materno: 'Herrera',
-    grado: '1°',
-    grupo: 'A',
-    tutor: 'Tutor Hernandez',
-    telefono: '+526641234503',
-    foto_url: 'https://api.dicebear.com/7.x/bottts/svg?seed=JulibethHernandez',
-    qr_code: '261118410-1',
-    created_at: new Date().toISOString()
-  },
-  {
-    id: 'student-lopez',
-    matricula: '261093180-1',
-    nombre: 'Blanca Estela',
-    apellido_paterno: 'Lopez',
-    apellido_materno: 'Pablo',
-    grado: '1°',
-    grupo: 'A',
-    tutor: 'Tutor Lopez',
-    telefono: '+526641234504',
-    foto_url: 'https://api.dicebear.com/7.x/bottts/svg?seed=BlancaLopez',
-    qr_code: '261093180-1',
-    created_at: new Date().toISOString()
-  },
-  {
-    id: 'student-todd',
-    matricula: '261074520-1',
-    nombre: 'Cecilia',
-    apellido_paterno: 'Todd',
-    apellido_materno: 'Ambriz',
-    grado: '1°',
-    grupo: 'A',
-    tutor: 'Tutor Todd',
-    telefono: '+526641234505',
-    foto_url: 'https://api.dicebear.com/7.x/bottts/svg?seed=CeciliaTodd',
-    qr_code: '261074520-1',
-    created_at: new Date().toISOString()
-  },
-  {
-    id: 'student-garcia-h',
-    matricula: '261145620-1',
-    nombre: 'Alejandra',
-    apellido_paterno: 'Garcia',
-    apellido_materno: 'Hernandez',
-    grado: '1°',
-    grupo: 'A',
-    tutor: 'Tutor Garcia',
-    telefono: '+526641234506',
-    foto_url: 'https://api.dicebear.com/7.x/bottts/svg?seed=AlejandraGarcia',
-    qr_code: '261145620-1',
-    created_at: new Date().toISOString()
-  },
-  {
-    id: 'student-alcantar',
-    matricula: '261131579-1',
-    nombre: 'Carlos',
-    apellido_paterno: 'Alcantar',
-    apellido_materno: 'Sanchez',
-    grado: '1°',
-    grupo: 'A',
-    tutor: 'Tutor Alcantar',
-    telefono: '+526641234507',
-    foto_url: 'https://api.dicebear.com/7.x/bottts/svg?seed=CarlosAlcantar',
-    qr_code: '261131579-1',
-    created_at: new Date().toISOString()
-  },
-  {
-    id: 'student-cendejas',
-    matricula: '261082843-1',
-    nombre: 'Oscar',
-    apellido_paterno: 'Cendejas',
-    apellido_materno: 'Alonso',
-    grado: '1°',
-    grupo: 'A',
-    tutor: 'Tutor Cendejas',
-    telefono: '+526641234508',
-    foto_url: 'https://api.dicebear.com/7.x/bottts/svg?seed=OscarCendejas',
-    qr_code: '261082843-1',
-    created_at: new Date().toISOString()
-  },
-  {
-    id: 'student-garcia-s',
-    matricula: '261118413-1',
-    nombre: 'Jose Daniel',
-    apellido_paterno: 'Garcia',
-    apellido_materno: 'Santiago',
-    grado: '1°',
-    grupo: 'A',
-    tutor: 'Tutor Garcia S',
-    telefono: '+526641234509',
-    foto_url: 'https://api.dicebear.com/7.x/bottts/svg?seed=JoseDanielGarcia',
-    qr_code: '261118413-1',
-    created_at: new Date().toISOString()
-  },
-  {
-    id: 'student-guzman',
-    matricula: '261093186-1',
-    nombre: 'Jazmin',
-    apellido_paterno: 'Guzman',
-    apellido_materno: 'Roblero',
-    grado: '1°',
-    grupo: 'A',
-    tutor: 'Tutor Guzman',
-    telefono: '+526641234510',
-    foto_url: 'https://api.dicebear.com/7.x/bottts/svg?seed=JazminGuzman',
-    qr_code: '261093186-1',
-    created_at: new Date().toISOString()
-  }
-];
+import masterAlumnosJson from '../../data/alumnos.json';
+
+// Master student list sourced directly from official institutional database (529 alumnos reales de CECYTE BC)
+const MOCK_ALUMNOS: Alumno[] = (masterAlumnosJson as unknown as Alumno[]) || [];
 
 // Permanent Vault Keys for student data protection
 const VAULT_PRIMARY_KEY = 'dojoia_alumnos';
@@ -213,31 +74,20 @@ export const persistToAllVaults = (students: Alumno[]) => {
 const initLocalStorage = () => {
   if (typeof window === 'undefined') return;
 
-  const hasVault = localStorage.getItem(VAULT_PERMANENT_KEY);
-  const hasExcel = localStorage.getItem(VAULT_EXCEL_KEY);
-  const hasBackup = localStorage.getItem(VAULT_BACKUP_KEY);
-  const hasPrimary = localStorage.getItem(VAULT_PRIMARY_KEY);
-  const hasEverUploaded = localStorage.getItem(HAS_USER_STUDENTS_KEY) === 'true';
+  const primaryRaw = localStorage.getItem(VAULT_PRIMARY_KEY);
+  let primaryCount = 0;
+  if (primaryRaw) {
+    try {
+      const parsed = JSON.parse(primaryRaw);
+      if (Array.isArray(parsed)) primaryCount = parsed.length;
+    } catch {}
+  }
 
-  // If the user has EVER uploaded real students, protect them at all costs
-  if (hasVault || hasExcel || hasBackup || hasEverUploaded) {
-    localStorage.setItem(HAS_USER_STUDENTS_KEY, 'true');
-    // Ensure primary key is populated from the vault if missing
-    if (!hasPrimary) {
-      const recoverySource = hasVault || hasExcel || hasBackup;
-      if (recoverySource) {
-        localStorage.setItem(VAULT_PRIMARY_KEY, recoverySource);
-      }
-    }
+  // If primary has fewer students than the official master database, automatically populate!
+  if (primaryCount < MOCK_ALUMNOS.length) {
+    persistToAllVaults(MOCK_ALUMNOS);
   } else {
-    // Only on a completely clean first installation with no previous user uploads
-    if (!localStorage.getItem(VAULT_PRIMARY_KEY)) {
-      if (localStorage.getItem('dojoia_alumnos_cleared') === 'true') {
-        localStorage.setItem(VAULT_PRIMARY_KEY, JSON.stringify([]));
-      } else {
-        localStorage.setItem(VAULT_PRIMARY_KEY, JSON.stringify(MOCK_ALUMNOS));
-      }
-    }
+    localStorage.setItem(HAS_USER_STUDENTS_KEY, 'true');
   }
 
   if (!localStorage.getItem('dojoia_asistencias')) {
@@ -420,12 +270,13 @@ export const db = {
       }
     }
 
-    // Layer 4: Fallback seed ONLY if completely empty AND the user has NEVER uploaded any students
-    const userHasUploaded = typeof window !== 'undefined' && localStorage.getItem(HAS_USER_STUDENTS_KEY) === 'true';
-    if (studentMap.size === 0 && !userHasUploaded) {
+    // Layer 4: Ensure master institutional student database is always fully merged
+    if (studentMap.size < MOCK_ALUMNOS.length) {
       MOCK_ALUMNOS.forEach(s => {
         const normalized = safeNormalizeStudent(s);
-        if (normalized) studentMap.set(normalized.matricula, normalized);
+        if (normalized && !studentMap.has(normalized.matricula)) {
+          studentMap.set(normalized.matricula, normalized);
+        }
       });
     }
 
@@ -439,12 +290,7 @@ export const db = {
 
     // Save and synchronize merged list across ALL vaults
     if (typeof window !== 'undefined' && finalList.length > 0) {
-      try {
-        const serialized = JSON.stringify(finalList);
-        localStorage.setItem(VAULT_PRIMARY_KEY, serialized);
-        localStorage.setItem(VAULT_PERMANENT_KEY, serialized);
-        localStorage.setItem(VAULT_BACKUP_KEY, serialized);
-      } catch {}
+      persistToAllVaults(finalList);
     }
 
     return finalList;

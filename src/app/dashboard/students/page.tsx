@@ -254,9 +254,9 @@ export default function StudentsPage() {
     return matchesSearch && matchesGrade && matchesGroup;
   });
 
-  // Grados escolares oficiales: 1°, 3° y 5° grado
-  const availableGrades = ['1°', '3°', '5°'];
-  const availableGroups = Array.from(new Set(['A', 'B', 'C', ...students.map(s => s.grupo)])).filter(Boolean);
+  // Grados y grupos dinámicos basados en los alumnos reales registrados
+  const availableGrades = Array.from(new Set(['1°', '3°', '5°', ...students.map(s => s.grado)])).filter(Boolean);
+  const availableGroups = Array.from(new Set([...students.map(s => s.grupo)])).filter(Boolean).sort();
 
   const handlePrint = () => {
     window.print();
@@ -417,7 +417,7 @@ export default function StudentsPage() {
                 >
                   <option value="">Todos los Grupos</option>
                   {availableGroups.map(grp => (
-                    <option key={grp} value={grp}>Grupo {grp}</option>
+                    <option key={grp} value={grp}>{grp.length > 2 ? grp : `Grupo ${grp}`}</option>
                   ))}
                 </select>
               </div>
