@@ -7,7 +7,7 @@ import { db, Alumno } from '@/lib/db';
 import { useAuth } from '@/lib/auth';
 import { 
   Search, Plus, Printer, Trash2, X, User, Phone, Shield, Lock, FileSpreadsheet,
-  AlertTriangle, ShieldAlert, Sparkles, CheckCircle2
+  AlertTriangle, ShieldAlert, Sparkles, CheckCircle2, Download, Upload, ShieldCheck
 } from 'lucide-react';
 import BulkUploadModal from '@/components/BulkUploadModal';
 
@@ -140,6 +140,49 @@ export default function StudentsPage() {
     }
   };
 
+  // Descargar respaldo offline de alumnos en formato JSON
+  const handleDownloadBackup = () => {
+    if (students.length === 0) {
+      alert('No hay alumnos registrados para respaldar.');
+      return;
+    }
+    const dataStr = 'data:text/json;charset=utf-8,' + encodeURIComponent(JSON.stringify(students, null, 2));
+    const downloadAnchor = document.createElement('a');
+    downloadAnchor.setAttribute('href', dataStr);
+    const dateStr = new Date().toISOString().split('T')[0];
+    downloadAnchor.setAttribute('download', `respaldo_alumnos_escuelaia_${dateStr}.json`);
+    document.body.appendChild(downloadAnchor);
+    downloadAnchor.click();
+    downloadAnchor.remove();
+    setSuccessBanner(`🛡️ Respaldo de ${students.length} alumnos descargado con éxito en tu equipo.`);
+    setTimeout(() => setSuccessBanner(null), 8000);
+  };
+
+  // Restaurar alumnos desde archivo de respaldo JSON
+  const handleRestoreBackup = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = async (event) => {
+      try {
+        const parsed = JSON.parse(event.target?.result as string);
+        if (!Array.isArray(parsed) || parsed.length === 0) {
+          alert('El archivo no contiene un listado válido de alumnos.');
+          return;
+        }
+        await db.addAlumnosBulk(parsed);
+        const updated = await db.getAlumnos();
+        setStudents(updated);
+        setSuccessBanner(`✅ Bóveda restaurada: ${updated.length} alumnos activos y protegidos.`);
+        setTimeout(() => setSuccessBanner(null), 8000);
+      } catch (err: any) {
+        alert('Error al leer el archivo de respaldo JSON: ' + (err.message || err));
+      }
+    };
+    reader.readAsText(file);
+    e.target.value = '';
+  };
+
   // Filter students based on search queries
   const filteredStudents = students.filter(student => {
     const matchesSearch = 
@@ -194,6 +237,31 @@ export default function StudentsPage() {
                 </button>
               )}
 
+              {/* Botón Descargar Respaldo JSON */}
+              <button
+                onClick={handleDownloadBackup}
+                className="flex items-center space-x-1.5 px-3 py-2 rounded-xl bg-white/5 hover:bg-white/10 border border-white/10 text-gray-300 hover:text-white font-medium text-xs sm:text-sm transition-all cursor-pointer"
+                title="Descargar copia de seguridad de todos los alumnos en formato JSON"
+              >
+                <Download size={15} className="text-cyan-400" />
+                <span className="hidden sm:inline">Respaldar JSON</span>
+              </button>
+
+              {/* Botón Restaurar Respaldo JSON */}
+              <label
+                className="flex items-center space-x-1.5 px-3 py-2 rounded-xl bg-white/5 hover:bg-white/10 border border-white/10 text-gray-300 hover:text-white font-medium text-xs sm:text-sm transition-all cursor-pointer"
+                title="Restaurar alumnos desde copia de seguridad JSON"
+              >
+                <Upload size={15} className="text-amber-400" />
+                <span className="hidden sm:inline">Restaurar JSON</span>
+                <input
+                  type="file"
+                  accept=".json"
+                  className="hidden"
+                  onChange={handleRestoreBackup}
+                />
+              </label>
+
               <button
                 onClick={() => setIsBulkModalOpen(true)}
                 className="flex items-center space-x-2 px-4 py-2.5 rounded-xl bg-gradient-to-r from-emerald-500/20 to-teal-500/20 hover:from-emerald-500/30 hover:to-teal-500/30 border border-emerald-500/40 text-emerald-300 font-extrabold text-sm shadow-[0_0_15px_rgba(16,185,129,0.2)] transition-all cursor-pointer"
@@ -218,6 +286,24 @@ export default function StudentsPage() {
             </div>
           )}
         </div>
+      </div>
+
+      {/* Persistent Protection Notice */}
+      <div className="p-3.5 px-4 rounded-xl bg-cyan-950/40 border border-cyan-500/30 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 text-cyan-200 text-xs">
+        <div className="flex items-center space-x-2.5">
+          <ShieldCheck size={18} className="text-cyan-400 shrink-0" />
+          <span>
+            <strong className="text-white">Bóveda de Alumnos Blindada:</strong> Tus alumnos registrados y subidos están protegidos permanentemente y no se eliminan al actualizar el sistema.
+          </span>
+        </div>
+        <button
+          onClick={handleDownloadBackup}
+          className="flex items-center space-x-1.5 px-3 py-1.5 rounded-lg bg-cyan-500/20 hover:bg-cyan-500/30 border border-cyan-500/40 text-cyan-300 text-xs font-bold transition-all shrink-0 cursor-pointer"
+          title="Descargar copia de seguridad de todos los alumnos en formato JSON"
+        >
+          <Download size={13} />
+          <span>Descargar Respaldo Offline</span>
+        </button>
       </div>
 
       {/* Success Notification Banner */}

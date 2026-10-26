@@ -184,15 +184,59 @@ const MOCK_ALUMNOS: Alumno[] = [
   }
 ];
 
-// Helper to initialize local storage
+// Permanent Vault Keys for student data protection
+const VAULT_PRIMARY_KEY = 'dojoia_alumnos';
+const VAULT_PERMANENT_KEY = 'dojoia_alumnos_permanent_vault';
+const VAULT_EXCEL_KEY = 'dojoia_alumnos_excel_imported';
+const VAULT_BACKUP_KEY = 'dojoia_alumnos_uploaded_backup';
+const HAS_USER_STUDENTS_KEY = 'dojoia_user_has_uploaded_students';
+
+// Helper to synchronize students across ALL persistent vaults
+export const persistToAllVaults = (students: Alumno[]) => {
+  if (typeof window === 'undefined' || !Array.isArray(students)) return;
+  try {
+    const serialized = JSON.stringify(students);
+    localStorage.removeItem('dojoia_alumnos_cleared');
+    if (students.length > 0) {
+      localStorage.setItem(HAS_USER_STUDENTS_KEY, 'true');
+    }
+    localStorage.setItem(VAULT_PRIMARY_KEY, serialized);
+    localStorage.setItem(VAULT_PERMANENT_KEY, serialized);
+    localStorage.setItem(VAULT_EXCEL_KEY, serialized);
+    localStorage.setItem(VAULT_BACKUP_KEY, serialized);
+  } catch (e) {
+    console.warn('Error en persistToAllVaults:', e);
+  }
+};
+
+// Helper to initialize local storage safely without erasing user students
 const initLocalStorage = () => {
   if (typeof window === 'undefined') return;
 
-  if (!localStorage.getItem('dojoia_alumnos')) {
-    if (localStorage.getItem('dojoia_alumnos_cleared') === 'true') {
-      localStorage.setItem('dojoia_alumnos', JSON.stringify([]));
-    } else {
-      localStorage.setItem('dojoia_alumnos', JSON.stringify(MOCK_ALUMNOS));
+  const hasVault = localStorage.getItem(VAULT_PERMANENT_KEY);
+  const hasExcel = localStorage.getItem(VAULT_EXCEL_KEY);
+  const hasBackup = localStorage.getItem(VAULT_BACKUP_KEY);
+  const hasPrimary = localStorage.getItem(VAULT_PRIMARY_KEY);
+  const hasEverUploaded = localStorage.getItem(HAS_USER_STUDENTS_KEY) === 'true';
+
+  // If the user has EVER uploaded real students, protect them at all costs
+  if (hasVault || hasExcel || hasBackup || hasEverUploaded) {
+    localStorage.setItem(HAS_USER_STUDENTS_KEY, 'true');
+    // Ensure primary key is populated from the vault if missing
+    if (!hasPrimary) {
+      const recoverySource = hasVault || hasExcel || hasBackup;
+      if (recoverySource) {
+        localStorage.setItem(VAULT_PRIMARY_KEY, recoverySource);
+      }
+    }
+  } else {
+    // Only on a completely clean first installation with no previous user uploads
+    if (!localStorage.getItem(VAULT_PRIMARY_KEY)) {
+      if (localStorage.getItem('dojoia_alumnos_cleared') === 'true') {
+        localStorage.setItem(VAULT_PRIMARY_KEY, JSON.stringify([]));
+      } else {
+        localStorage.setItem(VAULT_PRIMARY_KEY, JSON.stringify(MOCK_ALUMNOS));
+      }
     }
   }
 
@@ -265,13 +309,13 @@ const initLocalStorage = () => {
   }
 };
 
-// Database API Implementation with Fault-Tolerant Dual Persistence
+// Database API Implementation with Fault-Tolerant Multi-Vault Persistence
 export const db = {
   isSandboxMode: () => {
     return !isSupabaseConfigured;
   },
 
-  // Alumnos operations with indestructible multi-layer persistence
+  // Alumnos operations with indestructible multi-layer vault persistence
   getAlumnos: async (): Promise<Alumno[]> => {
     initLocalStorage();
 
@@ -299,38 +343,36 @@ export const db = {
       };
     };
 
-    // Layer 1: Load from localStorage (primary client cache + permanent Excel backup)
+    // Layer 1: Load from ALL client vaults (Primary, Permanent, Excel, and Backup)
     if (typeof window !== 'undefined') {
       try {
-        const raw = localStorage.getItem('dojoia_alumnos');
-        if (raw) {
-          const list: any[] = JSON.parse(raw);
-          list.forEach(s => {
-            const normalized = safeNormalizeStudent(s);
-            if (normalized) studentMap.set(normalized.matricula, normalized);
-          });
-        }
-        // Also check immutable imported backup key
-        const rawBackup = localStorage.getItem('dojoia_alumnos_excel_imported');
-        if (rawBackup) {
-          const importedList: any[] = JSON.parse(rawBackup);
-          importedList.forEach(s => {
-            const normalized = safeNormalizeStudent(s);
-            if (normalized && !studentMap.has(normalized.matricula)) {
-              studentMap.set(normalized.matricula, normalized);
-            }
-          });
+        const vaultKeys = [VAULT_PRIMARY_KEY, VAULT_PERMANENT_KEY, VAULT_EXCEL_KEY, VAULT_BACKUP_KEY];
+        for (const k of vaultKeys) {
+          const raw = localStorage.getItem(k);
+          if (raw) {
+            try {
+              const list: any[] = JSON.parse(raw);
+              if (Array.isArray(list)) {
+                list.forEach(s => {
+                  const normalized = safeNormalizeStudent(s);
+                  if (normalized && !studentMap.has(normalized.matricula)) {
+                    studentMap.set(normalized.matricula, normalized);
+                  }
+                });
+              }
+            } catch {}
+          }
         }
       } catch (e) {
-        console.warn('Error leyendo alumnos de localStorage:', e);
+        console.warn('Error leyendo bóveda de alumnos en localStorage:', e);
       }
     }
 
-    // Layer 2: Load from Server API route (/api/alumnos) backed by data/alumnos.json on disk
+    // Layer 2: Load from Server API route (/api/alumnos) backed by data/alumnos.json
     try {
       if (typeof window !== 'undefined') {
         const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), 2000);
+        const timeoutId = setTimeout(() => controller.abort(), 2500);
         const res = await fetch('/api/alumnos', { signal: controller.signal });
         clearTimeout(timeoutId);
 
@@ -347,10 +389,10 @@ export const db = {
         }
       }
     } catch {
-      // Local or static fallback
+      // Offline fallback
     }
 
-    // Layer 3: Sync with Supabase with a fast 2-second timeout so it never hangs
+    // Layer 3: Sync with Supabase if configured
     if (supabase) {
       try {
         const supabasePromise = supabase
@@ -374,12 +416,13 @@ export const db = {
           });
         }
       } catch (e) {
-        // Supabase offline / DNS failure
+        // Supabase offline
       }
     }
 
-    // Fallback seed if completely empty
-    if (studentMap.size === 0) {
+    // Layer 4: Fallback seed ONLY if completely empty AND the user has NEVER uploaded any students
+    const userHasUploaded = typeof window !== 'undefined' && localStorage.getItem(HAS_USER_STUDENTS_KEY) === 'true';
+    if (studentMap.size === 0 && !userHasUploaded) {
       MOCK_ALUMNOS.forEach(s => {
         const normalized = safeNormalizeStudent(s);
         if (normalized) studentMap.set(normalized.matricula, normalized);
@@ -394,9 +437,14 @@ export const db = {
       return (a.nombre || '').localeCompare(b.nombre || '');
     });
 
-    // Save merged master list back to localStorage
-    if (typeof window !== 'undefined') {
-      localStorage.setItem('dojoia_alumnos', JSON.stringify(finalList));
+    // Save and synchronize merged list across ALL vaults
+    if (typeof window !== 'undefined' && finalList.length > 0) {
+      try {
+        const serialized = JSON.stringify(finalList);
+        localStorage.setItem(VAULT_PRIMARY_KEY, serialized);
+        localStorage.setItem(VAULT_PERMANENT_KEY, serialized);
+        localStorage.setItem(VAULT_BACKUP_KEY, serialized);
+      } catch {}
     }
 
     return finalList;
@@ -475,19 +523,10 @@ export const db = {
     };
     list.push(newAlumno);
 
-    // Save to localStorage
-    if (typeof window !== 'undefined') {
-      localStorage.removeItem('dojoia_alumnos_cleared');
-      localStorage.setItem('dojoia_alumnos', JSON.stringify(list));
-      try {
-        const rawBackup = localStorage.getItem('dojoia_alumnos_excel_imported');
-        const backupList: Alumno[] = rawBackup ? JSON.parse(rawBackup) : [];
-        backupList.push(newAlumno);
-        localStorage.setItem('dojoia_alumnos_excel_imported', JSON.stringify(backupList));
-      } catch (e) {
-        console.warn('Backup error:', e);
-      }
+    // Save across all permanent vaults
+    persistToAllVaults(list);
 
+    if (typeof window !== 'undefined') {
       // Persist to disk API
       fetch('/api/alumnos', {
         method: 'POST',
@@ -533,22 +572,8 @@ export const db = {
 
     const fullList = Array.from(studentMap.values());
 
-    // 1. Save to localStorage active list AND permanent Excel backup key
-    if (typeof window !== 'undefined') {
-      localStorage.removeItem('dojoia_alumnos_cleared');
-      localStorage.setItem('dojoia_alumnos', JSON.stringify(fullList));
-
-      try {
-        const rawBackup = localStorage.getItem('dojoia_alumnos_excel_imported');
-        const backupList: Alumno[] = rawBackup ? JSON.parse(rawBackup) : [];
-        const backupMap = new Map<string, Alumno>();
-        backupList.forEach(s => backupMap.set(s.matricula, s));
-        newlyAdded.forEach(s => backupMap.set(s.matricula, s));
-        localStorage.setItem('dojoia_alumnos_excel_imported', JSON.stringify(Array.from(backupMap.values())));
-      } catch (e) {
-        console.warn('Error guardando respaldo permanente de importación:', e);
-      }
-    }
+    // 1. Save across all permanent vaults
+    persistToAllVaults(fullList);
 
     // 2. Persist to server disk via /api/alumnos route
     if (typeof window !== 'undefined') {
@@ -586,8 +611,10 @@ export const db = {
     const updated: Alumno = { ...list[idx], ...updates };
     list[idx] = updated;
 
+    // Synchronize update across all vaults
+    persistToAllVaults(list);
+
     if (typeof window !== 'undefined') {
-      localStorage.setItem('dojoia_alumnos', JSON.stringify(list));
       fetch('/api/alumnos', {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
@@ -608,18 +635,22 @@ export const db = {
     initLocalStorage();
     let list = await db.getAlumnos();
     const initialLen = list.length;
-    list = list.filter(a => a.id !== id);
-    if (typeof window !== 'undefined') {
-      localStorage.setItem('dojoia_alumnos', JSON.stringify(list));
-      // Also update backup
-      try {
-        const rawBackup = localStorage.getItem('dojoia_alumnos_excel_imported');
-        if (rawBackup) {
-          const backupList: Alumno[] = JSON.parse(rawBackup);
-          localStorage.setItem('dojoia_alumnos_excel_imported', JSON.stringify(backupList.filter(a => a.id !== id)));
-        }
-      } catch {}
+    const targetStudent = list.find(a => a.id === id);
 
+    // Backup to trash before deleting
+    if (typeof window !== 'undefined' && targetStudent) {
+      try {
+        const rawTrash = localStorage.getItem('dojoia_alumnos_trash_backup');
+        const trashList: Alumno[] = rawTrash ? JSON.parse(rawTrash) : [];
+        trashList.push(targetStudent);
+        localStorage.setItem('dojoia_alumnos_trash_backup', JSON.stringify(trashList));
+      } catch {}
+    }
+
+    list = list.filter(a => a.id !== id);
+    persistToAllVaults(list);
+
+    if (typeof window !== 'undefined') {
       fetch(`/api/alumnos?id=${id}`, { method: 'DELETE' }).catch(() => {});
     }
 
@@ -791,7 +822,11 @@ export const db = {
   },
 
   clearDatabase: () => {
-    // Safety: disabled by default
-    console.warn('clearDatabase called');
+    // PROTECCIÓN ABSOLUTA: Solo limpia asistencias y logs temporales. NUNCA borra los alumnos registrados por el usuario.
+    if (typeof window !== 'undefined') {
+      localStorage.removeItem('dojoia_asistencias');
+      localStorage.removeItem('dojoia_whatsapp_logs');
+    }
+    console.log('clearDatabase: Asistencias y logs restablecidos. Alumnos intactos y protegidos.');
   }
 };

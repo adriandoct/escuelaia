@@ -2,35 +2,62 @@ import { NextResponse } from 'next/server';
 import fs from 'fs';
 import path from 'path';
 
-const DATA_FILE = path.join(process.cwd(), 'data', 'alumnos.json');
+const PRIMARY_FILE = path.join(process.cwd(), 'data', 'alumnos.json');
+const TMP_FILE = path.join('/tmp', 'alumnos.json');
 
-const ensureDataFile = () => {
-  const dir = path.dirname(DATA_FILE);
-  if (!fs.existsSync(dir)) {
-    fs.mkdirSync(dir, { recursive: true });
-  }
-  if (!fs.existsSync(DATA_FILE)) {
-    fs.writeFileSync(DATA_FILE, JSON.stringify([], null, 2), 'utf-8');
+const getWritablePath = () => {
+  try {
+    const dir = path.dirname(PRIMARY_FILE);
+    if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
+    fs.accessSync(dir, fs.constants.W_OK);
+    return PRIMARY_FILE;
+  } catch {
+    return TMP_FILE;
   }
 };
 
 const readLocalData = (): any[] => {
-  try {
-    ensureDataFile();
-    const raw = fs.readFileSync(DATA_FILE, 'utf-8');
-    return JSON.parse(raw || '[]');
-  } catch (err) {
-    console.error('Error reading data/alumnos.json:', err);
-    return [];
-  }
+  const map = new Map<string, any>();
+
+  // Helper to safely parse file
+  const tryRead = (filePath: string) => {
+    try {
+      if (fs.existsSync(filePath)) {
+        const raw = fs.readFileSync(filePath, 'utf-8');
+        const list = JSON.parse(raw || '[]');
+        if (Array.isArray(list)) {
+          list.forEach(st => {
+            if (st && st.matricula) {
+              const mat = String(st.matricula).trim();
+              if (mat && !map.has(mat)) map.set(mat, st);
+            }
+          });
+        }
+      }
+    } catch (e) {
+      // Ignorar errores de lectura en paths no accesibles
+    }
+  };
+
+  tryRead(PRIMARY_FILE);
+  tryRead(TMP_FILE);
+
+  return Array.from(map.values());
 };
 
 const writeLocalData = (data: any[]) => {
+  const target = getWritablePath();
   try {
-    ensureDataFile();
-    fs.writeFileSync(DATA_FILE, JSON.stringify(data, null, 2), 'utf-8');
+    const dir = path.dirname(target);
+    if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
+    fs.writeFileSync(target, JSON.stringify(data, null, 2), 'utf-8');
   } catch (err) {
-    console.error('Error writing data/alumnos.json:', err);
+    try {
+      // Fallback a /tmp
+      fs.writeFileSync(TMP_FILE, JSON.stringify(data, null, 2), 'utf-8');
+    } catch (e) {
+      console.error('Error escribiendo datos de alumnos en disco:', e);
+    }
   }
 };
 

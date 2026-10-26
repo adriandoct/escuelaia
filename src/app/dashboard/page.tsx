@@ -119,7 +119,7 @@ export default function DashboardPage() {
   };
 
   const handleResetData = () => {
-    if (confirm('¿Restablecer la base de datos a los valores de prueba originales? Esto borrará los alumnos y asistencias actuales.')) {
+    if (confirm('¿Restablecer los registros de asistencia y alertas de prueba del día? Tus alumnos registrados están blindados y NO se borrarán.')) {
       db.clearDatabase();
       clearWhatsAppLogs();
       loadData();
