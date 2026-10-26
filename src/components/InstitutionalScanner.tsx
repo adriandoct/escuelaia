@@ -101,23 +101,6 @@ export default function InstitutionalScanner() {
   const [regPassType, setRegPassType] = useState<'entrada' | 'salida'>('entrada');
   const [isSubmittingAuth, setIsSubmittingAuth] = useState(false);
   const activeScanTimeoutRef = useRef<any>(null);
-  const [autoOpenWhatsApp, setAutoOpenWhatsApp] = useState<boolean>(() => {
-    if (typeof window !== 'undefined') {
-      const saved = localStorage.getItem('dojoia_auto_open_whatsapp');
-      return saved !== null ? saved === 'true' : true;
-    }
-    return true;
-  });
-
-  const toggleAutoOpenWhatsApp = () => {
-    setAutoOpenWhatsApp(prev => {
-      const next = !prev;
-      if (typeof window !== 'undefined') {
-        localStorage.setItem('dojoia_auto_open_whatsapp', String(next));
-      }
-      return next;
-    });
-  };
 
   // =========================================================================
   // ADMIN EDIT PARENT / TUTOR PHONE NUMBER ON SCAN
@@ -326,8 +309,8 @@ export default function InstitutionalScanner() {
         operatorName
       );
 
-      // WhatsApp Notification al momento de escanear código de barra
-      await sendWhatsAppNotification(alumno, asistencia, { autoOpen: autoOpenWhatsApp });
+      // Enviar mensaje de WhatsApp directamente al celular en segundo plano (sin abrir ventanas en la laptop)
+      await sendWhatsAppNotification(alumno, asistencia);
 
       if (duplicateWarning) {
         if (soundEnabled) playAudioFeedback('duplicate');
@@ -518,7 +501,7 @@ export default function InstitutionalScanner() {
       );
 
       if (alumno.telefono && alumno.telefono !== '+525500000000' && alumno.telefono.length >= 10) {
-        await sendWhatsAppNotification(alumno, asistencia, { autoOpen: autoOpenWhatsApp });
+        await sendWhatsAppNotification(alumno, asistencia);
       }
 
       if (soundEnabled) playAudioFeedback('success');
@@ -817,20 +800,15 @@ export default function InstitutionalScanner() {
                   {soundEnabled ? <Volume2 size={16} /> : <VolumeX size={16} />}
                 </button>
 
-                {/* Auto WhatsApp Toggle */}
-                <button
-                  type="button"
-                  onClick={toggleAutoOpenWhatsApp}
-                  className={`px-3 py-1.5 rounded-xl border text-xs font-bold flex items-center space-x-1.5 transition-all cursor-pointer ${
-                    autoOpenWhatsApp
-                      ? 'bg-emerald-500/15 border-emerald-500/40 text-emerald-300 shadow-[0_0_12px_rgba(16,185,129,0.2)]'
-                      : 'bg-white/5 border-white/10 text-gray-400 hover:text-white'
-                  }`}
-                  title={autoOpenWhatsApp ? 'Auto-WhatsApp ACTIVADO: Se envía/abre mensaje oficial al escanear código de barra' : 'Auto-WhatsApp DESACTIVADO (clic para activar)'}
+                {/* Indicador de WhatsApp al celular en segundo plano */}
+                <div
+                  className="px-3 py-1.5 rounded-xl border border-emerald-500/40 bg-emerald-500/15 text-emerald-300 text-xs font-bold flex items-center space-x-1.5 shadow-[0_0_12px_rgba(16,185,129,0.15)]"
+                  title="Envío automático directo al celular de WhatsApp asignado sin abrir ventanas en la laptop"
                 >
-                  <Smartphone size={14} className={autoOpenWhatsApp ? 'text-emerald-400 animate-pulse' : ''} />
-                  <span>{autoOpenWhatsApp ? '📲 Auto WhatsApp: ON' : '📲 Auto WhatsApp: OFF'}</span>
-                </button>
+                  <Smartphone size={14} className="text-emerald-400" />
+                  <span className="hidden sm:inline">📲 WhatsApp Directo al Celular</span>
+                  <span className="sm:hidden">📲 WhatsApp Celular</span>
+                </div>
 
                 {/* Detect / Reconnect Scanner */}
                 <button
