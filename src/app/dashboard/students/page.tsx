@@ -3,12 +3,13 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
+import Link from 'next/link';
 import { db, Alumno } from '@/lib/db';
 import { useAuth } from '@/lib/auth';
 import { 
   Search, Plus, Printer, Trash2, X, User, Phone, Shield, Lock, FileSpreadsheet,
   AlertTriangle, ShieldAlert, Sparkles, CheckCircle2, Download, Upload, ShieldCheck,
-  Edit3, Check
+  Edit3, Check, QrCode
 } from 'lucide-react';
 import BulkUploadModal from '@/components/BulkUploadModal';
 
@@ -318,6 +319,16 @@ export default function StudentsPage() {
                   onChange={handleRestoreBackup}
                 />
               </label>
+
+              {/* Botón Reporte QRs por Grupo (1.5x1.5 cm) */}
+              <Link
+                href="/dashboard/qr-report"
+                className="flex items-center space-x-1.5 px-3.5 py-2.5 rounded-xl bg-gradient-to-r from-blue-500/20 to-cyan-500/20 hover:from-blue-500/30 hover:to-cyan-500/30 border border-cyan-500/40 text-cyan-300 font-extrabold text-xs sm:text-sm shadow-[0_0_15px_rgba(6,182,212,0.2)] transition-all cursor-pointer"
+                title="Generar e imprimir reporte de etiquetas QR por grupo (1.5 cm x 1.5 cm)"
+              >
+                <QrCode size={15} className="text-cyan-400" />
+                <span>Reporte QRs (1.5cm)</span>
+              </Link>
 
               <button
                 onClick={() => setIsBulkModalOpen(true)}

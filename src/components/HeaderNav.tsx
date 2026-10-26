@@ -102,6 +102,18 @@ export default function HeaderNav() {
               <span>Alumnos</span>
             </Link>
 
+            {/* Admin QR stickers report */}
+            {(!user || user.role === 'administrador') && (
+              <Link 
+                href="/dashboard/qr-report" 
+                className="hover:text-cyan-400 transition-colors py-1.5 px-3 rounded-lg hover:bg-white/5 flex items-center space-x-1.5 text-cyan-300 font-bold"
+                title="Generar e imprimir etiquetas QR por grupo (1.5x1.5 cm)"
+              >
+                <QrCode size={14} className="text-cyan-400" />
+                <span>Reporte QRs (1.5cm)</span>
+              </Link>
+            )}
+
             {/* Admin user role manager */}
             {user?.role === 'administrador' && (
               <Link 
