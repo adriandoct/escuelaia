@@ -101,6 +101,23 @@ export default function InstitutionalScanner() {
   const [regPassType, setRegPassType] = useState<'entrada' | 'salida'>('entrada');
   const [isSubmittingAuth, setIsSubmittingAuth] = useState(false);
   const activeScanTimeoutRef = useRef<any>(null);
+  const [autoOpenWhatsApp, setAutoOpenWhatsApp] = useState<boolean>(() => {
+    if (typeof window !== 'undefined') {
+      const saved = localStorage.getItem('dojoia_auto_open_whatsapp');
+      return saved !== null ? saved === 'true' : true;
+    }
+    return true;
+  });
+
+  const toggleAutoOpenWhatsApp = () => {
+    setAutoOpenWhatsApp(prev => {
+      const next = !prev;
+      if (typeof window !== 'undefined') {
+        localStorage.setItem('dojoia_auto_open_whatsapp', String(next));
+      }
+      return next;
+    });
+  };
 
   // =========================================================================
   // ADMIN EDIT PARENT / TUTOR PHONE NUMBER ON SCAN
@@ -309,8 +326,8 @@ export default function InstitutionalScanner() {
         operatorName
       );
 
-      // WhatsApp Notification
-      await sendWhatsAppNotification(alumno, asistencia);
+      // WhatsApp Notification al momento de escanear código de barra
+      await sendWhatsAppNotification(alumno, asistencia, { autoOpen: autoOpenWhatsApp });
 
       if (duplicateWarning) {
         if (soundEnabled) playAudioFeedback('duplicate');
@@ -501,7 +518,7 @@ export default function InstitutionalScanner() {
       );
 
       if (alumno.telefono && alumno.telefono !== '+525500000000' && alumno.telefono.length >= 10) {
-        await sendWhatsAppNotification(alumno, asistencia);
+        await sendWhatsAppNotification(alumno, asistencia, { autoOpen: autoOpenWhatsApp });
       }
 
       if (soundEnabled) playAudioFeedback('success');
@@ -800,6 +817,21 @@ export default function InstitutionalScanner() {
                   {soundEnabled ? <Volume2 size={16} /> : <VolumeX size={16} />}
                 </button>
 
+                {/* Auto WhatsApp Toggle */}
+                <button
+                  type="button"
+                  onClick={toggleAutoOpenWhatsApp}
+                  className={`px-3 py-1.5 rounded-xl border text-xs font-bold flex items-center space-x-1.5 transition-all cursor-pointer ${
+                    autoOpenWhatsApp
+                      ? 'bg-emerald-500/15 border-emerald-500/40 text-emerald-300 shadow-[0_0_12px_rgba(16,185,129,0.2)]'
+                      : 'bg-white/5 border-white/10 text-gray-400 hover:text-white'
+                  }`}
+                  title={autoOpenWhatsApp ? 'Auto-WhatsApp ACTIVADO: Se envía/abre mensaje oficial al escanear código de barra' : 'Auto-WhatsApp DESACTIVADO (clic para activar)'}
+                >
+                  <Smartphone size={14} className={autoOpenWhatsApp ? 'text-emerald-400 animate-pulse' : ''} />
+                  <span>{autoOpenWhatsApp ? '📲 Auto WhatsApp: ON' : '📲 Auto WhatsApp: OFF'}</span>
+                </button>
+
                 {/* Detect / Reconnect Scanner */}
                 <button
                   type="button"
@@ -1049,21 +1081,26 @@ export default function InstitutionalScanner() {
 
                 {/* WhatsApp Status Pill & Quick Open */}
                 {activeScan.student?.telefono && activeScan.student.telefono !== '+525500000000' && (
-                  <div className="flex flex-wrap items-center gap-2">
-                    <div className="px-3.5 py-1.5 rounded-xl bg-emerald-500/10 border border-emerald-500/30 text-emerald-300 text-xs flex items-center space-x-2">
-                      <Smartphone size={16} />
-                      <span>WhatsApp enviado: {activeScan.student.telefono}</span>
+                  <div className="w-full space-y-2 pt-1 text-left">
+                    <div className="flex flex-wrap items-center justify-between gap-1.5 text-xs text-emerald-300 font-semibold bg-emerald-500/10 border border-emerald-500/30 rounded-xl px-3.5 py-2">
+                      <span className="flex items-center space-x-1.5">
+                        <Smartphone size={15} className="text-emerald-400 animate-pulse" />
+                        <span>WhatsApp de {activeScan.asistencia?.tipo === 'entrada' ? 'INGRESO' : 'SALIDA'} enviado a:</span>
+                      </span>
+                      <span className="font-mono text-emerald-300 font-bold bg-emerald-500/20 px-2 py-0.5 rounded border border-emerald-500/40">
+                        {activeScan.student.telefono}
+                      </span>
                     </div>
                     {activeScan.asistencia && (
                       <a
                         href={getWhatsAppSendUrl(activeScan.student, activeScan.asistencia)}
                         target="_blank"
                         rel="noopener noreferrer"
-                        className="inline-flex items-center space-x-1.5 px-3 py-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs shadow-md shadow-emerald-900/40 transition-all hover:scale-105 cursor-pointer"
+                        className="w-full flex items-center justify-center space-x-2 px-3.5 py-2.5 rounded-xl bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white font-extrabold text-xs shadow-md shadow-emerald-900/40 transition-all hover:scale-[1.01] cursor-pointer"
                         title="Abrir o enviar mensaje con formato oficial en WhatsApp"
                       >
                         <Smartphone size={14} />
-                        <span>📲 Abrir en WhatsApp</span>
+                        <span>📲 Abrir / Reenviar en WhatsApp Web</span>
                       </a>
                     )}
                   </div>

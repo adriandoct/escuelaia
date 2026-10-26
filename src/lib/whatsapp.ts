@@ -18,10 +18,10 @@ export interface WhatsAppLog {
 export const formatWhatsAppMessage = (alumno: Alumno, log: Asistencia): string => {
   const isEntrada = log.tipo === 'entrada';
   
-  // Condicional de ENTRADA o SALIDA en MAYÚSCULAS y en NEGRITAS (*...*)
+  // Condicional de INGRESO o SALIDA en MAYÚSCULAS y en NEGRITAS (*...*)
   const estadoPrincipal = isEntrada
-    ? '*EL ALUMNO ENTRÓ AL PLANTEL*'
-    : '*EL ALUMNO YA SALIÓ DEL PLANTEL*';
+    ? '*EL ALUMNO ENTRÓ AL PLANTEL (INGRESO)*'
+    : '*EL ALUMNO YA SALIÓ DEL PLANTEL (SALIDA)*';
 
   const estadoBadge = isEntrada ? '🟢 INGRESO REGISTRADO' : '🔴 SALIDA REGISTRADA';
 
@@ -64,10 +64,10 @@ ${estadoPrincipal}
 (${estadoBadge})
 
 📋 *DATOS DEL ALUMNO:*
-👤 *Nombre:* ${nombreCompleto}
+👤 *Nombre Completo:* ${nombreCompleto}
 🏷️ *Grupo:* ${alumno.grado} "${alumno.grupo}"
 🆔 *Matrícula:* ${alumno.matricula}
-📲 *Código QR:* ${qrCodeText}
+📲 *Código de Barra:* ${qrCodeText}
 
 ⏰ *Hora:* ${horaFormateada}
 📅 *Fecha:* ${fechaFormateada}
@@ -86,17 +86,28 @@ export const getWhatsAppSendUrl = (alumno: Alumno, log: Asistencia): string => {
   return `https://api.whatsapp.com/send?phone=${cleanPhone}&text=${encodeURIComponent(message)}`;
 };
 
-// Send WhatsApp trigger (Mock + Live support)
+// Send WhatsApp trigger (Mock + Live support + Instant Auto-Open)
 export const sendWhatsAppNotification = async (
   alumno: Alumno,
-  log: Asistencia
-): Promise<{ success: boolean; simulated: boolean; logEntry?: WhatsAppLog }> => {
+  log: Asistencia,
+  options?: { autoOpen?: boolean }
+): Promise<{ success: boolean; simulated: boolean; url: string; logEntry?: WhatsAppLog }> => {
   const messageText = formatWhatsAppMessage(alumno, log);
+  const sendUrl = getWhatsAppSendUrl(alumno, log);
   const useTwilio = !!(
     process.env.TWILIO_ACCOUNT_SID &&
     process.env.TWILIO_AUTH_TOKEN &&
     process.env.TWILIO_WHATSAPP_NUMBER
   );
+
+  // Auto-open WhatsApp chat in new window/tab if requested
+  if (options?.autoOpen && typeof window !== 'undefined' && alumno.telefono && alumno.telefono !== '+525500000000') {
+    try {
+      window.open(sendUrl, '_blank', 'noopener,noreferrer');
+    } catch (e) {
+      console.warn('Ventana emergente de WhatsApp bloqueada por el navegador:', e);
+    }
+  }
 
   const timestamp = new Date().toISOString();
   
@@ -132,23 +143,23 @@ export const sendWhatsAppNotification = async (
       if (!res.ok || !data.success) {
         logEntry.status = 'failed';
         saveLogToLocal(logEntry);
-        return { success: false, simulated: false, logEntry };
+        return { success: false, simulated: false, url: sendUrl, logEntry };
       }
       
       logEntry.status = 'sent';
       saveLogToLocal(logEntry);
-      return { success: true, simulated: false, logEntry };
+      return { success: true, simulated: false, url: sendUrl, logEntry };
     } catch (err) {
       console.error('Error triggering Twilio WhatsApp API:', err);
       logEntry.status = 'failed';
       saveLogToLocal(logEntry);
-      return { success: false, simulated: false, logEntry };
+      return { success: false, simulated: false, url: sendUrl, logEntry };
     }
   }
 
   // 2. Fallback: Simulated send (save to local storage so dashboard phone can review)
   saveLogToLocal(logEntry);
-  return { success: true, simulated: true, logEntry };
+  return { success: true, simulated: true, url: sendUrl, logEntry };
 };
 
 // Local storage logger for sandbox mode
