@@ -424,6 +424,8 @@ export default function BarcodeScannerHub({ onScanCompleted, className = '' }: B
     isReceivingSignal,
     isHardwareScannerConnected,
     isZktecoDetected,
+    isJowvdyDetected,
+    jowvdyDetails,
     detectedScannerName,
     connectedHidDevices,
     hasWebHidSupport,
@@ -565,20 +567,35 @@ export default function BarcodeScannerHub({ onScanCompleted, className = '' }: B
                 <span>
                   {isReceivingSignal 
                     ? '⚡ LEYENDO CÓDIGO DE BARRAS...' 
-                    : isHardwareScannerConnected 
-                      ? 'ESCÁNER FÍSICO CONECTADO Y ACTIVO' 
-                      : 'ESCÁNER LISTO / MODO WEDGE ACTIVO'}
+                    : isJowvdyDetected
+                      ? 'ESCÁNER JOWVDY CONECTADO Y ACTIVO'
+                      : isHardwareScannerConnected 
+                        ? 'ESCÁNER FÍSICO CONECTADO Y ACTIVO' 
+                        : 'ESCÁNER LISTO / MODO WEDGE ACTIVO'}
                 </span>
               </span>
 
+              {/* JOWVDY Specific Badge */}
+              {isJowvdyDetected && (
+                <span 
+                  className="text-[11px] font-black px-3 py-0.5 rounded-lg bg-emerald-500/20 text-emerald-300 border border-emerald-500/50 flex items-center space-x-1.5 shadow-[0_0_15px_rgba(16,185,129,0.3)] animate-pulse"
+                  title={jowvdyDetails ? `Dispositivo: ${jowvdyDetails.model} | S/N: ${jowvdyDetails.serialNumber} | Estado: ${jowvdyDetails.status}` : 'Escáner JOWVDY USB'}
+                >
+                  <Zap size={12} className="text-emerald-400" />
+                  <span>JOWVDY Barcode USB (VID: 0218 / PID: 0210)</span>
+                </span>
+              )}
+
               {/* Detected Device Model Pill */}
-              <span className="text-[11px] font-bold px-2.5 py-0.5 rounded-lg bg-indigo-500/15 text-indigo-300 border border-indigo-500/30 flex items-center space-x-1">
-                <Usb size={12} className="text-cyan-400" />
-                <span>{detectedScannerName}</span>
-              </span>
+              {!isJowvdyDetected && (
+                <span className="text-[11px] font-bold px-2.5 py-0.5 rounded-lg bg-indigo-500/15 text-indigo-300 border border-indigo-500/30 flex items-center space-x-1">
+                  <Usb size={12} className="text-cyan-400" />
+                  <span>{detectedScannerName}</span>
+                </span>
+              )}
 
               {/* ZKTeco Specific Device Pill */}
-              {isZktecoDetected && (
+              {isZktecoDetected && !isJowvdyDetected && (
                 <span className="text-[11px] font-bold px-2.5 py-0.5 rounded-lg bg-purple-500/15 text-purple-300 border border-purple-500/30 flex items-center space-x-1">
                   <Award size={12} />
                   <span>Protocolo ZKTeco Verificado</span>
@@ -603,7 +620,7 @@ export default function BarcodeScannerHub({ onScanCompleted, className = '' }: B
             </div>
 
             <p className="text-xs text-gray-300">
-              Escanea credenciales con tu <strong className="text-white">lector ZKTeco o escáner USB</strong> en cualquier momento. Si la matrícula no está registrada, se solicitará <strong className="text-cyan-400">autenticación obligatoria</strong> de <strong className="text-emerald-400">Docente</strong>, <strong className="text-amber-400">Administrador</strong> o <strong className="text-cyan-400">Encargado de Orden</strong> para autorizar y dar de alta al alumno.
+              Escanea credenciales con tu <strong className="text-emerald-300">{isJowvdyDetected ? 'lector JOWVDY USB' : 'lector de códigos de barras'}</strong> en cualquier momento. Si la matrícula no está registrada, se solicitará <strong className="text-cyan-400">autenticación obligatoria</strong> de <strong className="text-emerald-400">Docente</strong>, <strong className="text-amber-400">Administrador</strong> o <strong className="text-cyan-400">Encargado de Orden</strong> para autorizar y dar de alta al alumno.
             </p>
           </div>
 

@@ -176,7 +176,9 @@ export function useBarcodeScanner({
   const [isReceivingSignal, setIsReceivingSignal] = useState<boolean>(false);
   const [isHardwareScannerConnected, setIsHardwareScannerConnected] = useState<boolean>(false);
   const [isZktecoDetected, setIsZktecoDetected] = useState<boolean>(false);
-  const [detectedScannerName, setDetectedScannerName] = useState<string>('Lector ZKTeco / USB Barcode Listo');
+  const [isJowvdyDetected, setIsJowvdyDetected] = useState<boolean>(false);
+  const [jowvdyDetails, setJowvdyDetails] = useState<any>(null);
+  const [detectedScannerName, setDetectedScannerName] = useState<string>('Lector JOWVDY / USB Barcode Listo');
   const [connectedHidDevices, setConnectedHidDevices] = useState<string[]>([]);
   const [hasWebHidSupport, setHasWebHidSupport] = useState<boolean>(false);
   const [lastHardwareEvent, setLastHardwareEvent] = useState<{ type: 'connected' | 'disconnected'; name: string; timestamp: number } | null>(null);
@@ -193,9 +195,13 @@ export function useBarcodeScanner({
     onScanRef.current = onScan;
   }, [onScan]);
 
-  const identifyDeviceName = (d: any): { name: string; isZk: boolean } => {
+  const identifyDeviceName = (d: any): { name: string; isZk: boolean; isJow: boolean } => {
     const prod = (d?.productName || '').trim();
     const vid = d?.vendorId;
+    const isJow = prod.toLowerCase().includes('jowvdy') || 
+                  prod.toLowerCase().includes('jow') || 
+                  vid === 0x0218 || 
+                  vid === 536;
     const isZk = prod.toLowerCase().includes('zk') || 
                  prod.toLowerCase().includes('teco') || 
                  vid === 0x1b55 || 
@@ -204,14 +210,15 @@ export function useBarcodeScanner({
 
     let friendly = prod;
     if (!friendly) {
-      if (vid === 0x0416) friendly = 'Lector ZKTeco Láser USB (0416:5020)';
+      if (isJow || vid === 0x0218) friendly = 'Lector JOWVDY Barcode USB (0218:0210)';
+      else if (vid === 0x0416) friendly = 'Lector ZKTeco Láser USB (0416:5020)';
       else if (isZk) friendly = 'Lector ZKTeco Láser USB';
       else if (vid === 0x0c2e) friendly = 'Lector Honeywell Barcode';
       else if (vid === 0x05e0) friendly = 'Lector Zebra / Symbol USB';
       else if (vid === 0x05f9) friendly = 'Lector Datalogic Scanner';
       else friendly = vid ? `Lector Código de Barras USB (${vid.toString(16)})` : 'Escáner Código de Barras USB';
     }
-    return { name: friendly, isZk };
+    return { name: friendly, isZk, isJow };
   };
 
   const refreshConnectedHidDevices = useCallback(async () => {
@@ -219,15 +226,41 @@ export function useBarcodeScanner({
       if (typeof window === 'undefined') return;
       const deviceNames: string[] = [];
       let foundZk = false;
+      let foundJow = false;
       let anyScanner = false;
+
+      // 0. Auto-query local hardware scanner API (Windows PnP / CIM query)
+      try {
+        const res = await fetch('/api/hardware-scanner');
+        if (res.ok) {
+          const apiData = await res.json();
+          if (apiData?.connected && apiData.scanner) {
+            anyScanner = true;
+            if (apiData.scanner.brand === 'JOWVDY' || apiData.scanner.vendorId === '0218') {
+              foundJow = true;
+              setIsJowvdyDetected(true);
+              setJowvdyDetails(apiData.scanner);
+            }
+            const sName = apiData.scanner.model || 'Lector JOWVDY Barcode USB';
+            if (!deviceNames.includes(sName)) {
+              deviceNames.unshift(sName);
+            }
+          }
+        }
+      } catch (err) {
+        // Fallback silently if offline
+      }
 
       // 1. Check WebHID devices
       if ('hid' in navigator) {
         const hidDevices = await (navigator as any).hid.getDevices();
         for (const d of hidDevices) {
-          const { name, isZk } = identifyDeviceName(d);
-          deviceNames.push(name);
+          const { name, isZk, isJow } = identifyDeviceName(d);
+          if (!deviceNames.includes(name)) {
+            deviceNames.push(name);
+          }
           if (isZk) foundZk = true;
+          if (isJow) foundJow = true;
           anyScanner = true;
         }
       }
@@ -237,11 +270,12 @@ export function useBarcodeScanner({
         try {
           const usbDevices = await (navigator as any).usb.getDevices();
           usbDevices.forEach((d: any) => {
-            const { name, isZk } = identifyDeviceName(d);
+            const { name, isZk, isJow } = identifyDeviceName(d);
             if (!deviceNames.includes(name)) {
               deviceNames.push(name);
             }
             if (isZk) foundZk = true;
+            if (isJow) foundJow = true;
             anyScanner = true;
           });
         } catch {}
@@ -251,14 +285,18 @@ export function useBarcodeScanner({
       const hasStoredHardware = localStorage.getItem('dojoia_hardware_scanner_detected') === 'true';
       if (hasStoredHardware) {
         anyScanner = true;
-        const storedName = localStorage.getItem('dojoia_hardware_scanner_name') || 'Lector ZKTeco / USB Barcode Conectado';
+        const storedName = localStorage.getItem('dojoia_hardware_scanner_name') || 'Lector JOWVDY / USB Barcode Conectado';
         if (!deviceNames.includes(storedName)) {
           deviceNames.push(storedName);
+        }
+        if (storedName.toLowerCase().includes('jowvdy') || storedName.toLowerCase().includes('0218')) {
+          foundJow = true;
         }
       }
 
       setConnectedHidDevices(deviceNames);
       if (foundZk) setIsZktecoDetected(true);
+      if (foundJow) setIsJowvdyDetected(true);
       if (anyScanner) {
         setIsHardwareScannerConnected(true);
         if (deviceNames.length > 0) {
@@ -610,6 +648,8 @@ export function useBarcodeScanner({
     isReceivingSignal,
     isHardwareScannerConnected,
     isZktecoDetected,
+    isJowvdyDetected,
+    jowvdyDetails,
     detectedScannerName,
     connectedHidDevices,
     hasWebHidSupport,

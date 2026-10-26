@@ -404,6 +404,8 @@ export default function InstitutionalScanner() {
     isReceivingSignal,
     isHardwareScannerConnected,
     isZktecoDetected,
+    isJowvdyDetected,
+    jowvdyDetails,
     detectedScannerName,
     connectedHidDevices,
     hasWebHidSupport,
@@ -606,19 +608,34 @@ export default function InstitutionalScanner() {
                   <span>
                     {isReceivingSignal 
                       ? '⚡ LEYENDO CÓDIGO DE CREDENCIAL...' 
-                      : isHardwareScannerConnected 
-                        ? 'ESCÁNER FÍSICO CONECTADO Y ACTIVO' 
-                        : 'ESCÁNER LISTO / MODO WEDGE ACTIVO'}
+                      : isJowvdyDetected
+                        ? 'ESCÁNER JOWVDY CONECTADO Y ACTIVO'
+                        : isHardwareScannerConnected 
+                          ? 'ESCÁNER FÍSICO CONECTADO Y ACTIVO' 
+                          : 'ESCÁNER LISTO / MODO WEDGE ACTIVO'}
                   </span>
                 </span>
 
-                {/* Device Model Pill */}
-                <span className="text-[11px] font-bold px-2.5 py-0.5 rounded-lg bg-indigo-500/15 text-indigo-300 border border-indigo-500/30 flex items-center space-x-1">
-                  <Usb size={12} className="text-cyan-400" />
-                  <span>{detectedScannerName}</span>
-                </span>
+                {/* JOWVDY Specific Badge */}
+                {isJowvdyDetected && (
+                  <span 
+                    className="text-[11px] font-black px-3 py-0.5 rounded-lg bg-emerald-500/20 text-emerald-300 border border-emerald-500/50 flex items-center space-x-1.5 shadow-[0_0_15px_rgba(16,185,129,0.3)] animate-pulse"
+                    title={jowvdyDetails ? `Dispositivo: ${jowvdyDetails.model} | S/N: ${jowvdyDetails.serialNumber}` : 'Escáner JOWVDY USB'}
+                  >
+                    <Zap size={12} className="text-emerald-400" />
+                    <span>JOWVDY Barcode USB (VID: 0218 / PID: 0210)</span>
+                  </span>
+                )}
 
-                {isZktecoDetected && (
+                {/* Device Model Pill */}
+                {!isJowvdyDetected && (
+                  <span className="text-[11px] font-bold px-2.5 py-0.5 rounded-lg bg-indigo-500/15 text-indigo-300 border border-indigo-500/30 flex items-center space-x-1">
+                    <Usb size={12} className="text-cyan-400" />
+                    <span>{detectedScannerName}</span>
+                  </span>
+                )}
+
+                {isZktecoDetected && !isJowvdyDetected && (
                   <span className="text-[11px] font-bold px-2.5 py-0.5 rounded-lg bg-purple-500/15 text-purple-300 border border-purple-500/30 flex items-center space-x-1">
                     <Award size={12} />
                     <span>ZKTeco</span>
