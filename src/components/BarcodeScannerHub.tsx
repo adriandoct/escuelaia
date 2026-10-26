@@ -42,7 +42,7 @@ import {
 } from 'lucide-react';
 import confetti from 'canvas-confetti';
 import { db, Alumno, Asistencia } from '@/lib/db';
-import { sendWhatsAppNotification } from '@/lib/whatsapp';
+import { sendWhatsAppNotification, getWhatsAppSendUrl } from '@/lib/whatsapp';
 import { useBarcodeScanner, playAudioFeedback, cleanBarcode } from '@/lib/useBarcodeScanner';
 import { useAuth } from '@/lib/auth';
 
@@ -1457,12 +1457,21 @@ export default function BarcodeScannerHub({ onScanCompleted, className = '' }: B
                     )}
 
                     {activeScan.student.telefono && activeScan.student.telefono !== '+525500000000' && (
-                      <div className="pt-2 border-t border-white/5 flex items-center justify-between text-[11px] text-emerald-400 font-semibold">
+                      <div className="pt-2 border-t border-white/5 flex flex-wrap items-center justify-between gap-2 text-[11px] text-emerald-400 font-semibold">
                         <span className="flex items-center space-x-1.5">
                           <Smartphone size={13} />
-                          <span>WhatsApp enviado a {activeScan.student.tutor}</span>
+                          <span>WhatsApp notificado: {activeScan.student.telefono}</span>
                         </span>
-                        <Check size={14} />
+                        <a
+                          href={getWhatsAppSendUrl(activeScan.student, activeScan.asistencia)}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="inline-flex items-center space-x-1 px-2.5 py-1 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-[11px] shadow-sm shadow-emerald-900/40 transition-all hover:scale-105 cursor-pointer"
+                          title="Abrir mensaje con formato oficial en WhatsApp"
+                        >
+                          <Smartphone size={12} />
+                          <span>📲 Abrir en WhatsApp</span>
+                        </a>
                       </div>
                     )}
                   </div>

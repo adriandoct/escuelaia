@@ -14,22 +14,30 @@ export interface WhatsAppLog {
   timestamp: string;
 }
 
-// Format the specific messages required by the user
+// Format the specific messages required by the user for Plantel Urbivillas
 export const formatWhatsAppMessage = (alumno: Alumno, log: Asistencia): string => {
   const isEntrada = log.tipo === 'entrada';
-  const estadoEmoji = isEntrada ? '✅ ENTRÓ' : '✅ SALIÓ';
-  const preposicion = isEntrada ? 'a la' : 'de la';
   
-  // Format Date to: "27 Mayo 2026"
+  // Condicional de ENTRADA o SALIDA en MAYÚSCULAS y en NEGRITAS (*...*)
+  const estadoPrincipal = isEntrada
+    ? '*EL ALUMNO ENTRÓ AL PLANTEL*'
+    : '*EL ALUMNO YA SALIÓ DEL PLANTEL*';
+
+  const estadoBadge = isEntrada ? '🟢 INGRESO REGISTRADO' : '🔴 SALIDA REGISTRADA';
+
+  // Format Date to: "26 de Octubre de 2026"
   const meses = [
     'Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio',
     'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'
   ];
-  const dateObj = new Date(log.fecha + 'T00:00:00');
-  const dia = dateObj.getDate();
-  const mes = meses[dateObj.getMonth()];
-  const anio = dateObj.getFullYear();
-  const fechaFormateada = `${dia} ${mes} ${anio}`;
+  let fechaFormateada = log.fecha;
+  try {
+    const dateObj = new Date(log.fecha + 'T00:00:00');
+    const dia = dateObj.getDate();
+    const mes = meses[dateObj.getMonth()];
+    const anio = dateObj.getFullYear();
+    fechaFormateada = `${dia} de ${mes} de ${anio}`;
+  } catch (e) {}
 
   // Format Time to: "7:12 AM" or similar
   let horaFormateada = log.hora;
@@ -39,25 +47,43 @@ export const formatWhatsAppMessage = (alumno: Alumno, log: Asistencia): string =
     const ampm = hours >= 12 ? 'PM' : 'AM';
     const displayHours = hours % 12 || 12;
     horaFormateada = `${displayHours}:${m} ${ampm}`;
-  } catch (e) {
-    // Fallback if formatting fails
-  }
+  } catch (e) {}
 
   const nombreCompleto = `${alumno.nombre} ${alumno.apellido_paterno} ${alumno.apellido_materno || ''}`.replace(/\s+/g, ' ').trim();
+  const tutorSaludo = alumno.tutor ? alumno.tutor : 'Padre / Madre de Familia o Tutor';
+  const qrCodeText = alumno.qr_code || alumno.matricula;
 
-  return `📚 Escuela DOJOIA
+  return `🏫 *CECYTE BC - PLANTEL URBIVILLAS*
+🛡️ *SISTEMA DE ASISTENCIA Y CONTROL ESCOLAR*
 
-Hola Sr./Sra. ${alumno.tutor}.
+Estimado(a) *${tutorSaludo}*, le saludamos cordialmente de parte del *PLANTEL URBIVILLAS*.
 
-Le informamos que el alumno:
-👦 ${nombreCompleto}
+Le informamos que:
 
-${estadoEmoji} ${preposicion} escuela.
+${estadoPrincipal}
+(${estadoBadge})
 
-🕒 Hora: ${horaFormateada}
-📅 Fecha: ${fechaFormateada}
+📋 *DATOS DEL ALUMNO:*
+👤 *Nombre:* ${nombreCompleto}
+🏷️ *Grupo:* ${alumno.grado} "${alumno.grupo}"
+🆔 *Matrícula:* ${alumno.matricula}
+📲 *Código QR:* ${qrCodeText}
 
-Gracias por utilizar DOJOIA ACCESS.`;
+⏰ *Hora:* ${horaFormateada}
+📅 *Fecha:* ${fechaFormateada}
+📍 *Punto de control:* ${log.ubicacion || 'Acceso Principal Plantel Urbivillas'}
+
+_Mensaje automático del Sistema de Seguridad y Asistencia de CECYTE BC Plantel Urbivillas._`;
+};
+
+// Generate direct WhatsApp Web / API click link
+export const getWhatsAppSendUrl = (alumno: Alumno, log: Asistencia): string => {
+  const message = formatWhatsAppMessage(alumno, log);
+  let cleanPhone = (alumno.telefono || '').replace(/[\s\-\(\)\+]/g, '');
+  if (!cleanPhone.startsWith('52') && cleanPhone.length === 10) {
+    cleanPhone = `52${cleanPhone}`;
+  }
+  return `https://api.whatsapp.com/send?phone=${cleanPhone}&text=${encodeURIComponent(message)}`;
 };
 
 // Send WhatsApp trigger (Mock + Live support)

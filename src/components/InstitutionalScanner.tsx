@@ -42,7 +42,7 @@ import {
 } from 'lucide-react';
 import confetti from 'canvas-confetti';
 import { db, Alumno, Asistencia } from '@/lib/db';
-import { sendWhatsAppNotification } from '@/lib/whatsapp';
+import { sendWhatsAppNotification, getWhatsAppSendUrl } from '@/lib/whatsapp';
 import { useAuth, Role } from '@/lib/auth';
 import { useBarcodeScanner, playAudioFeedback } from '@/lib/useBarcodeScanner';
 
@@ -1037,11 +1037,25 @@ export default function InstitutionalScanner() {
                   </div>
                 </div>
 
-                {/* WhatsApp Status Pill */}
+                {/* WhatsApp Status Pill & Quick Open */}
                 {activeScan.student?.telefono && activeScan.student.telefono !== '+525500000000' && (
-                  <div className="px-4 py-2 rounded-2xl bg-emerald-500/10 border border-emerald-500/30 text-emerald-300 text-xs flex items-center space-x-2">
-                    <Smartphone size={16} />
-                    <span>WhatsApp enviado a {activeScan.student.tutor}</span>
+                  <div className="flex flex-wrap items-center gap-2">
+                    <div className="px-3.5 py-1.5 rounded-xl bg-emerald-500/10 border border-emerald-500/30 text-emerald-300 text-xs flex items-center space-x-2">
+                      <Smartphone size={16} />
+                      <span>WhatsApp enviado: {activeScan.student.telefono}</span>
+                    </div>
+                    {activeScan.asistencia && (
+                      <a
+                        href={getWhatsAppSendUrl(activeScan.student, activeScan.asistencia)}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="inline-flex items-center space-x-1.5 px-3 py-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs shadow-md shadow-emerald-900/40 transition-all hover:scale-105 cursor-pointer"
+                        title="Abrir o enviar mensaje con formato oficial en WhatsApp"
+                      >
+                        <Smartphone size={14} />
+                        <span>📲 Abrir en WhatsApp</span>
+                      </a>
+                    )}
                   </div>
                 )}
 
