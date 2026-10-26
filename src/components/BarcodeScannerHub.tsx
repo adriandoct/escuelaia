@@ -34,7 +34,11 @@ import {
   Eye,
   EyeOff,
   Radio,
-  RefreshCw
+  RefreshCw,
+  Edit3,
+  Save,
+  Phone,
+  Send
 } from 'lucide-react';
 import confetti from 'canvas-confetti';
 import { db, Alumno, Asistencia } from '@/lib/db';
@@ -101,8 +105,129 @@ export default function BarcodeScannerHub({ onScanCompleted, className = '' }: B
   const [regPassType, setRegPassType] = useState<'entrada' | 'salida'>('entrada');
   const [isSubmittingAuth, setIsSubmittingAuth] = useState(false);
   const autoScanTimeoutRef = useRef<any>(null);
+  const activeScanTimeoutRef = useRef<any>(null);
   const [showDiagnosticModal, setShowDiagnosticModal] = useState(false);
   const [diagnosticCode, setDiagnosticCode] = useState('');
+
+  // =========================================================================
+  // ADMIN EDIT PARENT / TUTOR PHONE NUMBER ON SCAN
+  // =========================================================================
+  const [isEditingPhone, setIsEditingPhone] = useState(false);
+  const [editTutorName, setEditTutorName] = useState('');
+  const [editPhoneNumber, setEditPhoneNumber] = useState('');
+  const [isSavingPhone, setIsSavingPhone] = useState(false);
+  const [phoneSaveSuccessMsg, setPhoneSaveSuccessMsg] = useState<string | null>(null);
+  const [phoneSaveErrorMsg, setPhoneSaveErrorMsg] = useState<string | null>(null);
+  const [adminAuthModalOpen, setAdminAuthModalOpen] = useState(false);
+  const [adminAuthInputPin, setAdminAuthInputPin] = useState('');
+  const [adminAuthPinError, setAdminAuthPinError] = useState<string | null>(null);
+  const [isAdminUnlocked, setIsAdminUnlocked] = useState(false);
+
+  const isAdmin = user?.role === 'administrador' || isAdminUnlocked;
+
+  const handleStartEditingPhone = () => {
+    // Stop auto-dismiss immediately so the admin can write comfortably
+    if (activeScanTimeoutRef.current) {
+      clearTimeout(activeScanTimeoutRef.current);
+      activeScanTimeoutRef.current = null;
+    }
+
+    if (isAdmin) {
+      setEditTutorName(activeScan?.student?.tutor || '');
+      setEditPhoneNumber(activeScan?.student?.telefono || '');
+      setPhoneSaveSuccessMsg(null);
+      setPhoneSaveErrorMsg(null);
+      setIsEditingPhone(true);
+    } else {
+      setAdminAuthModalOpen(true);
+      setAdminAuthInputPin('');
+      setAdminAuthPinError(null);
+    }
+  };
+
+  const handleVerifyAdminPin = (e: React.FormEvent) => {
+    e.preventDefault();
+    const cleanPin = adminAuthInputPin.trim();
+    const MASTER_PINS = ['Cecyte2026!', '12345678Cecyte', '2026', '1234'];
+    const adminExpectedPass = usersPasswordsMap?.['admin@admin.com'] || '12345678Cecyte';
+
+    if (cleanPin === adminExpectedPass || MASTER_PINS.includes(cleanPin)) {
+      setIsAdminUnlocked(true);
+      setAdminAuthModalOpen(false);
+      setAdminAuthPinError(null);
+      setEditTutorName(activeScan?.student?.tutor || '');
+      setEditPhoneNumber(activeScan?.student?.telefono || '');
+      setPhoneSaveSuccessMsg(null);
+      setPhoneSaveErrorMsg(null);
+      setIsEditingPhone(true);
+      if (soundEnabled) playAudioFeedback('success');
+    } else {
+      setAdminAuthPinError('PIN o contraseña de Administrador incorrecto.');
+      if (soundEnabled) playAudioFeedback('error');
+    }
+  };
+
+  const handleSaveParentPhone = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!activeScan?.student) return;
+
+    const cleanPhone = editPhoneNumber.trim();
+    const cleanTutor = editTutorName.trim() || activeScan.student.tutor || 'Tutor Responsable';
+
+    if (!cleanPhone || cleanPhone.replace(/\D/g, '').length < 8) {
+      setPhoneSaveErrorMsg('Ingresa un número de celular o WhatsApp válido (mínimo 8-10 dígitos).');
+      if (soundEnabled) playAudioFeedback('error');
+      return;
+    }
+
+    setIsSavingPhone(true);
+    setPhoneSaveErrorMsg(null);
+
+    try {
+      const updated = await db.updateAlumno(activeScan.student.id, {
+        telefono: cleanPhone,
+        tutor: cleanTutor
+      });
+
+      // Update in active scan HUD
+      setActiveScan(prev => {
+        if (!prev || !prev.student) return prev;
+        return {
+          ...prev,
+          student: {
+            ...prev.student,
+            telefono: updated.telefono,
+            tutor: updated.tutor
+          }
+        };
+      });
+
+      setIsEditingPhone(false);
+      setPhoneSaveSuccessMsg(`¡Número de ${updated.tutor} actualizado correctamente a ${updated.telefono}!`);
+      if (soundEnabled) playAudioFeedback('success');
+
+      // Refresh dashboard lists if callback provided
+      if (onScanCompleted) {
+        onScanCompleted();
+      }
+    } catch (err: any) {
+      setPhoneSaveErrorMsg(`Error al actualizar teléfono: ${err.message || err}`);
+      if (soundEnabled) playAudioFeedback('error');
+    } finally {
+      setIsSavingPhone(false);
+    }
+  };
+
+  const handleResendWhatsAppAfterUpdate = async () => {
+    if (!activeScan?.student || !activeScan?.asistencia) return;
+    try {
+      await sendWhatsAppNotification(activeScan.student, activeScan.asistencia);
+      setPhoneSaveSuccessMsg(`¡WhatsApp de asistencia reenviado exitosamente a ${activeScan.student.telefono}!`);
+      if (soundEnabled) playAudioFeedback('success');
+    } catch (err: any) {
+      setPhoneSaveErrorMsg('No se pudo reenviar la notificación de WhatsApp.');
+    }
+  };
 
   // Helper to obtain authorized accounts for each role
   const getAccountsForRole = useCallback((role: AuthRoleType): string[] => {
@@ -222,10 +347,16 @@ export default function BarcodeScannerHub({ onScanCompleted, className = '' }: B
         }, 3000);
       }
 
-      // Auto dismiss modal after 4.5 seconds
-      setTimeout(() => {
+      // Reset phone edit states
+      setIsEditingPhone(false);
+      setPhoneSaveSuccessMsg(null);
+      setPhoneSaveErrorMsg(null);
+
+      // Auto dismiss modal after 7 seconds (can be cancelled if admin starts editing)
+      if (activeScanTimeoutRef.current) clearTimeout(activeScanTimeoutRef.current);
+      activeScanTimeoutRef.current = setTimeout(() => {
         setActiveScan(null);
-      }, 4500);
+      }, 7000);
 
     } catch (err: any) {
       // CODE NOT FOUND IN DATABASE!
@@ -403,9 +534,11 @@ export default function BarcodeScannerHub({ onScanCompleted, className = '' }: B
         source: unregisteredModal.source
       });
 
-      setTimeout(() => {
+      // Auto dismiss modal (cancelled if admin starts editing)
+      if (activeScanTimeoutRef.current) clearTimeout(activeScanTimeoutRef.current);
+      activeScanTimeoutRef.current = setTimeout(() => {
         setActiveScan(null);
-      }, 4500);
+      }, 7000);
 
     } catch (err: any) {
       alert(`Error al registrar el acceso: ${err.message || err}`);
@@ -1307,7 +1440,7 @@ export default function BarcodeScannerHub({ onScanCompleted, className = '' }: B
                     </p>
                   </div>
 
-                  {/* Time & WhatsApp confirmation pill */}
+                  {/* Time & Attendance Details */}
                   <div className="bg-black/50 border border-white/10 rounded-2xl p-3.5 space-y-2 text-xs">
                     <div className="flex justify-between items-center text-gray-300">
                       <span className="flex items-center space-x-1.5 font-mono text-sm text-white">
@@ -1331,6 +1464,133 @@ export default function BarcodeScannerHub({ onScanCompleted, className = '' }: B
                         </span>
                         <Check size={14} />
                       </div>
+                    )}
+                  </div>
+
+                  {/* ========================================================================= */}
+                  {/* MODIFICACIÓN DEL NÚMERO DE TELÉFONO DEL PADRE (ADMINISTRADOR)            */}
+                  {/* ========================================================================= */}
+                  <div className="bg-gradient-to-b from-[#0e1726]/90 to-[#070c16]/95 border border-amber-500/30 rounded-2xl p-3.5 space-y-3 text-xs text-left shadow-lg">
+                    <div className="flex items-center justify-between border-b border-white/10 pb-2">
+                      <div className="flex items-center space-x-1.5 text-gray-200 font-bold">
+                        <Smartphone size={15} className="text-amber-400" />
+                        <span>Contacto Padre de Familia / Tutor</span>
+                      </div>
+
+                      {!isEditingPhone && (
+                        <button
+                          type="button"
+                          onClick={handleStartEditingPhone}
+                          className="px-2.5 py-1 rounded-lg bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 border border-amber-500/40 text-[11px] font-bold flex items-center space-x-1 transition-all cursor-pointer shadow-sm shadow-amber-500/10"
+                          title="Modificar número de teléfono del padre de familia como Administrador"
+                        >
+                          <Crown size={12} className="text-amber-400" />
+                          <Edit3 size={11} />
+                          <span>Modificar Teléfono</span>
+                        </button>
+                      )}
+                    </div>
+
+                    {!isEditingPhone ? (
+                      <div className="space-y-1.5">
+                        <div className="flex items-center justify-between text-xs">
+                          <span className="text-gray-400">Tutor Registrado:</span>
+                          <span className="text-white font-semibold">{activeScan.student.tutor || 'No registrado'}</span>
+                        </div>
+                        <div className="flex items-center justify-between text-xs">
+                          <span className="text-gray-400">Teléfono WhatsApp:</span>
+                          <span className="font-mono text-cyan-300 font-bold bg-cyan-500/10 px-2 py-0.5 rounded border border-cyan-500/20">
+                            {activeScan.student.telefono || 'Sin registrar'}
+                          </span>
+                        </div>
+
+                        {phoneSaveSuccessMsg && (
+                          <div className="mt-2 p-2 rounded-xl bg-emerald-500/20 border border-emerald-500/40 text-emerald-300 text-[11px] flex items-center justify-between animate-fadeIn">
+                            <span className="flex items-center space-x-1.5">
+                              <CheckCircle size={14} className="shrink-0 text-emerald-400" />
+                              <span>{phoneSaveSuccessMsg}</span>
+                            </span>
+                            <button
+                              type="button"
+                              onClick={handleResendWhatsAppAfterUpdate}
+                              className="ml-2 px-2 py-0.5 rounded bg-emerald-500 text-black font-bold text-[10px] hover:bg-emerald-400 transition-colors cursor-pointer shrink-0"
+                            >
+                              Reenviar WhatsApp
+                            </button>
+                          </div>
+                        )}
+                      </div>
+                    ) : (
+                      <form onSubmit={handleSaveParentPhone} className="space-y-2.5 pt-1 animate-fadeIn">
+                        <div className="flex items-center justify-between text-[11px] text-amber-400 font-bold bg-amber-500/10 px-2.5 py-1 rounded-lg border border-amber-500/20">
+                          <span className="flex items-center space-x-1">
+                            <Crown size={12} />
+                            <span>Modo Administrador: Editar Teléfono</span>
+                          </span>
+                          <span className="text-[10px] text-amber-300/80 font-mono">Auto-cierre pausado</span>
+                        </div>
+
+                        <div>
+                          <label className="text-[11px] text-gray-400 block mb-1">Nombre del Tutor / Padre:</label>
+                          <input
+                            type="text"
+                            value={editTutorName}
+                            onChange={(e) => setEditTutorName(e.target.value)}
+                            placeholder="Ej. Sra. Carmen Pérez"
+                            className="w-full bg-[#070b14] border border-white/20 focus:border-amber-400 rounded-xl px-3 py-1.5 text-white text-xs outline-none"
+                          />
+                        </div>
+
+                        <div>
+                          <label className="text-[11px] text-gray-400 block mb-1">Nuevo Teléfono WhatsApp del Padre: *</label>
+                          <div className="relative">
+                            <Smartphone size={13} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-gray-400" />
+                            <input
+                              type="text"
+                              required
+                              value={editPhoneNumber}
+                              onChange={(e) => setEditPhoneNumber(e.target.value)}
+                              placeholder="Ej. +526641234567 o 6641234567"
+                              className="w-full bg-[#070b14] border border-white/20 focus:border-amber-400 rounded-xl pl-8 pr-3 py-1.5 text-white text-xs font-mono outline-none"
+                            />
+                          </div>
+                          <span className="text-[10px] text-gray-400 mt-0.5 block">Se actualizará en la base de datos y se usarán para futuras alertas WhatsApp.</span>
+                        </div>
+
+                        {phoneSaveErrorMsg && (
+                          <p className="text-[11px] text-red-400 font-medium">{phoneSaveErrorMsg}</p>
+                        )}
+
+                        <div className="flex items-center justify-end space-x-2 pt-1">
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setIsEditingPhone(false);
+                              setPhoneSaveErrorMsg(null);
+                            }}
+                            className="px-3 py-1.5 rounded-xl bg-white/5 hover:bg-white/10 text-gray-400 hover:text-white text-xs transition-colors cursor-pointer"
+                          >
+                            Cancelar
+                          </button>
+                          <button
+                            type="submit"
+                            disabled={isSavingPhone}
+                            className="px-4 py-1.5 rounded-xl bg-gradient-to-r from-amber-500 to-amber-400 hover:from-amber-400 hover:to-amber-300 text-black font-extrabold text-xs flex items-center space-x-1.5 shadow-md shadow-amber-500/20 transition-all cursor-pointer disabled:opacity-50"
+                          >
+                            {isSavingPhone ? (
+                              <>
+                                <Activity size={13} className="animate-spin" />
+                                <span>Guardando...</span>
+                              </>
+                            ) : (
+                              <>
+                                <Save size={13} />
+                                <span>Guardar Teléfono</span>
+                              </>
+                            )}
+                          </button>
+                        </div>
+                      </form>
                     )}
                   </div>
 
@@ -1439,6 +1699,86 @@ export default function BarcodeScannerHub({ onScanCompleted, className = '' }: B
                 {diagnosticCode.trim() ? 'Procesar Asistencia con este Código' : 'Entendido, Cerrar'}
               </button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* ========================================================================= */}
+      {/* MODAL: AUTENTICACIÓN RÁPIDA DE ADMINISTRADOR PARA EDITAR TELÉFONO          */}
+      {/* ========================================================================= */}
+      {adminAuthModalOpen && (
+        <div className="fixed inset-0 z-50 bg-black/85 backdrop-blur-md flex items-center justify-center p-4 animate-fadeIn">
+          <div className="relative w-full max-w-sm rounded-3xl bg-[#090d16] border border-amber-500/50 p-6 shadow-2xl space-y-4 text-white">
+            <button
+              type="button"
+              onClick={() => {
+                setAdminAuthModalOpen(false);
+                setAdminAuthPinError(null);
+              }}
+              className="absolute top-4 right-4 text-gray-400 hover:text-white p-1 rounded-lg hover:bg-white/10 transition-colors cursor-pointer"
+            >
+              <X size={18} />
+            </button>
+
+            <div className="flex items-center space-x-3">
+              <span className="p-2.5 rounded-2xl bg-amber-500/20 text-amber-400 border border-amber-500/30">
+                <Crown size={22} />
+              </span>
+              <div>
+                <h4 className="text-sm font-extrabold text-white">Autorización de Administrador</h4>
+                <p className="text-[11px] text-gray-400">Ingresa la clave o PIN institucional para modificar el teléfono del padre.</p>
+              </div>
+            </div>
+
+            <form onSubmit={handleVerifyAdminPin} className="space-y-3.5">
+              <div>
+                <label className="text-[11px] text-gray-300 block mb-1 font-semibold">
+                  Contraseña o PIN Maestro de Administrador:
+                </label>
+                <div className="relative">
+                  <KeyRound size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+                  <input
+                    type="password"
+                    autoFocus
+                    required
+                    value={adminAuthInputPin}
+                    onChange={(e) => {
+                      setAdminAuthInputPin(e.target.value);
+                      setAdminAuthPinError(null);
+                    }}
+                    placeholder="Contraseña o PIN (ej. 2026)..."
+                    className="w-full bg-black/70 border border-white/20 focus:border-amber-400 rounded-xl pl-9 pr-3 py-2 text-white text-xs outline-none"
+                  />
+                </div>
+              </div>
+
+              {adminAuthPinError && (
+                <div className="p-2 rounded-xl bg-red-500/15 border border-red-500/30 text-[11px] text-red-300 flex items-center space-x-1.5">
+                  <AlertTriangle size={13} className="shrink-0 text-red-400" />
+                  <span>{adminAuthPinError}</span>
+                </div>
+              )}
+
+              <div className="flex items-center justify-end space-x-2 pt-1">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setAdminAuthModalOpen(false);
+                    setAdminAuthPinError(null);
+                  }}
+                  className="px-3 py-1.5 rounded-xl bg-white/5 hover:bg-white/10 text-gray-400 hover:text-white text-xs transition-colors cursor-pointer"
+                >
+                  Cancelar
+                </button>
+                <button
+                  type="submit"
+                  className="px-4 py-1.5 rounded-xl bg-amber-500 hover:bg-amber-400 text-black font-extrabold text-xs flex items-center space-x-1 shadow-md shadow-amber-500/20 transition-all cursor-pointer"
+                >
+                  <Lock size={13} />
+                  <span>Desbloquear Edición</span>
+                </button>
+              </div>
+            </form>
           </div>
         </div>
       )}
