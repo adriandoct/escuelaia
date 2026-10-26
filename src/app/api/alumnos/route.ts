@@ -118,7 +118,7 @@ export async function PUT(req: Request) {
     if (!id) return NextResponse.json({ error: 'Missing student ID' }, { status: 400 });
 
     const existing = readLocalData();
-    const idx = existing.findIndex(s => s.id === id);
+    const idx = existing.findIndex(s => s.id === id || s.matricula === id || (updates.matricula && s.matricula === updates.matricula));
     if (idx === -1) return NextResponse.json({ error: 'Student not found' }, { status: 400 });
 
     existing[idx] = { ...existing[idx], ...updates };

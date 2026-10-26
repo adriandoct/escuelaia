@@ -606,7 +606,7 @@ export const db = {
   updateAlumno: async (id: string, updates: Partial<Omit<Alumno, 'id' | 'created_at'>>): Promise<Alumno> => {
     initLocalStorage();
     const list = await db.getAlumnos();
-    const idx = list.findIndex(a => a.id === id);
+    const idx = list.findIndex(a => a.id === id || a.matricula === id || (updates.matricula && a.matricula === updates.matricula));
     if (idx === -1) throw new Error('Student not found');
     const updated: Alumno = { ...list[idx], ...updates };
     list[idx] = updated;

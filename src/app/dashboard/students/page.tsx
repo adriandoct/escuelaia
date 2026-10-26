@@ -7,7 +7,8 @@ import { db, Alumno } from '@/lib/db';
 import { useAuth } from '@/lib/auth';
 import { 
   Search, Plus, Printer, Trash2, X, User, Phone, Shield, Lock, FileSpreadsheet,
-  AlertTriangle, ShieldAlert, Sparkles, CheckCircle2, Download, Upload, ShieldCheck
+  AlertTriangle, ShieldAlert, Sparkles, CheckCircle2, Download, Upload, ShieldCheck,
+  Edit3, Check
 } from 'lucide-react';
 import BulkUploadModal from '@/components/BulkUploadModal';
 
@@ -21,6 +22,12 @@ export default function StudentsPage() {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isBulkModalOpen, setIsBulkModalOpen] = useState(false);
   const [selectedStudent, setSelectedStudent] = useState<Alumno | null>(null);
+
+  // Quick WhatsApp & Tutor Edit State
+  const [isEditingContact, setIsEditingContact] = useState(false);
+  const [editPhoneValue, setEditPhoneValue] = useState('');
+  const [editTutorValue, setEditTutorValue] = useState('');
+  const [isSavingPhone, setIsSavingPhone] = useState(false);
 
   // Superadmin Clear Database State
   const [isClearDbModalOpen, setIsClearDbModalOpen] = useState(false);
@@ -46,12 +53,62 @@ export default function StudentsPage() {
     loadStudents();
   }, []);
 
+  // Sync edit form whenever selected student changes
+  useEffect(() => {
+    if (selectedStudent) {
+      setEditPhoneValue(selectedStudent.telefono || '');
+      setEditTutorValue(selectedStudent.tutor || '');
+      setIsEditingContact(false);
+    }
+  }, [selectedStudent?.id]);
+
   const loadStudents = async () => {
     try {
       const data = await db.getAlumnos();
       setStudents(data);
     } catch (e) {
       console.error('Error loading students:', e);
+    }
+  };
+
+  const handleStartEditContact = (targetStudent?: Alumno) => {
+    const st = targetStudent || selectedStudent;
+    if (!st) return;
+    if (targetStudent && (!selectedStudent || selectedStudent.id !== targetStudent.id)) {
+      setSelectedStudent(targetStudent);
+    }
+    setEditPhoneValue(st.telefono || '');
+    setEditTutorValue(st.tutor || '');
+    setIsEditingContact(true);
+  };
+
+  const handleSaveContact = async () => {
+    if (!selectedStudent) return;
+    setIsSavingPhone(true);
+    try {
+      let cleanPhone = editPhoneValue.trim().replace(/[\s\-\(\)]/g, '');
+      if (/^\d{10}$/.test(cleanPhone)) {
+        cleanPhone = `+52${cleanPhone}`;
+      } else if (/^52\d{10}$/.test(cleanPhone)) {
+        cleanPhone = `+${cleanPhone}`;
+      }
+
+      const newTutor = editTutorValue.trim() || selectedStudent.tutor || 'No asignado';
+      const updated = await db.updateAlumno(selectedStudent.id, {
+        telefono: cleanPhone,
+        tutor: newTutor,
+        matricula: selectedStudent.matricula
+      });
+
+      setSelectedStudent(updated);
+      setStudents(prev => prev.map(s => (s.id === updated.id || s.matricula === updated.matricula) ? updated : s));
+      setIsEditingContact(false);
+      setSuccessBanner(`✅ Teléfono de WhatsApp de ${updated.nombre} actualizado a ${updated.telefono} con éxito.`);
+      setTimeout(() => setSuccessBanner(null), 6000);
+    } catch (err: any) {
+      alert('Error al actualizar el teléfono de WhatsApp: ' + (err.message || err));
+    } finally {
+      setIsSavingPhone(false);
     }
   };
 
@@ -451,16 +508,34 @@ export default function StudentsPage() {
                     {/* Student Details */}
                     <div>
                       <h4 className="font-bold text-white group-hover:text-cyan-400 transition-colors text-sm sm:text-base line-clamp-1">{student.nombre} {student.apellido_paterno} {student.apellido_materno || ''}</h4>
-                      <div className="flex items-center space-x-2 text-xs text-gray-400 mt-0.5">
+                      <div className="flex items-center space-x-2 text-xs text-gray-400 mt-0.5 flex-wrap gap-y-1">
                         <span className="font-mono text-cyan-400">{student.matricula}</span>
                         <span>•</span>
                         <span className="bg-white/5 px-1.5 py-0.5 rounded text-gray-300 font-semibold">{student.grado} &quot;{student.grupo}&quot;</span>
+                        {student.telefono && (
+                          <>
+                            <span>•</span>
+                            <span className="text-emerald-400/90 font-mono text-[11px] flex items-center gap-1 font-semibold">
+                              <Phone size={10} /> {student.telefono}
+                            </span>
+                          </>
+                        )}
                       </div>
                     </div>
                   </div>
 
-                  {user?.role === 'administrador' && (
-                    <div className="flex items-center space-x-2">
+                  <div className="flex items-center space-x-1.5 shrink-0">
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleStartEditContact(student);
+                      }}
+                      className="p-2 rounded-lg text-emerald-400 hover:text-emerald-300 hover:bg-emerald-500/10 transition-colors cursor-pointer"
+                      title="Modificar número de WhatsApp"
+                    >
+                      <Edit3 size={15} />
+                    </button>
+                    {user?.role === 'administrador' && (
                       <button
                         onClick={(e) => {
                           e.stopPropagation();
@@ -469,10 +544,10 @@ export default function StudentsPage() {
                         className="p-2 rounded-lg text-gray-500 hover:text-red-400 hover:bg-red-500/10 transition-colors cursor-pointer"
                         title="Eliminar Alumno"
                       >
-                        <Trash2 size={16} />
+                        <Trash2 size={15} />
                       </button>
-                    </div>
-                  )}
+                    )}
+                  </div>
                 </div>
               ))}
             </div>
@@ -540,32 +615,129 @@ export default function StudentsPage() {
                 </div>
               </div>
 
-              {/* Extra Tutor & Contact Data */}
-              <div className="space-y-3 bg-white/5 rounded-xl p-4 border border-white/5 text-sm">
-                <div className="flex items-center space-x-3 text-xs sm:text-sm">
-                  <User size={16} className="text-cyan-400" />
-                  <div>
-                    <span className="text-gray-500 text-[10px] block uppercase">Padre o Tutor</span>
-                    <span className="text-white font-semibold">{selectedStudent.tutor}</span>
+              {/* Extra Tutor & Contact Data with WhatsApp Quick Editor */}
+              {isEditingContact ? (
+                <div className="space-y-3 bg-cyan-950/30 rounded-xl p-4 border border-cyan-500/40 text-sm shadow-[0_0_20px_rgba(6,182,212,0.15)] animate-in fade-in duration-200">
+                  <div className="flex items-center justify-between pb-2 border-b border-white/10">
+                    <span className="text-xs font-bold text-cyan-400 flex items-center gap-1.5">
+                      <Edit3 size={14} /> Cambiar WhatsApp del Alumno
+                    </span>
+                    <button
+                      onClick={() => setIsEditingContact(false)}
+                      className="text-gray-400 hover:text-white p-1 rounded hover:bg-white/5 transition-colors cursor-pointer"
+                    >
+                      <X size={14} />
+                    </button>
+                  </div>
+
+                  <div className="space-y-1">
+                    <label className="text-gray-400 text-[10px] block uppercase font-semibold">Padre o Tutor</label>
+                    <div className="relative">
+                      <User size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500" />
+                      <input
+                        type="text"
+                        value={editTutorValue}
+                        onChange={(e) => setEditTutorValue(e.target.value)}
+                        placeholder="Nombre del Padre o Tutor"
+                        className="w-full glass-input pl-8 pr-3 py-2 rounded-lg text-xs font-medium text-white"
+                      />
+                    </div>
+                  </div>
+
+                  <div className="space-y-1">
+                    <label className="text-emerald-400 text-[10px] block uppercase font-bold flex items-center justify-between">
+                      <span className="flex items-center gap-1"><Phone size={11} /> Teléfono de WhatsApp</span>
+                      <span className="text-[9px] text-gray-400 font-normal">10 dígitos o con +52</span>
+                    </label>
+                    <div className="relative">
+                      <Phone size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-emerald-400" />
+                      <input
+                        type="tel"
+                        value={editPhoneValue}
+                        onChange={(e) => setEditPhoneValue(e.target.value)}
+                        placeholder="+526648546957"
+                        className="w-full glass-input pl-8 pr-3 py-2 rounded-lg text-xs font-mono font-bold text-emerald-300 border-emerald-500/50 focus:border-emerald-400"
+                        autoFocus
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter') handleSaveContact();
+                          if (e.key === 'Escape') setIsEditingContact(false);
+                        }}
+                      />
+                    </div>
+                    <p className="text-[10px] text-gray-400">Este número recibe automáticamente las alertas de asistencia por WhatsApp.</p>
+                  </div>
+
+                  <div className="flex gap-2 pt-1">
+                    <button
+                      onClick={handleSaveContact}
+                      disabled={isSavingPhone}
+                      className="flex-1 flex items-center justify-center space-x-1.5 px-3 py-2 rounded-lg bg-emerald-500 hover:bg-emerald-400 text-black font-extrabold text-xs transition-all shadow-[0_0_15px_rgba(16,185,129,0.3)] cursor-pointer disabled:opacity-50"
+                    >
+                      <Check size={14} />
+                      <span>{isSavingPhone ? 'Guardando...' : 'Guardar WhatsApp'}</span>
+                    </button>
+                    <button
+                      onClick={() => setIsEditingContact(false)}
+                      className="px-3 py-2 rounded-lg bg-white/10 hover:bg-white/15 text-gray-300 hover:text-white font-semibold text-xs transition-all cursor-pointer"
+                    >
+                      Cancelar
+                    </button>
                   </div>
                 </div>
+              ) : (
+                <div className="space-y-3 bg-white/5 rounded-xl p-4 border border-white/5 text-sm">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center space-x-3 text-xs sm:text-sm">
+                      <User size={16} className="text-cyan-400 shrink-0" />
+                      <div>
+                        <span className="text-gray-500 text-[10px] block uppercase">Padre o Tutor</span>
+                        <span className="text-white font-semibold">{selectedStudent.tutor}</span>
+                      </div>
+                    </div>
+                    <button
+                      onClick={() => handleStartEditContact()}
+                      className="p-1.5 rounded-lg text-gray-400 hover:text-cyan-400 hover:bg-white/5 transition-colors cursor-pointer"
+                      title="Editar Padre o Tutor"
+                    >
+                      <Edit3 size={13} />
+                    </button>
+                  </div>
 
-                <div className="flex items-center space-x-3 text-xs sm:text-sm">
-                  <Phone size={16} className="text-cyan-400" />
-                  <div>
-                    <span className="text-gray-500 text-[10px] block uppercase">Teléfono de WhatsApp</span>
-                    <span className="text-white font-mono">{selectedStudent.telefono}</span>
+                  <div className="flex items-center justify-between pt-2 border-t border-white/5">
+                    <div className="flex items-center space-x-3 text-xs sm:text-sm">
+                      <Phone size={16} className="text-emerald-400 shrink-0" />
+                      <div>
+                        <span className="text-gray-500 text-[10px] block uppercase">Teléfono de WhatsApp</span>
+                        <span className="text-white font-mono font-bold">{selectedStudent.telefono}</span>
+                      </div>
+                    </div>
+                    <button
+                      onClick={() => handleStartEditContact()}
+                      className="flex items-center space-x-1 px-2.5 py-1.5 rounded-lg bg-emerald-500/15 hover:bg-emerald-500/25 border border-emerald-500/30 text-emerald-300 text-xs font-bold transition-all cursor-pointer shadow-[0_0_10px_rgba(16,185,129,0.15)]"
+                      title="Cambiar número de WhatsApp del alumno"
+                    >
+                      <Edit3 size={12} />
+                      <span>Cambiar</span>
+                    </button>
                   </div>
                 </div>
-              </div>
+              )}
 
-              <div className="flex gap-3">
+              <div className="flex gap-2.5">
                 <button
                   onClick={handlePrint}
-                  className="flex-1 flex items-center justify-center space-x-2 px-4 py-2.5 rounded-xl glass-panel text-sm text-cyan-400 font-bold hover:bg-white/5 hover:border-cyan-500/20 transition-all cursor-pointer"
+                  className="flex-1 flex items-center justify-center space-x-2 px-3.5 py-2.5 rounded-xl glass-panel text-xs sm:text-sm text-cyan-400 font-bold hover:bg-white/5 hover:border-cyan-500/20 transition-all cursor-pointer"
                 >
                   <Printer size={16} />
                   <span>Imprimir Credencial</span>
+                </button>
+                <button
+                  onClick={() => handleStartEditContact()}
+                  className="flex items-center justify-center space-x-1.5 px-3.5 py-2.5 rounded-xl bg-emerald-500/20 hover:bg-emerald-500/30 border border-emerald-500/40 text-emerald-300 font-bold text-xs sm:text-sm transition-all cursor-pointer shadow-[0_0_12px_rgba(16,185,129,0.15)]"
+                  title="Cambiar número de WhatsApp del alumno"
+                >
+                  <Edit3 size={15} />
+                  <span>Cambiar WhatsApp</span>
                 </button>
               </div>
 
