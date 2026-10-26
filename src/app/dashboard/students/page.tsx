@@ -49,9 +49,20 @@ export default function StudentsPage() {
     foto_url: ''
   });
 
-  // Load students on mount
+  // Load students on mount and listen for real-time updates
   useEffect(() => {
     loadStudents();
+
+    const handleUpdate = (e: any) => {
+      const updated: Alumno = e.detail;
+      if (updated) {
+        setStudents(prev => prev.map(s => (s.id === updated.id || s.matricula === updated.matricula) ? updated : s));
+        setSelectedStudent(prev => (prev && (prev.id === updated.id || prev.matricula === updated.matricula)) ? updated : prev);
+      }
+    };
+
+    window.addEventListener('dojoia_alumnos_updated', handleUpdate);
+    return () => window.removeEventListener('dojoia_alumnos_updated', handleUpdate);
   }, []);
 
   // Sync edit form whenever selected student changes
@@ -61,7 +72,7 @@ export default function StudentsPage() {
       setEditTutorValue(selectedStudent.tutor || '');
       setIsEditingContact(false);
     }
-  }, [selectedStudent?.id]);
+  }, [selectedStudent?.id, selectedStudent?.telefono, selectedStudent?.tutor]);
 
   const loadStudents = async () => {
     try {

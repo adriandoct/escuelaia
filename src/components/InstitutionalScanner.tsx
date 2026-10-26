@@ -236,7 +236,17 @@ export default function InstitutionalScanner() {
 
   useEffect(() => {
     loadData();
+
+    const handleUpdate = (e: any) => {
+      const updated: Alumno = e.detail;
+      if (updated) {
+        setStudents(prev => prev.map(s => (s.id === updated.id || s.matricula === updated.matricula) ? updated : s));
+      }
+    };
+    window.addEventListener('dojoia_alumnos_updated', handleUpdate);
+
     return () => {
+      window.removeEventListener('dojoia_alumnos_updated', handleUpdate);
       stopCameraScanner();
     };
   }, [loadData]);

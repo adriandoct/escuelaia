@@ -268,7 +268,13 @@ export default function BarcodeScannerHub({ onScanCompleted, className = '' }: B
     }
     loadSamples();
 
+    const handleUpdate = () => {
+      loadSamples();
+    };
+    window.addEventListener('dojoia_alumnos_updated', handleUpdate);
+
     return () => {
+      window.removeEventListener('dojoia_alumnos_updated', handleUpdate);
       stopCameraScanner();
     };
   }, []);

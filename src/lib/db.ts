@@ -461,11 +461,20 @@ export const db = {
     persistToAllVaults(list);
 
     if (typeof window !== 'undefined') {
-      fetch('/api/alumnos', {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(updated)
-      }).catch(() => {});
+      try {
+        await fetch('/api/alumnos', {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(updated)
+        });
+      } catch (e) {
+        console.warn('Error sincronizando con API de alumnos:', e);
+      }
+
+      // Dispatch global update event
+      try {
+        window.dispatchEvent(new CustomEvent('dojoia_alumnos_updated', { detail: updated }));
+      } catch {}
     }
 
     if (supabase) {
