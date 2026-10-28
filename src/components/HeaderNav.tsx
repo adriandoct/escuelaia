@@ -5,7 +5,7 @@
 import React from 'react';
 import Link from 'next/link';
 import { useAuth, Role } from '@/lib/auth';
-import { LogIn, LogOut, Shield, User, Sparkles, BookOpen, QrCode, Users } from 'lucide-react';
+import { LogIn, LogOut, Shield, User, Sparkles, BookOpen, QrCode, Users, HeartHandshake } from 'lucide-react';
 
 export default function HeaderNav() {
   const { user, openLoginModal, logout } = useAuth();
@@ -102,6 +102,18 @@ export default function HeaderNav() {
               <span>Alumnos</span>
             </Link>
 
+            {/* Padres de Familia / Tutores */}
+            {(!user || user.role === 'administrador' || user.role === 'encargado_orden') && (
+              <Link 
+                href="/dashboard/parents" 
+                className="hover:text-purple-400 transition-colors py-1.5 px-3 rounded-lg hover:bg-white/5 flex items-center space-x-1.5 text-purple-300 font-bold"
+                title="Módulo de Padres de Familia y Tutores"
+              >
+                <HeartHandshake size={14} className="text-purple-400" />
+                <span>Padres / Tutores</span>
+              </Link>
+            )}
+
             {/* Admin QR stickers report */}
             {(!user || user.role === 'administrador') && (
               <Link 
@@ -190,6 +202,9 @@ export default function HeaderNav() {
           <Link href="/dashboard/teacher" className="hover:text-emerald-400 py-1 px-2">👨‍🏫 Docente</Link>
         )}
         <Link href="/dashboard/students" className="hover:text-cyan-400 py-1 px-2">👦 Alumnos</Link>
+        {(!user || user.role === 'administrador' || user.role === 'encargado_orden') && (
+          <Link href="/dashboard/parents" className="hover:text-purple-400 py-1 px-2 text-purple-300">👨‍👩‍👧 Padres</Link>
+        )}
         {user?.role === 'administrador' && (
           <Link href="/dashboard/roles" className="hover:text-amber-400 py-1 px-2">⚙️ Roles</Link>
         )}

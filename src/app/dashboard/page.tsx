@@ -9,7 +9,7 @@ import { getWhatsAppLogs, WhatsAppLog, clearWhatsAppLogs } from '@/lib/whatsapp'
 import { useAuth } from '@/lib/auth';
 import BarcodeScannerHub from '@/components/BarcodeScannerHub';
 import { 
-  Users, UserCheck, UserX, Clock, PhoneCall, Search, Filter, Download, RotateCcw, AlertTriangle, ArrowUpRight, Check, Send, BookOpen, Shield
+  Users, UserCheck, UserX, Clock, PhoneCall, Search, Filter, Download, RotateCcw, AlertTriangle, ArrowUpRight, Check, Send, BookOpen, Shield, HeartHandshake, ArrowRight
 } from 'lucide-react';
 
 export default function DashboardPage() {
@@ -268,6 +268,31 @@ export default function DashboardPage() {
 
       {/* Barcode Scanner Hardware Hub (Global Physical Scanner Integration) */}
       <BarcodeScannerHub onScanCompleted={loadData} />
+
+      {/* Banner de Acceso al Módulo de Padres de Familia y Tutores */}
+      <div className="p-4 rounded-2xl bg-gradient-to-r from-purple-950/40 via-purple-900/20 to-black border border-purple-500/30 flex flex-col sm:flex-row items-center justify-between gap-4 shadow-lg shadow-purple-500/5">
+        <div className="flex items-center space-x-3.5">
+          <div className="p-3 rounded-2xl bg-purple-500/20 text-purple-300 border border-purple-500/30 shrink-0">
+            <HeartHandshake className="w-6 h-6" />
+          </div>
+          <div>
+            <div className="flex items-center space-x-2">
+              <h3 className="text-sm font-extrabold text-white">Módulo de Padres de Familia y Tutores</h3>
+              <span className="text-[10px] uppercase font-bold tracking-wider px-2 py-0.5 rounded-full bg-purple-500/20 text-purple-300 border border-purple-500/40">Nuevo</span>
+            </div>
+            <p className="text-xs text-gray-400 mt-0.5">
+              Supervisa qué alumnos están en el plantel o ya salieron, envía avisos oficiales a sus tutores por WhatsApp y asigna nombres a tutores pendientes.
+            </p>
+          </div>
+        </div>
+        <Link
+          href="/dashboard/parents"
+          className="w-full sm:w-auto px-4 py-2.5 rounded-xl bg-purple-600 hover:bg-purple-500 text-white font-bold text-xs shadow-lg shadow-purple-500/20 transition-all flex items-center justify-center space-x-1.5 shrink-0"
+        >
+          <span>Abrir Módulo de Padres</span>
+          <ArrowRight size={14} />
+        </Link>
+      </div>
 
       {/* Numerical Stats Widgets Cards */}
       <div className="grid grid-cols-2 md:grid-cols-5 gap-4">

@@ -1534,6 +1534,22 @@ export default function BarcodeScannerHub({ onScanCompleted, className = '' }: B
                           </span>
                         </div>
 
+                        {(!activeScan.student.tutor || activeScan.student.tutor.toLowerCase().startsWith('tutor de') || activeScan.student.tutor.toLowerCase() === 'no asignado' || activeScan.student.tutor.toLowerCase() === 'sin tutor') && (
+                          <div className="mt-2 p-2 rounded-xl bg-amber-500/15 border border-amber-500/30 text-amber-300 text-[11px] flex items-center justify-between">
+                            <span className="flex items-center space-x-1.5">
+                              <AlertTriangle size={13} className="shrink-0 text-amber-400" />
+                              <span>Falta nombre real del tutor</span>
+                            </span>
+                            <button
+                              type="button"
+                              onClick={handleStartEditingPhone}
+                              className="px-2 py-0.5 rounded bg-amber-500 text-black font-extrabold text-[10px] hover:bg-amber-400 transition-colors cursor-pointer"
+                            >
+                              Escribir Nombre
+                            </button>
+                          </div>
+                        )}
+
                         {phoneSaveSuccessMsg && (
                           <div className="mt-2 p-2 rounded-xl bg-emerald-500/20 border border-emerald-500/40 text-emerald-300 text-[11px] flex items-center justify-between animate-fadeIn">
                             <span className="flex items-center space-x-1.5">
