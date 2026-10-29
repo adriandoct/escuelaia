@@ -39,8 +39,9 @@ const readLocalData = (): any[] => {
     }
   };
 
-  tryRead(PRIMARY_FILE);
+  // Read TMP_FILE first so runtime updates on serverless/Vercel take precedence over static PRIMARY_FILE
   tryRead(TMP_FILE);
+  tryRead(PRIMARY_FILE);
 
   return Array.from(map.values());
 };

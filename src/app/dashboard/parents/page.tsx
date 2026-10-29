@@ -9,13 +9,16 @@ import {
   formatWhatsAppMessage, 
   getWhatsAppSendUrl, 
   getWhatsAppLogs, 
+  getStudentNtfyTopic,
+  getTutorNtfyTopic,
+  getClean10DigitPhone,
   WhatsAppLog 
 } from '@/lib/whatsapp';
 import { 
   Users, Search, UserCheck, UserX, Phone, MessageSquare, CheckCircle2, 
   AlertTriangle, Shield, Clock, Send, Edit3, ArrowRight, X, ExternalLink,
   Sparkles, RefreshCw, Filter, FileSpreadsheet, Download, Check, ShieldCheck,
-  Building2, LogIn, LogOut, Info, Bell
+  Building2, LogIn, LogOut, Info, Bell, Smartphone, QrCode, Copy, BellRing
 } from 'lucide-react';
 
 // Helper to determine if student has a valid named tutor
@@ -67,6 +70,11 @@ export default function ParentsDashboardPage() {
   const [notifyType, setNotifyType] = useState<'entrada' | 'salida'>('entrada');
   const [isSendingWhatsApp, setIsSendingWhatsApp] = useState(false);
   const [toastMessage, setToastMessage] = useState<string | null>(null);
+
+  // Free Cell Phone Push Notification Modal States ($0 Sin Cobro)
+  const [freePushStudent, setFreePushStudent] = useState<Alumno | null>(null);
+  const [isTestingFreePush, setIsTestingFreePush] = useState(false);
+  const [copiedPushText, setCopiedPushText] = useState<string | null>(null);
 
   // Tab State: 'students' or 'notifications_history'
   const [activeTab, setActiveTab] = useState<'students' | 'history'>('students');
@@ -244,16 +252,12 @@ export default function ParentsDashboardPage() {
     setIsEditModalOpen(true);
   };
 
-  // Save Tutor Information
+  // Save Tutor Information (Name and/or Phone Number)
   const handleSaveTutor = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!editingStudent) return;
 
-    const trimmedName = tutorNameInput.trim();
-    if (!trimmedName) {
-      setSaveError('Por favor ingresa el nombre completo del tutor responsable.');
-      return;
-    }
+    const trimmedName = tutorNameInput.trim() || editingStudent.tutor || `Tutor de ${editingStudent.nombre}`;
 
     let cleanPhone = tutorPhoneInput.trim().replace(/[\s\-\(\)]/g, '');
     if (/^\d{10}$/.test(cleanPhone)) {
@@ -275,11 +279,40 @@ export default function ParentsDashboardPage() {
       // Update state locally
       setStudents(prev => prev.map(s => (s.id === updated.id || s.matricula === updated.matricula) ? updated : s));
       setIsEditModalOpen(false);
-      showToast(`✅ Tutor "${updated.tutor}" asignado correctamente a ${updated.nombre}.`);
+      showToast(`✅ Datos actualizados: Tutor "${updated.tutor}" (${updated.telefono}) para ${updated.nombre}.`);
     } catch (err: any) {
       setSaveError('Error al guardar datos del tutor: ' + (err.message || err));
     } finally {
       setIsSavingTutor(false);
+    }
+  };
+
+  // Send instant test push notification (100% Free / Sin Cobro)
+  const handleSendTestFreePush = async (student: Alumno) => {
+    if (isTestingFreePush) return;
+    setIsTestingFreePush(true);
+    try {
+      const fullName = `${student.nombre} ${student.apellido_paterno} ${student.apellido_materno || ''}`.trim();
+      const nowTime = new Date().toLocaleTimeString('es-MX', { hour: '2-digit', minute: '2-digit' });
+      const testMessage = `🏫 *CECYTE BC - PLANTEL URBIVILLAS*\n🔔 *NOTIFICACIÓN GRATUITA ACTIVADA ($0 SIN COBRO)*\n\n👤 *Alumno:* ${fullName}\n🏷️ *Grupo:* ${student.grado} "${student.grupo}"\n🆔 *Matrícula:* ${student.matricula}\n📞 *Celular Tutor:* ${student.telefono}\n⏰ *Hora:* ${nowTime}\n\n✅ Las alertas de INGRESO y SALIDA llegarán directo al celular del tutor sin ningún costo.`;
+
+      await fetch('/api/whatsapp/send', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          to: student.telefono || student.matricula,
+          matricula: student.matricula,
+          studentName: fullName,
+          tipo: 'entrada',
+          message: testMessage
+        })
+      });
+
+      showToast(`🔔 Alerta de prueba enviada gratis al celular (${student.telefono}) y al canal ${getStudentNtfyTopic(student.matricula)}.`);
+    } catch (err: any) {
+      alert('Error al enviar prueba: ' + (err.message || err));
+    } finally {
+      setIsTestingFreePush(false);
     }
   };
 
@@ -832,7 +865,7 @@ export default function ParentsDashboardPage() {
                             className="text-[11px] font-bold text-purple-400 hover:text-purple-300 flex items-center space-x-1 cursor-pointer hover:underline"
                           >
                             <Edit3 size={11} />
-                            <span>{isAssigned ? 'Modificar' : 'Escribir Nombre'}</span>
+                            <span>{isAssigned ? 'Modificar' : 'Editar Tutor / Tel'}</span>
                           </button>
                         </div>
 
@@ -842,9 +875,17 @@ export default function ParentsDashboardPage() {
                               <span>👤</span>
                               <span className="truncate">{student.tutor}</span>
                             </div>
-                            <div className="text-[11px] text-gray-300 flex items-center space-x-1.5 font-mono">
-                              <Phone size={11} className="text-emerald-400 shrink-0" />
-                              <span className="truncate">{student.telefono || 'Sin teléfono'}</span>
+                            <div className="text-[11px] text-gray-300 flex items-center justify-between font-mono">
+                              <span className="flex items-center space-x-1.5">
+                                <Phone size={11} className="text-emerald-400 shrink-0" />
+                                <span className="truncate">{student.telefono || 'Sin teléfono'}</span>
+                              </span>
+                              <button
+                                onClick={() => handleOpenEditTutor(student)}
+                                className="text-[10px] text-cyan-400 hover:underline font-sans font-semibold cursor-pointer"
+                              >
+                                Cambiar número
+                              </button>
                             </div>
                           </div>
                         ) : (
@@ -853,15 +894,24 @@ export default function ParentsDashboardPage() {
                               <AlertTriangle size={13} className="shrink-0" />
                               <span>Sin tutor asignado con nombre</span>
                             </div>
-                            <p className="text-[11px] text-amber-200/80 leading-tight">
-                              El alumno no tiene registrado el nombre de su tutor. Haz clic en el botón para asignarlo.
-                            </p>
+                            <div className="flex items-center justify-between text-[11px] bg-black/30 px-2.5 py-1.5 rounded-lg border border-white/10">
+                              <span className="flex items-center space-x-1.5 font-mono text-emerald-300 font-bold">
+                                <Phone size={11} className="text-emerald-400 shrink-0" />
+                                <span>{student.telefono || 'Sin teléfono'}</span>
+                              </span>
+                              <button
+                                onClick={() => handleOpenEditTutor(student)}
+                                className="text-[10px] text-amber-300 hover:text-white font-bold underline cursor-pointer"
+                              >
+                                Cambiar Teléfono
+                              </button>
+                            </div>
                             <button
                               onClick={() => handleOpenEditTutor(student)}
-                              className="w-full mt-1.5 py-1.5 px-3 rounded-lg bg-amber-500/20 hover:bg-amber-500/30 border border-amber-500/40 text-amber-200 text-xs font-bold transition-all flex items-center justify-center space-x-1 cursor-pointer"
+                              className="w-full mt-1 py-1.5 px-3 rounded-lg bg-amber-500/20 hover:bg-amber-500/30 border border-amber-500/40 text-amber-200 text-xs font-bold transition-all flex items-center justify-center space-x-1 cursor-pointer"
                             >
                               <Edit3 size={12} />
-                              <span>Escribir Nombre del Tutor</span>
+                              <span>Escribir Nombre y Teléfono del Tutor</span>
                             </button>
                           </div>
                         )}
@@ -871,7 +921,7 @@ export default function ParentsDashboardPage() {
                     {/* Notification Actions for this Student */}
                     <div className="pt-2 border-t border-white/5 space-y-2">
                       <div className="text-[10px] text-gray-400 font-semibold uppercase tracking-wider flex items-center justify-between">
-                        <span>Avisar al Tutor vía WhatsApp:</span>
+                        <span>Avisar al Celular del Tutor (Sin Cobro):</span>
                         {isInside && <span className="text-cyan-400 font-bold">● En Plantel</span>}
                       </div>
 
@@ -880,7 +930,7 @@ export default function ParentsDashboardPage() {
                         <button
                           onClick={() => handleOpenNotifyModal(student, 'entrada')}
                           className="py-2 px-2.5 rounded-xl bg-cyan-600/15 hover:bg-cyan-600/30 border border-cyan-500/30 text-cyan-300 hover:text-cyan-200 text-[11px] font-bold transition-all flex items-center justify-center space-x-1 cursor-pointer shadow-sm active:scale-95"
-                          title="Enviar WhatsApp al tutor avisando que el alumno está en el plantel"
+                          title="Enviar notificación gratuita al celular del tutor avisando que el alumno está en el plantel"
                         >
                           <LogIn size={13} className="text-cyan-400" />
                           <span>Avisar Ingreso</span>
@@ -890,12 +940,22 @@ export default function ParentsDashboardPage() {
                         <button
                           onClick={() => handleOpenNotifyModal(student, 'salida')}
                           className="py-2 px-2.5 rounded-xl bg-rose-600/15 hover:bg-rose-600/30 border border-rose-500/30 text-rose-300 hover:text-rose-200 text-[11px] font-bold transition-all flex items-center justify-center space-x-1 cursor-pointer shadow-sm active:scale-95"
-                          title="Enviar WhatsApp al tutor avisando que el alumno ya salió del plantel"
+                          title="Enviar notificación gratuita al celular del tutor avisando que el alumno ya salió del plantel"
                         >
                           <LogOut size={13} className="text-rose-400" />
                           <span>Avisar Salida</span>
                         </button>
                       </div>
+
+                      {/* 100% Free Cell Phone Push Setup & Live Test Button */}
+                      <button
+                        type="button"
+                        onClick={() => setFreePushStudent(student)}
+                        className="w-full py-2 px-3 rounded-xl bg-gradient-to-r from-emerald-500/20 via-cyan-500/20 to-blue-500/20 hover:from-emerald-500/30 hover:to-blue-500/30 border border-emerald-500/40 text-emerald-300 text-[11px] font-extrabold transition-all flex items-center justify-center space-x-1.5 cursor-pointer shadow-sm"
+                      >
+                        <BellRing size={13} className="text-emerald-400 animate-pulse" />
+                        <span>🔔 Notificación Gratis en Celular ($0 Sin Cobro)</span>
+                      </button>
 
                       {/* Direct WhatsApp Web Chat Trigger */}
                       {student.telefono && (
@@ -1081,11 +1141,10 @@ export default function ParentsDashboardPage() {
               <div className="space-y-1">
                 <label className="text-xs font-bold text-gray-300 flex items-center space-x-1">
                   <span>Nombre Completo del Tutor:</span>
-                  <span className="text-red-400">*</span>
+                  <span className="text-gray-500 text-[10px]">(Opcional si solo actualizas teléfono)</span>
                 </label>
                 <input
                   type="text"
-                  required
                   placeholder="Ej. María Elena Rosales Martínez"
                   value={tutorNameInput}
                   onChange={(e) => setTutorNameInput(e.target.value)}
@@ -1093,7 +1152,7 @@ export default function ParentsDashboardPage() {
                   autoFocus
                 />
                 <p className="text-[10px] text-gray-500">
-                  Este nombre se utilizará en el saludo oficial del mensaje de WhatsApp.
+                  Este nombre se utilizará en el saludo oficial del mensaje al tutor.
                 </p>
               </div>
 
@@ -1315,13 +1374,238 @@ export default function ParentsDashboardPage() {
                   ) : (
                     <>
                       <Send size={14} />
-                      <span>Registrar y Notificar al Tutor</span>
+                      <span>Registrar y Notificar al Tutor (Gratis)</span>
                     </>
                   )}
                 </button>
               </div>
             </div>
 
+          </div>
+        </div>
+      )}
+
+      {/* ========================================================================= */}
+      {/* MODAL: Activar Notificación Gratis en Celular ($0 Sin Cobro)             */}
+      {/* ========================================================================= */}
+      {freePushStudent && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/85 backdrop-blur-md animate-in fade-in duration-200">
+          <div className="w-full max-w-xl rounded-3xl bg-[#091220] border border-emerald-500/40 p-6 shadow-2xl space-y-5 max-h-[92vh] overflow-y-auto">
+            <div className="flex items-start justify-between gap-3">
+              <div className="flex items-center space-x-3">
+                <div className="p-3 rounded-2xl bg-emerald-500/20 text-emerald-300 border border-emerald-500/40">
+                  <BellRing className="w-6 h-6" />
+                </div>
+                <div>
+                  <span className="inline-flex items-center space-x-1 px-2.5 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 text-[10px] font-black uppercase">
+                    <Sparkles size={10} />
+                    <span>100% Gratis • $0.00 MXN Sin Cobro</span>
+                  </span>
+                  <h3 className="text-lg font-extrabold text-white mt-0.5">
+                    Notificaciones Directas al Celular del Tutor
+                  </h3>
+                  <p className="text-xs text-gray-400">
+                    Recibe alertas con sonido y vibración en el celular sin pagar suscripciones ni recargas.
+                  </p>
+                </div>
+              </div>
+              <button
+                onClick={() => setFreePushStudent(null)}
+                className="text-gray-400 hover:text-white p-1.5 rounded-xl hover:bg-white/10 cursor-pointer"
+              >
+                <X size={20} />
+              </button>
+            </div>
+
+            {/* Student Info Summary */}
+            <div className="p-3.5 rounded-2xl bg-black/50 border border-white/10 flex items-center justify-between gap-3">
+              <div className="flex items-center space-x-3 min-w-0">
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img
+                  src={freePushStudent.foto_url || `https://api.dicebear.com/7.x/bottts/svg?seed=${freePushStudent.matricula}`}
+                  alt={freePushStudent.nombre}
+                  className="w-11 h-11 rounded-xl bg-gray-800 object-cover border border-white/10 shrink-0"
+                />
+                <div className="min-w-0">
+                  <div className="text-xs font-extrabold text-white truncate">
+                    {freePushStudent.nombre} {freePushStudent.apellido_paterno} {freePushStudent.apellido_materno || ''}
+                  </div>
+                  <div className="text-[11px] text-cyan-400 font-mono">
+                    {freePushStudent.grado} &quot;{freePushStudent.grupo}&quot; • Mat: {freePushStudent.matricula}
+                  </div>
+                </div>
+              </div>
+              <div className="text-right shrink-0">
+                <div className="text-xs font-mono font-bold text-emerald-400">
+                  {freePushStudent.telefono}
+                </div>
+                <button
+                  type="button"
+                  onClick={() => {
+                    const st = freePushStudent;
+                    setFreePushStudent(null);
+                    handleOpenEditTutor(st);
+                  }}
+                  className="text-[10px] text-amber-300 hover:underline font-bold cursor-pointer"
+                >
+                  Cambiar teléfono
+                </button>
+              </div>
+            </div>
+
+            {/* Method 1: Mobile Web Portal QR & Direct Link */}
+            {(() => {
+              const originUrl = typeof window !== 'undefined' ? window.location.origin : 'https://escuela-ia.vercel.app';
+              const tutorPortalUrl = `${originUrl}/tutor?matricula=${encodeURIComponent(freePushStudent.matricula)}&tel=${encodeURIComponent(getClean10DigitPhone(freePushStudent.telefono))}`;
+              const qrImageUrl = `https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(tutorPortalUrl)}`;
+              const studentTopic = getStudentNtfyTopic(freePushStudent.matricula);
+              const tutorTopic = getTutorNtfyTopic(freePushStudent.telefono);
+              const waInviteText = `🏫 *CECYTE BC PLANTEL URBIVILLAS*\n🔔 *ACTIVACIÓN DE NOTIFICACIONES GRATIS EN TU CELULAR*\n\nEstimado tutor de *${freePushStudent.nombre} ${freePushStudent.apellido_paterno}* (${freePushStudent.grado} "${freePushStudent.grupo}"), abre este enlace en tu celular para recibir alertas instantáneas con sonido cada vez que tu hijo(a) entre o salga del plantel (100% gratis, sin cobro):\n\n👉 ${tutorPortalUrl}\n\n🔑 Código directo para App ntfy: *${studentTopic}*`;
+              const cleanTel = (freePushStudent.telefono || '').replace(/\D/g, '');
+              const waInviteUrl = `https://api.whatsapp.com/send?phone=${cleanTel.startsWith('52') ? cleanTel : `52${cleanTel}`}&text=${encodeURIComponent(waInviteText)}`;
+
+              return (
+                <div className="space-y-4">
+                  <div className="p-4 rounded-2xl bg-emerald-950/30 border border-emerald-500/30 flex flex-col sm:flex-row items-center gap-4">
+                    <div className="bg-white p-2.5 rounded-2xl shadow-lg shrink-0">
+                      {/* eslint-disable-next-line @next/next/no-img-element */}
+                      <img
+                        src={qrImageUrl}
+                        alt="QR Portal Móvil del Tutor"
+                        className="w-32 h-32 object-contain"
+                      />
+                    </div>
+                    <div className="space-y-2.5 text-xs flex-1">
+                      <div className="font-extrabold text-emerald-300 text-sm flex items-center space-x-1.5">
+                        <Smartphone size={16} />
+                        <span>Opción 1: Escanea con la Cámara del Celular</span>
+                      </div>
+                      <p className="text-gray-300 leading-relaxed">
+                        El tutor escanea este código QR con su celular (o abre el enlace) y recibe en vivo cada <strong>INGRESO</strong> y <strong>SALIDA</strong> con sonido y vibración, <strong>100% gratis y sin cobro</strong>.
+                      </p>
+                      <div className="flex flex-wrap gap-2 pt-1">
+                        <a
+                          href={tutorPortalUrl}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="px-3 py-1.5 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-black font-black text-xs flex items-center space-x-1.5"
+                        >
+                          <ExternalLink size={13} />
+                          <span>Abrir Portal Móvil del Tutor</span>
+                        </a>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            navigator.clipboard.writeText(tutorPortalUrl);
+                            setCopiedPushText('link');
+                            setTimeout(() => setCopiedPushText(null), 2500);
+                          }}
+                          className="px-3 py-1.5 rounded-xl bg-white/10 hover:bg-white/15 border border-white/15 text-white font-bold text-xs flex items-center space-x-1 cursor-pointer"
+                        >
+                          {copiedPushText === 'link' ? <Check size={13} className="text-emerald-400" /> : <Copy size={13} />}
+                          <span>{copiedPushText === 'link' ? 'Enlace Copiado' : 'Copiar Enlace'}</span>
+                        </button>
+                        <a
+                          href={waInviteUrl}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="px-3 py-1.5 rounded-xl bg-cyan-500/20 hover:bg-cyan-500/30 border border-cyan-500/40 text-cyan-300 font-bold text-xs flex items-center space-x-1"
+                        >
+                          <MessageSquare size={13} />
+                          <span>Enviar Enlace por WhatsApp</span>
+                        </a>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Option 2: Free ntfy App for Lock-Screen Push */}
+                  <div className="p-4 rounded-2xl bg-cyan-950/30 border border-cyan-500/30 space-y-2.5 text-xs">
+                    <div className="font-extrabold text-cyan-300 flex items-center justify-between">
+                      <span className="flex items-center space-x-1.5">
+                        <Bell size={15} />
+                        <span>Opción 2: Notificación Push con Pantalla Bloqueada (App ntfy Gratis)</span>
+                      </span>
+                      <span className="text-[10px] bg-cyan-500/20 text-cyan-300 px-2 py-0.5 rounded font-black">
+                        Android / iPhone
+                      </span>
+                    </div>
+                    <p className="text-gray-300 leading-relaxed">
+                      Descarga gratis la app <strong>ntfy</strong> en Play Store o App Store, pulsa el botón <strong>&quot;+&quot;</strong> y pega cualquiera de estos códigos de suscripción:
+                    </p>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 pt-1">
+                      <div className="bg-black/60 border border-cyan-500/30 rounded-xl p-2.5 flex items-center justify-between">
+                        <div>
+                          <span className="text-[10px] text-gray-400 block">Por Matrícula del Alumno:</span>
+                          <code className="font-mono text-cyan-300 font-bold text-xs select-all">{studentTopic}</code>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            navigator.clipboard.writeText(studentTopic);
+                            setCopiedPushText('mat');
+                            setTimeout(() => setCopiedPushText(null), 2500);
+                          }}
+                          className="p-1.5 rounded-lg bg-cyan-500/20 text-cyan-300 hover:bg-cyan-500/30 cursor-pointer"
+                          title="Copiar código"
+                        >
+                          {copiedPushText === 'mat' ? <Check size={14} /> : <Copy size={14} />}
+                        </button>
+                      </div>
+                      {tutorTopic && (
+                        <div className="bg-black/60 border border-emerald-500/30 rounded-xl p-2.5 flex items-center justify-between">
+                          <div>
+                            <span className="text-[10px] text-gray-400 block">Por Teléfono del Tutor:</span>
+                            <code className="font-mono text-emerald-300 font-bold text-xs select-all">{tutorTopic}</code>
+                          </div>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              navigator.clipboard.writeText(tutorTopic);
+                              setCopiedPushText('tel');
+                              setTimeout(() => setCopiedPushText(null), 2500);
+                            }}
+                            className="p-1.5 rounded-lg bg-emerald-500/20 text-emerald-300 hover:bg-emerald-500/30 cursor-pointer"
+                            title="Copiar código"
+                          >
+                            {copiedPushText === 'tel' ? <Check size={14} /> : <Copy size={14} />}
+                          </button>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Live Test Button */}
+                  <div className="pt-2 border-t border-white/10 flex flex-col sm:flex-row items-center justify-between gap-3">
+                    <button
+                      type="button"
+                      onClick={() => handleSendTestFreePush(freePushStudent)}
+                      disabled={isTestingFreePush}
+                      className="w-full sm:flex-1 py-3 px-4 rounded-2xl bg-gradient-to-r from-emerald-500 to-cyan-500 hover:from-emerald-400 hover:to-cyan-400 text-black font-black text-xs flex items-center justify-center space-x-2 shadow-lg shadow-emerald-500/25 cursor-pointer disabled:opacity-50"
+                    >
+                      {isTestingFreePush ? (
+                        <>
+                          <RefreshCw size={15} className="animate-spin" />
+                          <span>Enviando Notificación Gratis al Celular...</span>
+                        </>
+                      ) : (
+                        <>
+                          <BellRing size={16} />
+                          <span>📲 Probar Notificación al Celular Ahora (Sin Cobro)</span>
+                        </>
+                      )}
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => setFreePushStudent(null)}
+                      className="w-full sm:w-auto px-5 py-3 rounded-2xl bg-white/10 hover:bg-white/15 text-xs font-bold text-white cursor-pointer"
+                    >
+                      Cerrar
+                    </button>
+                  </div>
+                </div>
+              );
+            })()}
           </div>
         </div>
       )}

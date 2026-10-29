@@ -50,6 +50,7 @@ const VAULT_PRIMARY_KEY = 'dojoia_alumnos';
 const VAULT_PERMANENT_KEY = 'dojoia_alumnos_permanent_vault';
 const VAULT_EXCEL_KEY = 'dojoia_alumnos_excel_imported';
 const VAULT_BACKUP_KEY = 'dojoia_alumnos_uploaded_backup';
+const CUSTOM_EDITS_KEY = 'dojoia_alumnos_custom_edits';
 const HAS_USER_STUDENTS_KEY = 'dojoia_user_has_uploaded_students';
 
 // Helper to synchronize students across ALL persistent vaults
@@ -280,6 +281,22 @@ export const db = {
       });
     }
 
+    // Layer 5: Always overlay user custom edits (tutor name, phone number, etc.) so they are never overwritten
+    if (typeof window !== 'undefined') {
+      try {
+        const rawEdits = localStorage.getItem(CUSTOM_EDITS_KEY);
+        if (rawEdits) {
+          const editsMap: Record<string, Partial<Alumno>> = JSON.parse(rawEdits);
+          Object.entries(editsMap).forEach(([mat, customFields]) => {
+            const existing = studentMap.get(mat);
+            if (existing && customFields) {
+              studentMap.set(mat, { ...existing, ...customFields });
+            }
+          });
+        }
+      } catch {}
+    }
+
     const finalList = Array.from(studentMap.values()).sort((a, b) => {
       const patCompare = (a.apellido_paterno || '').localeCompare(b.apellido_paterno || '');
       if (patCompare !== 0) return patCompare;
@@ -456,6 +473,19 @@ export const db = {
     if (idx === -1) throw new Error('Student not found');
     const updated: Alumno = { ...list[idx], ...updates };
     list[idx] = updated;
+
+    // Persist custom edits per matricula so they survive any re-sync
+    if (typeof window !== 'undefined' && updated.matricula) {
+      try {
+        const rawEdits = localStorage.getItem(CUSTOM_EDITS_KEY);
+        const editsMap: Record<string, Partial<Alumno>> = rawEdits ? JSON.parse(rawEdits) : {};
+        editsMap[updated.matricula] = {
+          ...(editsMap[updated.matricula] || {}),
+          ...updates
+        };
+        localStorage.setItem(CUSTOM_EDITS_KEY, JSON.stringify(editsMap));
+      } catch {}
+    }
 
     // Synchronize update across all vaults
     persistToAllVaults(list);

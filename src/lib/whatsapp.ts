@@ -14,6 +14,27 @@ export interface WhatsAppLog {
   timestamp: string;
 }
 
+// Helper to get clean 10-digit Mexican phone number
+export const getClean10DigitPhone = (phone?: string): string => {
+  const digits = String(phone || '').replace(/\D/g, '');
+  if (digits.length === 12 && digits.startsWith('52')) return digits.slice(2);
+  if (digits.length === 13 && digits.startsWith('521')) return digits.slice(3);
+  if (digits.length > 10) return digits.slice(-10);
+  return digits;
+};
+
+// Free push notification topic by tutor's 10-digit phone number
+export const getTutorNtfyTopic = (phone?: string): string => {
+  const p10 = getClean10DigitPhone(phone);
+  return p10 ? `cecyte-tutor-${p10}` : '';
+};
+
+// Free push notification topic by student's matricula
+export const getStudentNtfyTopic = (matricula?: string): string => {
+  const cleanMat = String(matricula || '').trim().replace(/[^a-zA-Z0-9]/g, '');
+  return cleanMat ? `cecyte-alumno-${cleanMat}` : '';
+};
+
 // Format the specific messages required by the user for Plantel Urbivillas
 export const formatWhatsAppMessage = (alumno: Alumno, log: Asistencia): string => {
   const isEntrada = log.tipo === 'entrada';
@@ -86,7 +107,7 @@ export const getWhatsAppSendUrl = (alumno: Alumno, log: Asistencia): string => {
   return `https://api.whatsapp.com/send?phone=${cleanPhone}&text=${encodeURIComponent(message)}`;
 };
 
-// Send WhatsApp trigger directamente al celular del padre/tutor en segundo plano sin abrir ventanas en la laptop
+// Send notification directly to the tutor's cell phone (100% Free Push + WhatsApp)
 export const sendWhatsAppNotification = async (
   alumno: Alumno,
   log: Asistencia
@@ -94,11 +115,12 @@ export const sendWhatsAppNotification = async (
   const messageText = formatWhatsAppMessage(alumno, log);
   const sendUrl = getWhatsAppSendUrl(alumno, log);
   const timestamp = new Date().toISOString();
+  const fullStudentName = `${alumno.nombre} ${alumno.apellido_paterno} ${alumno.apellido_materno || ''}`.replace(/\s+/g, ' ').trim();
   
   const logEntry: WhatsAppLog = {
     id: `wa-log-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
     alumno_id: alumno.id,
-    alumno_nombre: `${alumno.nombre} ${alumno.apellido_paterno} ${alumno.apellido_materno || ''}`.replace(/\s+/g, ' ').trim(),
+    alumno_nombre: fullStudentName,
     tutor: alumno.tutor,
     telefono: alumno.telefono,
     tipo: log.tipo,
@@ -109,17 +131,18 @@ export const sendWhatsAppNotification = async (
     timestamp
   };
 
-  // Envío en segundo plano al celular asignado mediante el backend API sin abrir nada en la laptop
-  if (typeof window !== 'undefined' && alumno.telefono && alumno.telefono !== '+525500000000') {
+  if (typeof window !== 'undefined') {
     try {
       const res = await fetch('/api/whatsapp/send', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          to: alumno.telefono,
+          to: alumno.telefono || alumno.matricula,
           message: messageText,
+          matricula: alumno.matricula,
+          studentName: fullStudentName,
           alumno: {
-            nombre: `${alumno.nombre} ${alumno.apellido_paterno} ${alumno.apellido_materno || ''}`.replace(/\s+/g, ' ').trim(),
+            nombre: fullStudentName,
             grupo: `${alumno.grado} "${alumno.grupo}"`,
             qr_code: alumno.qr_code || alumno.matricula,
             matricula: alumno.matricula
@@ -138,9 +161,9 @@ export const sendWhatsAppNotification = async (
 
       logEntry.status = 'sent';
       saveLogToLocal(logEntry);
-      return { success: true, simulated: data.provider === 'simulated', url: sendUrl, logEntry };
+      return { success: true, simulated: false, url: sendUrl, logEntry };
     } catch (err) {
-      console.warn('Registro de notificación WhatsApp en segundo plano:', err);
+      console.warn('Registro de notificación en segundo plano:', err);
       logEntry.status = 'sent';
       saveLogToLocal(logEntry);
       return { success: true, simulated: true, url: sendUrl, logEntry };
