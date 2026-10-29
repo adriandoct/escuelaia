@@ -7,15 +7,16 @@ import * as XLSX from 'xlsx';
 import confetti from 'canvas-confetti';
 import { 
   X, UploadCloud, FileSpreadsheet, Download, CheckCircle2, 
-  AlertTriangle, Sparkles, RefreshCw, Layers
+  AlertTriangle, Sparkles, RefreshCw
 } from 'lucide-react';
 import { 
   BloqueHorario, 
-  parseHorariosFromMatrix, 
+  parseHorariosFromWorkbook, 
   downloadHorariosExcelTemplate, 
   getStoredHorarios, 
   saveHorarios,
-  resetHorariosToDefault
+  resetHorariosToDefault,
+  sortGruposOficiales
 } from '@/lib/horarios';
 
 interface SubirHorariosModalProps {
@@ -45,16 +46,13 @@ export default function SubirHorariosModal({ isOpen, onClose, onHorariosUpdated 
     try {
       const buffer = await file.arrayBuffer();
       const wb = XLSX.read(new Uint8Array(buffer), { type: 'array' });
-      const firstSheetName = wb.SheetNames[0];
-      const ws = wb.Sheets[firstSheetName];
-      const matrix: any[][] = XLSX.utils.sheet_to_json(ws, { header: 1, defval: '' });
+      const result = parseHorariosFromWorkbook(wb);
 
-      const result = parseHorariosFromMatrix(matrix);
-      if (result.errors.length > 0) {
+      if (result.errors.length > 0 && result.bloques.length === 0) {
         setErrors(result.errors);
         setParsedBloques([]);
       } else if (result.bloques.length === 0) {
-        setErrors(['No se pudieron extraer bloques válidos del archivo. Revisa que contenga columnas de Materia y Docente.']);
+        setErrors(['No se pudieron extraer bloques válidos del archivo. Verifica que contenga pestañas de grupo o columnas de Materia y Docente.']);
         setParsedBloques([]);
       } else {
         setParsedBloques(result.bloques);
@@ -92,10 +90,13 @@ export default function SubirHorariosModal({ isOpen, onClose, onHorariosUpdated 
       finalHorarios = parsedBloques;
     } else {
       const existing = getStoredHorarios();
-      finalHorarios = [...existing, ...parsedBloques];
+      const map = new Map<string, BloqueHorario>();
+      existing.forEach(b => map.set(`${b.grupo}-${b.dia}-${b.horaInicio}`, b));
+      parsedBloques.forEach(b => map.set(`${b.grupo}-${b.dia}-${b.horaInicio}`, b));
+      finalHorarios = Array.from(map.values());
     }
 
-    saveHorarios(finalHorarios);
+    saveHorarios(finalHorarios, importMode);
     onHorariosUpdated(finalHorarios);
 
     confetti({
@@ -104,7 +105,8 @@ export default function SubirHorariosModal({ isOpen, onClose, onHorariosUpdated 
       origin: { y: 0.6 }
     });
 
-    setSuccessMessage(`¡Se han cargado exitosamente ${parsedBloques.length} bloques de clase en los horarios de grupo!`);
+    const grpCount = new Set(parsedBloques.map(b => b.grupo)).size;
+    setSuccessMessage(`¡Se han cargado exitosamente ${parsedBloques.length} bloques de clase (${grpCount} grupos) con docentes normalizados!`);
     setTimeout(() => {
       onClose();
       setParsedBloques([]);
@@ -123,15 +125,15 @@ export default function SubirHorariosModal({ isOpen, onClose, onHorariosUpdated 
       origin: { y: 0.6 }
     });
 
-    setSuccessMessage('¡Se restauraron los horarios modelo oficiales de CECYTE BC (1°A, 1°B, 3°APGA, 5°APGA)!');
+    setSuccessMessage('¡Se cargaron los 12 grupos oficiales de HORARIOS DE GRUPO 2026-2 (1A a 5APGA, 351 clases)!');
     setTimeout(() => {
       onClose();
       setSuccessMessage(null);
     }, 1500);
   };
 
-  // Group summary from parsed preview
-  const groupsDetected = Array.from(new Set(parsedBloques.map(b => `${b.grado} ${b.grupo}`)));
+  // Group and teacher summary from parsed preview
+  const groupsDetected = sortGruposOficiales(Array.from(new Set(parsedBloques.map(b => b.grupo))));
   const teachersDetected = Array.from(new Set(parsedBloques.map(b => b.maestro)));
 
   return (
@@ -150,10 +152,10 @@ export default function SubirHorariosModal({ isOpen, onClose, onHorariosUpdated 
             </div>
             <h3 className="text-xl sm:text-2xl font-black text-white flex items-center space-x-2">
               <UploadCloud className="text-cyan-400" size={24} />
-              <span>Subir Horarios de Grupo</span>
+              <span>Subir Horarios de Grupo (2026-2)</span>
             </h3>
             <p className="text-xs text-gray-400">
-              Carga masiva de horarios mediante archivo Excel (.xlsx, .xls) o CSV con detección de docentes y materias.
+              Soporta libros multipestaña de CECYTE BC (<strong className="text-gray-200">HORARIOS DE GRUPO 2026-2.xlsx</strong> con los 12 grupos) o plantillas tabulares.
             </p>
           </div>
 
@@ -168,7 +170,7 @@ export default function SubirHorariosModal({ isOpen, onClose, onHorariosUpdated 
         {/* Modal Body */}
         <div className="flex-1 overflow-y-auto py-5 space-y-5 pr-1">
 
-          {/* Quick template and demo buttons */}
+          {/* Quick template and official 2026-2 load buttons */}
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <button
               type="button"
@@ -182,10 +184,10 @@ export default function SubirHorariosModal({ isOpen, onClose, onHorariosUpdated 
             <button
               type="button"
               onClick={handleLoadOfficialDemo}
-              className="flex items-center justify-center space-x-2 p-3 rounded-2xl bg-white/5 border border-white/10 hover:border-cyan-500/40 text-cyan-400 hover:bg-cyan-500/10 text-xs font-bold transition-all cursor-pointer group"
+              className="flex items-center justify-center space-x-2 p-3 rounded-2xl bg-cyan-500/10 border border-cyan-500/30 hover:border-cyan-400 text-cyan-300 hover:bg-cyan-500/20 text-xs font-bold transition-all cursor-pointer group"
             >
               <Sparkles size={16} className="group-hover:rotate-12 transition-transform" />
-              <span>Cargar Horarios Modelo CECYTE BC</span>
+              <span>Cargar los 12 Grupos Oficiales 2026-2</span>
             </button>
           </div>
 
@@ -215,10 +217,10 @@ export default function SubirHorariosModal({ isOpen, onClose, onHorariosUpdated 
 
             <div>
               <p className="text-sm font-bold text-white">
-                {fileName ? fileName : 'Selecciona o arrastra tu archivo de Horarios'}
+                {fileName ? fileName : 'Selecciona o arrastra HORARIOS DE GRUPO 2026-2.xlsx'}
               </p>
               <p className="text-xs text-gray-400 mt-1">
-                Formatos compatibles: Microsoft Excel (.xlsx, .xls) o archivo delimitado por comas (.csv)
+                Formatos compatibles: Microsoft Excel multipestaña (.xlsx, .xls) o CSV (.csv)
               </p>
             </div>
 
@@ -256,31 +258,36 @@ export default function SubirHorariosModal({ isOpen, onClose, onHorariosUpdated 
                 <div className="flex items-center space-x-2">
                   <CheckCircle2 size={16} className="text-emerald-400" />
                   <span className="text-xs font-extrabold text-white">
-                    Vista Previa de Detección ({parsedBloques.length} clases)
+                    Vista Previa de Detección ({parsedBloques.length} bloques de clase)
                   </span>
                 </div>
-                <span className="text-[11px] text-gray-400">
-                  {groupsDetected.length} grupos • {teachersDetected.length} docentes
+                <span className="text-[11px] text-cyan-300 font-bold">
+                  {groupsDetected.length} grupos • {teachersDetected.length} maestros
                 </span>
               </div>
 
-              {/* Badges preview */}
-              <div className="flex flex-wrap gap-1.5 pt-1">
-                {groupsDetected.map(g => (
-                  <span key={g} className="px-2 py-0.5 rounded-md bg-blue-500/20 text-blue-300 border border-blue-500/30 text-[10px] font-mono font-bold">
-                    Grupo: {g}
-                  </span>
-                ))}
-                {teachersDetected.slice(0, 5).map(t => (
-                  <span key={t} className="px-2 py-0.5 rounded-md bg-purple-500/20 text-purple-300 border border-purple-500/30 text-[10px] font-bold">
-                    👨‍🏫 {t}
-                  </span>
-                ))}
-                {teachersDetected.length > 5 && (
-                  <span className="px-2 py-0.5 rounded-md bg-white/10 text-gray-400 text-[10px]">
-                    +{teachersDetected.length - 5} docentes más
-                  </span>
-                )}
+              {/* Group Badges preview */}
+              <div className="space-y-1.5 pt-1">
+                <p className="text-[10px] font-bold uppercase text-gray-400">Grupos detectados ({groupsDetected.length}):</p>
+                <div className="flex flex-wrap gap-1.5">
+                  {groupsDetected.map(g => (
+                    <span key={g} className="px-2 py-0.5 rounded-md bg-blue-500/20 text-blue-300 border border-blue-500/30 text-[10px] font-mono font-bold">
+                      {g}
+                    </span>
+                  ))}
+                </div>
+              </div>
+
+              {/* Teacher Badges preview */}
+              <div className="space-y-1.5 pt-1">
+                <p className="text-[10px] font-bold uppercase text-gray-400">Maestros normalizados ({teachersDetected.length}):</p>
+                <div className="flex flex-wrap gap-1.5">
+                  {teachersDetected.map(t => (
+                    <span key={t} className="px-2 py-0.5 rounded-md bg-purple-500/20 text-purple-300 border border-purple-500/30 text-[10px] font-bold">
+                      👨‍🏫 {t}
+                    </span>
+                  ))}
+                </div>
               </div>
 
               {/* Mode Selection */}
@@ -312,9 +319,9 @@ export default function SubirHorariosModal({ isOpen, onClose, onHorariosUpdated 
                     }`}
                   >
                     <p className="font-bold flex items-center space-x-1">
-                      <span>➕ Combinar / Agregar</span>
+                      <span>➕ Combinar / Actualizar</span>
                     </p>
-                    <p className="text-[10px] text-gray-400 mt-0.5">Agrega las clases nuevas sin borrar las anteriores</p>
+                    <p className="text-[10px] text-gray-400 mt-0.5">Actualiza los grupos del archivo sin borrar otros</p>
                   </button>
                 </div>
               </div>

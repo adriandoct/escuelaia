@@ -44,13 +44,13 @@ export default function TeacherDashboardPage() {
   const [activeMainTab, setActiveMainTab] = useState<'asistencias' | 'horarios' | 'reportes'>('asistencias');
   const [horarios, setHorarios] = useState<BloqueHorario[]>([]);
   const [scheduleGroup, setScheduleGroup] = useState<string>('1A');
-  const [scheduleGrade, setScheduleGrade] = useState<string>('1°');
+  const [scheduleGrade, setScheduleGrade] = useState<string>('');
   const [isUploadScheduleModalOpen, setIsUploadScheduleModalOpen] = useState(false);
 
   const [students, setStudents] = useState<Alumno[]>([]);
   const [todayLogs, setTodayLogs] = useState<Asistencia[]>([]);
   const [selectedGrade, setSelectedGrade] = useState<string>('1°');
-  const [selectedGroup, setSelectedGroup] = useState<string>('A');
+  const [selectedGroup, setSelectedGroup] = useState<string>('1A');
   const [searchQuery, setSearchQuery] = useState('');
   const [loading, setLoading] = useState(true);
 
@@ -1046,7 +1046,12 @@ export default function TeacherDashboardPage() {
               {['1°', '3°', '5°'].map((g) => (
                 <button
                   key={g}
-                  onClick={() => setSelectedGrade(g)}
+                  onClick={() => {
+                    setSelectedGrade(g);
+                    if (g === '1°') setSelectedGroup('1A');
+                    else if (g === '3°') setSelectedGroup('3APGA');
+                    else if (g === '5°') setSelectedGroup('5APGA');
+                  }}
                   className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
                     selectedGrade === g
                       ? 'bg-gradient-to-r from-emerald-500 to-teal-600 text-white shadow-md shadow-emerald-500/20'
@@ -1058,13 +1063,18 @@ export default function TeacherDashboardPage() {
               ))}
             </div>
 
-            <div className="flex items-center space-x-1.5">
+            <div className="flex items-center flex-wrap gap-1.5">
               <span className="text-xs font-bold text-gray-400 uppercase tracking-wider">Grupo:</span>
-              {['A', 'B'].map((grp) => (
+              {(selectedGrade === '1°'
+                ? ['1A', '1B', '1C', '1D', '1E']
+                : selectedGrade === '3°'
+                ? ['3APGM', '3APGA', '3ASC', '3BPGA']
+                : ['5APGM', '5BPGM', '5APGA']
+              ).map((grp) => (
                 <button
                   key={grp}
                   onClick={() => setSelectedGroup(grp)}
-                  className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+                  className={`px-3 py-1.5 rounded-xl text-xs font-mono font-bold transition-all cursor-pointer ${
                     selectedGroup === grp
                       ? 'bg-gradient-to-r from-emerald-500 to-teal-600 text-white shadow-md shadow-emerald-500/20'
                       : 'glass-panel text-gray-400 hover:text-white'
