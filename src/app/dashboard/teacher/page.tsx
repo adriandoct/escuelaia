@@ -29,10 +29,24 @@ import {
   setMateriaWebhook,
   GOOGLE_APPS_SCRIPT_TEMPLATE
 } from '@/lib/spreadsheet';
+import { 
+  BloqueHorario, 
+  getStoredHorarios 
+} from '@/lib/horarios';
+import HorarioSemanalGrid from '@/components/horarios/HorarioSemanalGrid';
+import ReporteHorariosPorGrupo from '@/components/horarios/ReporteHorariosPorGrupo';
+import SubirHorariosModal from '@/components/horarios/SubirHorariosModal';
 
 export default function TeacherDashboardPage() {
   const { user } = useAuth();
   
+  // MAIN NAVIGATION TABS: Asistencias vs Horarios de Grupo vs Reportes Oficiales
+  const [activeMainTab, setActiveMainTab] = useState<'asistencias' | 'horarios' | 'reportes'>('asistencias');
+  const [horarios, setHorarios] = useState<BloqueHorario[]>([]);
+  const [scheduleGroup, setScheduleGroup] = useState<string>('1A');
+  const [scheduleGrade, setScheduleGrade] = useState<string>('1°');
+  const [isUploadScheduleModalOpen, setIsUploadScheduleModalOpen] = useState(false);
+
   const [students, setStudents] = useState<Alumno[]>([]);
   const [todayLogs, setTodayLogs] = useState<Asistencia[]>([]);
   const [selectedGrade, setSelectedGrade] = useState<string>('1°');
@@ -87,6 +101,20 @@ export default function TeacherDashboardPage() {
       const savedWh = localStorage.getItem('dojoia_google_sheets_webhook') || '';
       setGoogleWebhookUrl(savedWh);
       setMateriaWebhooksMap(getMateriaWebhooksMap());
+    }
+
+    // Load group schedules
+    setHorarios(getStoredHorarios());
+    const handleHorariosUpdate = (e: any) => {
+      if (e.detail && Array.isArray(e.detail)) {
+        setHorarios(e.detail);
+      } else {
+        setHorarios(getStoredHorarios());
+      }
+    };
+    if (typeof window !== 'undefined') {
+      window.addEventListener('dojoia_horarios_updated', handleHorariosUpdate);
+      return () => window.removeEventListener('dojoia_horarios_updated', handleHorariosUpdate);
     }
   }, []);
 
@@ -727,10 +755,67 @@ export default function TeacherDashboardPage() {
     <div className="space-y-6 pb-12 flex-1 flex flex-col">
       
       {/* =========================================================================
+          BARRA DE NAVEGACIÓN SUPERIOR: ASISTENCIAS vs HORARIOS DE GRUPO vs REPORTES
+          ========================================================================= */}
+      <div className="flex items-center space-x-2 p-1.5 rounded-2xl bg-[#030712]/95 border border-white/10 shadow-2xl overflow-x-auto">
+        <button
+          type="button"
+          onClick={() => setActiveMainTab('asistencias')}
+          className={`flex items-center space-x-2 px-4 py-2.5 rounded-xl text-xs sm:text-sm font-extrabold transition-all cursor-pointer whitespace-nowrap ${
+            activeMainTab === 'asistencias'
+              ? 'bg-gradient-to-r from-emerald-500 to-teal-500 text-black shadow-lg shadow-emerald-500/30 ring-1 ring-emerald-300'
+              : 'text-gray-400 hover:text-white hover:bg-white/5'
+          }`}
+        >
+          <span>📊</span>
+          <span>Pase de Lista y Asistencias</span>
+        </button>
+
+        <button
+          type="button"
+          onClick={() => setActiveMainTab('horarios')}
+          className={`flex items-center space-x-2 px-4 py-2.5 rounded-xl text-xs sm:text-sm font-extrabold transition-all cursor-pointer whitespace-nowrap ${
+            activeMainTab === 'horarios'
+              ? 'bg-gradient-to-r from-cyan-500 to-blue-600 text-white shadow-lg shadow-cyan-500/30 ring-1 ring-cyan-300'
+              : 'text-gray-400 hover:text-white hover:bg-white/5'
+          }`}
+        >
+          <span>📅</span>
+          <span>Horarios de Grupo (Colores por Maestro)</span>
+          {user?.role === 'administrador' && (
+            <span className="ml-1 px-1.5 py-0.5 rounded-full bg-amber-400/20 text-amber-300 text-[10px] border border-amber-400/40">
+              Admin
+            </span>
+          )}
+        </button>
+
+        <button
+          type="button"
+          onClick={() => setActiveMainTab('reportes')}
+          className={`flex items-center space-x-2 px-4 py-2.5 rounded-xl text-xs sm:text-sm font-extrabold transition-all cursor-pointer whitespace-nowrap ${
+            activeMainTab === 'reportes'
+              ? 'bg-gradient-to-r from-purple-500 to-indigo-600 text-white shadow-lg shadow-purple-500/30 ring-1 ring-purple-300'
+              : 'text-gray-400 hover:text-white hover:bg-white/5'
+          }`}
+        >
+          <span>📑</span>
+          <span>Reporte Oficial de Horarios</span>
+        </button>
+      </div>
+
+      {/* =========================================================================
           HEADER BANNER CON CONTROLES PRINCIPALES Y RESPALDO EN DRIVE
           ========================================================================= */}
-      <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-6 glass-panel p-6 rounded-3xl border-emerald-500/20 relative overflow-hidden">
-        <div className="absolute top-0 right-0 w-72 h-72 bg-emerald-500/10 rounded-full blur-3xl pointer-events-none"></div>
+      <div className={`flex flex-col lg:flex-row lg:items-center lg:justify-between gap-6 glass-panel p-6 rounded-3xl relative overflow-hidden ${
+        activeMainTab === 'horarios' 
+          ? 'border-cyan-500/30' 
+          : activeMainTab === 'reportes' 
+          ? 'border-purple-500/30' 
+          : 'border-emerald-500/20'
+      }`}>
+        <div className={`absolute top-0 right-0 w-72 h-72 rounded-full blur-3xl pointer-events-none ${
+          activeMainTab === 'horarios' ? 'bg-cyan-500/10' : activeMainTab === 'reportes' ? 'bg-purple-500/10' : 'bg-emerald-500/10'
+        }`}></div>
 
         <div className="space-y-1.5 z-10">
           <div className="inline-flex items-center space-x-2 px-3 py-1 rounded-full bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 text-xs font-bold uppercase tracking-wider">
@@ -738,82 +823,132 @@ export default function TeacherDashboardPage() {
             <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span>
             <span>CECYTE BC</span>
           </div>
+
           <h2 className="text-2xl sm:text-3xl font-extrabold text-white tracking-tight flex items-center space-x-2">
-            <span>Pase de Lista y Participaciones</span>
+            {activeMainTab === 'asistencias' && <span>Pase de Lista y Participaciones</span>}
+            {activeMainTab === 'horarios' && <span>Horarios de Grupo y Carga Docente</span>}
+            {activeMainTab === 'reportes' && <span>Reportes Oficiales e Impresión de Horarios</span>}
           </h2>
+
           <p className="text-gray-400 text-xs sm:text-sm flex items-center space-x-2 flex-wrap">
-            <span>Docente: <strong className="text-white">{user?.name || 'Profesor'}</strong></span>
+            <span>Usuario: <strong className="text-white">{user?.name || 'Profesor'}</strong></span>
             <span>•</span>
-            <span className="text-cyan-400 font-mono">Clase de hoy: {formatDateShort(selectedDate)}</span>
-            {lastSavedTime && (
-              <>
-                <span>•</span>
-                <span className="text-gray-400 text-xs">Guardado a las: {lastSavedTime}</span>
-              </>
+            {user?.role === 'administrador' ? (
+              <span className="text-amber-400 font-bold">👑 Privilegio: Administrador</span>
+            ) : (
+              <span className="text-emerald-400 font-semibold">👨‍🏫 Docente</span>
             )}
-            {lastDriveBackupTime && (
+            {activeMainTab === 'asistencias' && (
               <>
                 <span>•</span>
-                <span className="text-emerald-400 text-xs font-semibold">☁️ Respaldo Drive: {lastDriveBackupTime}</span>
+                <span className="text-cyan-400 font-mono">Clase de hoy: {formatDateShort(selectedDate)}</span>
+                {lastSavedTime && (
+                  <>
+                    <span>•</span>
+                    <span className="text-gray-400 text-xs">Guardado a las: {lastSavedTime}</span>
+                  </>
+                )}
+                {lastDriveBackupTime && (
+                  <>
+                    <span>•</span>
+                    <span className="text-emerald-400 text-xs font-semibold">☁️ Respaldo Drive: {lastDriveBackupTime}</span>
+                  </>
+                )}
               </>
             )}
           </p>
         </div>
 
-        {/* Action Buttons Toolbar */}
+        {/* Action Buttons Toolbar depending on active tab */}
         <div className="flex items-center flex-wrap gap-2.5 z-10">
           
-          {/* Button: Guardar el Día */}
-          <button
-            onClick={handleSaveDay}
-            disabled={isSaving}
-            className="flex items-center space-x-2 px-4 py-2.5 sm:px-5 sm:py-3 rounded-xl bg-gradient-to-r from-emerald-500 to-teal-600 hover:from-emerald-400 hover:to-teal-500 text-white font-bold text-xs sm:text-sm shadow-lg shadow-emerald-500/25 transition-all transform active:scale-95 cursor-pointer disabled:opacity-50"
-            title="Guardar asistencias y participaciones del día en la hoja de cálculo para todas las materias"
-          >
-            <Save size={17} className={isSaving ? 'animate-spin' : ''} />
-            <span>{isSaving ? 'Guardando en Hoja...' : 'Guardar el Día'}</span>
-          </button>
+          {activeMainTab === 'asistencias' && (
+            <>
+              {/* Button: Guardar el Día */}
+              <button
+                onClick={handleSaveDay}
+                disabled={isSaving}
+                className="flex items-center space-x-2 px-4 py-2.5 sm:px-5 sm:py-3 rounded-xl bg-gradient-to-r from-emerald-500 to-teal-600 hover:from-emerald-400 hover:to-teal-500 text-white font-bold text-xs sm:text-sm shadow-lg shadow-emerald-500/25 transition-all transform active:scale-95 cursor-pointer disabled:opacity-50"
+                title="Guardar asistencias y participaciones del día en la hoja de cálculo para todas las materias"
+              >
+                <Save size={17} className={isSaving ? 'animate-spin' : ''} />
+                <span>{isSaving ? 'Guardando en Hoja...' : 'Guardar el Día'}</span>
+              </button>
 
-          {/* Button: Subir al Drive (Respaldo en la nube) */}
-          <button
-            onClick={handleUploadToGoogleDrive}
-            disabled={isUploadingDrive}
-            className="flex items-center space-x-2 px-4 py-2.5 sm:px-5 sm:py-3 rounded-xl bg-gradient-to-r from-blue-600 to-cyan-600 hover:from-blue-500 hover:to-cyan-500 text-white font-bold text-xs sm:text-sm shadow-lg shadow-cyan-500/25 transition-all transform active:scale-95 cursor-pointer disabled:opacity-50"
-            title="Subir y respaldar la hoja de cálculo directamente en Google Drive"
-          >
-            <CloudUpload size={17} className={isUploadingDrive ? 'animate-spin text-cyan-200' : ''} />
-            <span>{isUploadingDrive ? 'Subiendo a Drive...' : 'Subir a Drive (Respaldo)'}</span>
-          </button>
+              {/* Button: Subir al Drive (Respaldo en la nube) */}
+              <button
+                onClick={handleUploadToGoogleDrive}
+                disabled={isUploadingDrive}
+                className="flex items-center space-x-2 px-4 py-2.5 sm:px-5 sm:py-3 rounded-xl bg-gradient-to-r from-blue-600 to-cyan-600 hover:from-blue-500 hover:to-cyan-500 text-white font-bold text-xs sm:text-sm shadow-lg shadow-cyan-500/25 transition-all transform active:scale-95 cursor-pointer disabled:opacity-50"
+                title="Subir y respaldar la hoja de cálculo directamente en Google Drive"
+              >
+                <CloudUpload size={17} className={isUploadingDrive ? 'animate-spin text-cyan-200' : ''} />
+                <span>{isUploadingDrive ? 'Subiendo a Drive...' : 'Subir a Drive (Respaldo)'}</span>
+              </button>
 
-          {/* Button: Actualizar */}
-          <button
-            onClick={handleRefreshAndSync}
-            disabled={loading}
-            className="flex items-center space-x-1.5 px-3.5 py-2.5 sm:px-4 sm:py-3 rounded-xl glass-panel text-xs sm:text-sm font-semibold text-gray-200 hover:text-white hover:bg-white/10 transition-all cursor-pointer"
-            title="Actualizar escaneos del lector y sincronizar hoja de cálculo"
-          >
-            <RefreshCw size={16} className={loading ? 'animate-spin text-emerald-400' : ''} />
-            <span>Actualizar</span>
-          </button>
+              {/* Button: Actualizar */}
+              <button
+                onClick={handleRefreshAndSync}
+                disabled={loading}
+                className="flex items-center space-x-1.5 px-3.5 py-2.5 sm:px-4 sm:py-3 rounded-xl glass-panel text-xs sm:text-sm font-semibold text-gray-200 hover:text-white hover:bg-white/10 transition-all cursor-pointer"
+                title="Actualizar escaneos del lector y sincronizar hoja de cálculo"
+              >
+                <RefreshCw size={16} className={loading ? 'animate-spin text-emerald-400' : ''} />
+                <span>Actualizar</span>
+              </button>
 
-          {/* Button: Descargar Excel (.xlsx) */}
-          <button
-            onClick={handleDownloadExcel}
-            className="flex items-center space-x-1.5 px-3.5 py-2.5 sm:px-4 sm:py-3 rounded-xl bg-white/5 border border-white/10 hover:border-emerald-500/40 text-gray-300 hover:text-white text-xs sm:text-sm font-semibold transition-all cursor-pointer"
-            title="Descargar libro de Excel completo (.xlsx) con la Matriz Sábana y hojas de todas las materias"
-          >
-            <Download size={16} className="text-emerald-400" />
-            <span className="hidden sm:inline">Descargar .xlsx</span>
-          </button>
+              {/* Button: Descargar Excel (.xlsx) */}
+              <button
+                onClick={handleDownloadExcel}
+                className="flex items-center space-x-1.5 px-3.5 py-2.5 sm:px-4 sm:py-3 rounded-xl bg-white/5 border border-white/10 hover:border-emerald-500/40 text-gray-300 hover:text-white text-xs sm:text-sm font-semibold transition-all cursor-pointer"
+                title="Descargar libro de Excel completo (.xlsx) con la Matriz Sábana y hojas de todas las materias"
+              >
+                <Download size={16} className="text-emerald-400" />
+                <span className="hidden sm:inline">Descargar .xlsx</span>
+              </button>
 
-          {/* Button: Config Google Drive */}
-          <button
-            onClick={() => setIsDriveModalOpen(true)}
-            className="p-2.5 sm:p-3 rounded-xl glass-panel text-gray-400 hover:text-white hover:bg-white/10 transition-all cursor-pointer"
-            title="Configuración de sincronización automática con Google Drive"
-          >
-            <Settings size={18} />
-          </button>
+              {/* Button: Config Google Drive */}
+              <button
+                onClick={() => setIsDriveModalOpen(true)}
+                className="p-2.5 sm:p-3 rounded-xl glass-panel text-gray-400 hover:text-white hover:bg-white/10 transition-all cursor-pointer"
+                title="Configuración de sincronización automática con Google Drive"
+              >
+                <Settings size={18} />
+              </button>
+            </>
+          )}
+
+          {activeMainTab === 'horarios' && (
+            <>
+              {user?.role === 'administrador' && (
+                <button
+                  onClick={() => setIsUploadScheduleModalOpen(true)}
+                  className="flex items-center space-x-2 px-4 py-2.5 sm:px-5 sm:py-3 rounded-xl bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-400 hover:to-blue-500 text-white font-bold text-xs sm:text-sm shadow-lg shadow-cyan-500/25 transition-all transform active:scale-95 cursor-pointer"
+                >
+                  <CloudUpload size={17} />
+                  <span>Subir Horarios (.xlsx / .csv)</span>
+                </button>
+              )}
+
+              <button
+                onClick={() => setActiveMainTab('reportes')}
+                className="flex items-center space-x-1.5 px-3.5 py-2.5 sm:px-4 sm:py-3 rounded-xl bg-purple-500/20 border border-purple-500/40 hover:bg-purple-500/30 text-purple-300 font-bold text-xs sm:text-sm transition-all cursor-pointer"
+              >
+                <Layers size={16} />
+                <span>📑 Reporte de Horarios</span>
+              </button>
+            </>
+          )}
+
+          {activeMainTab === 'reportes' && (
+            <button
+              onClick={() => setActiveMainTab('horarios')}
+              className="flex items-center space-x-1.5 px-3.5 py-2.5 sm:px-4 sm:py-3 rounded-xl glass-panel text-gray-200 hover:text-white font-semibold text-xs sm:text-sm transition-all cursor-pointer"
+            >
+              <Calendar size={16} className="text-cyan-400" />
+              <span>Ver Cuadrícula Semanal</span>
+            </button>
+          )}
 
         </div>
       </div>
@@ -846,12 +981,15 @@ export default function TeacherDashboardPage() {
       )}
 
       {/* =========================================================================
-          VIEW MODE TOGGLE: VISTA MATRIZ SÁBANA VS VISTA DETALLADA (EXACTO A LA IMAGEN)
+          MÓDULO 1: PASE DE LISTA Y ASISTENCIAS (VISTA MATRIZ SÁBANA & DETALLADA)
           ========================================================================= */}
-      <div className="flex flex-col md:flex-row items-stretch md:items-center justify-between gap-4">
-        
-        {/* Toggle Buttons (Matching user screenshot style) */}
-        <div className="flex items-center space-x-2 p-1.5 rounded-2xl bg-[#030712]/90 border border-white/10 shadow-lg">
+      {activeMainTab === 'asistencias' && (
+        <>
+          {/* VIEW MODE TOGGLE: VISTA MATRIZ SÁBANA VS VISTA DETALLADA */}
+          <div className="flex flex-col md:flex-row items-stretch md:items-center justify-between gap-4">
+            
+            {/* Toggle Buttons */}
+            <div className="flex items-center space-x-2 p-1.5 rounded-2xl bg-[#030712]/90 border border-white/10 shadow-lg">
           <button
             type="button"
             onClick={() => setViewMode('sabana')}
@@ -1492,6 +1630,43 @@ export default function TeacherDashboardPage() {
 
         </div>
       )}
+      </>
+      )}
+
+      {/* =========================================================================
+          MÓDULO 2: HORARIOS DE GRUPO (COLORES POR DOCENTE & SUBIDA ADMIN)
+          ========================================================================= */}
+      {activeMainTab === 'horarios' && (
+        <HorarioSemanalGrid
+          horarios={horarios}
+          isAdmin={user?.role === 'administrador'}
+          onHorariosUpdated={(updated) => setHorarios(updated)}
+          selectedGroup={scheduleGroup}
+          onSelectGroup={(grp) => setScheduleGroup(grp)}
+          selectedGrade={scheduleGrade}
+          onSelectGrade={(g) => setScheduleGrade(g)}
+          onOpenReport={() => setActiveMainTab('reportes')}
+        />
+      )}
+
+      {/* =========================================================================
+          MÓDULO 3: REPORTE OFICIAL DE HORARIOS POR GRUPO
+          ========================================================================= */}
+      {activeMainTab === 'reportes' && (
+        <ReporteHorariosPorGrupo
+          horarios={horarios}
+          initialGroup={scheduleGroup}
+          initialGrade={scheduleGrade}
+          onBackToGrid={() => setActiveMainTab('horarios')}
+        />
+      )}
+
+      {/* Upload Schedule Modal accessible directly for Administrator */}
+      <SubirHorariosModal
+        isOpen={isUploadScheduleModalOpen}
+        onClose={() => setIsUploadScheduleModalOpen(false)}
+        onHorariosUpdated={(updated) => setHorarios(updated)}
+      />
 
       {/* =========================================================================
           MODAL: CONFIGURACIÓN GOOGLE DRIVE / SHEETS (RESPALDO EN LA NUBE)
