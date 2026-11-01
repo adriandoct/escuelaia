@@ -12,6 +12,9 @@ import {
   getStudentNtfyTopic,
   getTutorNtfyTopic,
   getClean10DigitPhone,
+  formatPhoneWithCountryCode,
+  openWhatsAppDeepLink,
+  WHATSAPP_SENDER_PHONE,
   WhatsAppLog 
 } from '@/lib/whatsapp';
 import { 
@@ -323,17 +326,31 @@ export default function ParentsDashboardPage() {
     setIsNotifyModalOpen(true);
   };
 
-  // Send WhatsApp Notification (Entry or Exit)
+  // Send WhatsApp Notification (Entry or Exit) via Free Deep Link https://wa.me/<NUMERO_CON_CODIGO_PAIS>?text=<MENSAJE_CODIFICADO>
   const handleSendNotification = async () => {
     if (!selectedStudentForNotify) return;
 
+    const todayStr = new Date().toISOString().split('T')[0];
+    const timeStr = new Date().toTimeString().split(' ')[0];
+
+    // 1. Abrir de inmediato el Deep Link gratuito https://wa.me/<NUMERO_CON_CODIGO_PAIS>?text=<MENSAJE_CODIFICADO>
+    // (Sincrónico al clic del usuario para evitar bloqueadores de ventanas emergentes y abrir la app de WhatsApp con emisor +526641665354)
+    const immediateLog: Asistencia = {
+      id: `wa-direct-${Date.now()}`,
+      alumno_id: selectedStudentForNotify.id,
+      tipo: notifyType,
+      fecha: todayStr,
+      hora: timeStr,
+      ubicacion: 'Acceso Principal Plantel Urbivillas'
+    };
+    const waMeDeepLink = getWhatsAppSendUrl(selectedStudentForNotify, immediateLog);
+    if (selectedStudentForNotify.telefono) {
+      openWhatsAppDeepLink(waMeDeepLink);
+    }
+
     setIsSendingWhatsApp(true);
     try {
-      // 1. Create or retrieve the attendance log
-      const todayStr = new Date().toISOString().split('T')[0];
-      const timeStr = new Date().toTimeString().split(' ')[0];
-
-      // Register attendance event to persist in system and reflect real status
+      // 2. Register attendance event to persist in system and reflect real status
       const { asistencia, alumno } = await db.registrarAsistencia(
         selectedStudentForNotify.matricula,
         notifyType,
@@ -342,8 +359,8 @@ export default function ParentsDashboardPage() {
         user?.name || 'Administración Escolar'
       );
 
-      // 2. Dispatch the WhatsApp notification
-      const result = await sendWhatsAppNotification(alumno, asistencia);
+      // 3. Registrar en historial y enviar respaldo push sin duplicar ventana wa.me
+      const result = await sendWhatsAppNotification(alumno, asistencia, { openDeepLink: false });
 
       // Refresh data
       await loadAllData();
@@ -351,10 +368,10 @@ export default function ParentsDashboardPage() {
 
       if (result.success) {
         showToast(
-          `📲 Notificación de ${notifyType.toUpperCase()} enviada exitosamente a ${alumno.tutor} (${alumno.telefono}).`
+          `📲 WhatsApp Directo (wa.me Gratis • Emisor ${WHATSAPP_SENDER_PHONE}) abierto para ${alumno.tutor} (${alumno.telefono}).`
         );
       } else {
-        showToast(`⚠️ Alerta registrada en el sistema. Puedes enviar manualmente el WhatsApp.`);
+        showToast(`⚠️ Alerta registrada en el sistema. Enlace wa.me generado.`);
       }
     } catch (err: any) {
       alert('Error al registrar y notificar: ' + (err.message || err));
@@ -1261,30 +1278,64 @@ export default function ParentsDashboardPage() {
               </button>
             </div>
 
-            {/* Recipient Details */}
-            <div className="p-3.5 rounded-2xl bg-black/40 border border-white/10 flex items-center justify-between">
-              <div className="flex items-center space-x-3">
-                {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img
-                  src={selectedStudentForNotify.foto_url || `https://api.dicebear.com/7.x/bottts/svg?seed=${selectedStudentForNotify.matricula}`}
-                  alt={selectedStudentForNotify.nombre}
-                  className="w-10 h-10 rounded-xl bg-gray-800 object-cover border border-white/10"
-                />
-                <div>
-                  <div className="text-xs font-bold text-white">
-                    {selectedStudentForNotify.nombre} {selectedStudentForNotify.apellido_paterno}
+            {/* Recipient & Sender Details */}
+            <div className="p-3.5 rounded-2xl bg-black/40 border border-white/10 space-y-2.5">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center space-x-3">
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img
+                    src={selectedStudentForNotify.foto_url || `https://api.dicebear.com/7.x/bottts/svg?seed=${selectedStudentForNotify.matricula}`}
+                    alt={selectedStudentForNotify.nombre}
+                    className="w-10 h-10 rounded-xl bg-gray-800 object-cover border border-white/10"
+                  />
+                  <div>
+                    <div className="text-xs font-bold text-white">
+                      {selectedStudentForNotify.nombre} {selectedStudentForNotify.apellido_paterno}
+                    </div>
+                    <div className="text-[11px] text-gray-400">
+                      Tutor: <strong className="text-purple-300">{selectedStudentForNotify.tutor || 'No asignado'}</strong>
+                    </div>
                   </div>
-                  <div className="text-[11px] text-gray-400">
-                    Tutor: <strong className="text-purple-300">{selectedStudentForNotify.tutor || 'No asignado'}</strong>
+                </div>
+
+                <div className="text-right">
+                  <div className="text-xs font-mono font-bold text-emerald-400">
+                    {selectedStudentForNotify.telefono || 'Sin teléfono'}
+                  </div>
+                  <div className="text-[10px] text-gray-400 font-mono">
+                    Emisor: <span className="text-cyan-300 font-bold">{WHATSAPP_SENDER_PHONE}</span>
                   </div>
                 </div>
               </div>
 
-              <div className="text-right">
-                <div className="text-xs font-mono font-bold text-emerald-400">
-                  {selectedStudentForNotify.telefono || 'Sin teléfono'}
+              {/* Direct Deep Link URL Box */}
+              <div className="pt-2 border-t border-white/10 flex items-center justify-between gap-2 text-[11px]">
+                <div className="min-w-0 flex-1">
+                  <span className="text-[10px] text-emerald-400 font-bold uppercase block">
+                    Enlace Directo / Deep Link Gratuito (wa.me):
+                  </span>
+                  <code className="text-[10px] font-mono text-gray-300 truncate block bg-black/60 px-2 py-1 rounded border border-emerald-500/20">
+                    {`https://wa.me/${formatPhoneWithCountryCode(selectedStudentForNotify.telefono)}?text=${encodeURIComponent(previewMessage).slice(0, 48)}...`}
+                  </code>
                 </div>
-                <div className="text-[10px] text-gray-500">Destino WhatsApp</div>
+                <button
+                  type="button"
+                  onClick={() => {
+                    const url = getWhatsAppSendUrl(selectedStudentForNotify, {
+                      id: 'modal-copy',
+                      alumno_id: selectedStudentForNotify.id,
+                      tipo: notifyType,
+                      fecha: new Date().toISOString().split('T')[0],
+                      hora: new Date().toTimeString().split(' ')[0]
+                    });
+                    navigator.clipboard.writeText(url);
+                    showToast('✅ Enlace directo https://wa.me/... copiado al portapapeles');
+                  }}
+                  className="px-2.5 py-1.5 rounded-lg bg-emerald-500/15 hover:bg-emerald-500/25 border border-emerald-500/30 text-emerald-300 text-[10px] font-bold flex items-center space-x-1 shrink-0 cursor-pointer"
+                >
+                  <Copy size={12} />
+                  <span>Copiar URL</span>
+                </button>
               </div>
             </div>
 
@@ -1461,8 +1512,8 @@ export default function ParentsDashboardPage() {
               const studentTopic = getStudentNtfyTopic(freePushStudent.matricula);
               const tutorTopic = getTutorNtfyTopic(freePushStudent.telefono);
               const waInviteText = `🏫 *CECYTE BC PLANTEL URBIVILLAS*\n🔔 *ACTIVACIÓN DE NOTIFICACIONES GRATIS EN TU CELULAR*\n\nEstimado tutor de *${freePushStudent.nombre} ${freePushStudent.apellido_paterno}* (${freePushStudent.grado} "${freePushStudent.grupo}"), abre este enlace en tu celular para recibir alertas instantáneas con sonido cada vez que tu hijo(a) entre o salga del plantel (100% gratis, sin cobro):\n\n👉 ${tutorPortalUrl}\n\n🔑 Código directo para App ntfy: *${studentTopic}*`;
-              const cleanTel = (freePushStudent.telefono || '').replace(/\D/g, '');
-              const waInviteUrl = `https://api.whatsapp.com/send?phone=${cleanTel.startsWith('52') ? cleanTel : `52${cleanTel}`}&text=${encodeURIComponent(waInviteText)}`;
+              const cleanTel = formatPhoneWithCountryCode(freePushStudent.telefono);
+              const waInviteUrl = `https://wa.me/${cleanTel}?text=${encodeURIComponent(waInviteText)}`;
 
               return (
                 <div className="space-y-4">

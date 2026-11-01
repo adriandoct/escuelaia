@@ -829,14 +829,14 @@ export default function BarcodeScannerHub({ onScanCompleted, className = '' }: B
               {soundEnabled ? <Volume2 size={16} /> : <VolumeX size={16} />}
             </button>
 
-            {/* Indicador de WhatsApp al celular en segundo plano */}
+            {/* Indicador de Enlace Directo de WhatsApp / Deep Link Gratuito (Emisor +526641665354) */}
             <div
               className="px-3 py-1.5 rounded-xl border border-emerald-500/40 bg-emerald-500/15 text-emerald-300 text-xs font-bold flex items-center space-x-1.5 shadow-[0_0_12px_rgba(16,185,129,0.15)]"
-              title="Envío automático directo al celular de WhatsApp asignado sin abrir ventanas en la laptop"
+              title="Enlace directo gratuito https://wa.me/<NUMERO_CON_CODIGO_PAIS>?text=<MENSAJE_CODIFICADO> desde el emisor +526641665354"
             >
               <Smartphone size={14} className="text-emerald-400" />
-              <span className="hidden sm:inline">📲 WhatsApp Directo al Celular</span>
-              <span className="sm:hidden">📲 WhatsApp Celular</span>
+              <span className="hidden sm:inline">📲 WhatsApp wa.me Gratis (+526641665354)</span>
+              <span className="sm:hidden">📲 wa.me Gratis</span>
             </div>
 
             {/* Hardware Scanner Reconnect / Detect Button */}
@@ -1488,10 +1488,10 @@ export default function BarcodeScannerHub({ onScanCompleted, className = '' }: B
                           target="_blank"
                           rel="noopener noreferrer"
                           className="w-full flex items-center justify-center space-x-1.5 px-3 py-2 rounded-xl bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white font-extrabold text-xs shadow-md shadow-emerald-900/40 transition-all hover:scale-[1.01] cursor-pointer"
-                          title="Abrir mensaje oficial en WhatsApp Web o App"
+                          title="Abrir enlace directo gratuito https://wa.me/<NUMERO_CON_CODIGO_PAIS>?text=<MENSAJE_CODIFICADO> (Emisor +526641665354)"
                         >
                           <Smartphone size={14} />
-                          <span>📲 Abrir / Reenviar en WhatsApp Web</span>
+                          <span>📲 Enviar en WhatsApp (wa.me Gratis • +526641665354)</span>
                         </a>
                       </div>
                     )}

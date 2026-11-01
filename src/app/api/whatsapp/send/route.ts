@@ -1,5 +1,7 @@
 import { NextResponse } from 'next/server';
 
+const OFFICIAL_SENDER_PHONE = '+526641665354';
+
 export async function POST(req: Request) {
   try {
     const body = await req.json();
@@ -21,7 +23,7 @@ export async function POST(req: Request) {
       );
     }
 
-    // Normalize phone to extract clean 10-digit Mexican number
+    // Normalize phone to extract clean 10-digit Mexican number and country-code number (52 + 10 digits)
     const digitsOnly = String(to).replace(/\D/g, '');
     let phone10 = digitsOnly;
     if (digitsOnly.length === 12 && digitsOnly.startsWith('52')) {
@@ -32,6 +34,11 @@ export async function POST(req: Request) {
       phone10 = digitsOnly.slice(-10);
     }
 
+    const numeroConCodigoPais = phone10.length === 10 ? `52${phone10}` : digitsOnly;
+    // Enlace directo de WhatsApp / Deep Link (Completamente gratuito):
+    // https://wa.me/<NUMERO_CON_CODIGO_PAIS>?text=<MENSAJE_CODIFICADO>
+    const waMeDeepLink = `https://wa.me/${numeroConCodigoPais}?text=${encodeURIComponent(String(message))}`;
+
     const cleanMessage = String(message).replace(/\*/g, '');
     const isSalida =
       tipo === 'salida' ||
@@ -40,14 +47,15 @@ export async function POST(req: Request) {
       ? `🚪 SALIDA CECYTE: ${studentName || 'Alumno'}`
       : `✅ INGRESO CECYTE: ${studentName || 'Alumno'}`;
 
-    const channelsDelivered: string[] = [];
+    const channelsDelivered: string[] = ['wa_me_deeplink'];
     let primaryId: string | number | undefined;
 
     // =========================================================================
     // 1. CANAL 100% GRATUITO SIN COBRO: PUSH DIRECTO AL CELULAR (ntfy.sh)
-    // Funciona gratis para siempre ($0 MXN) en Android, iPhone y en la App Web /tutor
+    // Incluye el Deep Link https://wa.me/<NUMERO>?text=<MENSAJE> para el emisor +526641665354
     // =========================================================================
     const ntfyTopics = new Set<string>();
+    ntfyTopics.add('cecyte-emisor-526641665354');
     if (phone10 && phone10.length >= 10) {
       ntfyTopics.add(`cecyte-tutor-${phone10}`);
     }
@@ -58,7 +66,6 @@ export async function POST(req: Request) {
       }
     }
 
-    // Extract matricula from message if not explicitly passed
     if (!matricula) {
       const matMatch = String(message).match(/Matr[íi]cula:\s*\*?(\d{8,16})\*?/i);
       if (matMatch?.[1]) {
@@ -78,7 +85,15 @@ export async function POST(req: Request) {
                 title: eventTitle,
                 message: cleanMessage,
                 priority: 5,
-                tags: isSalida ? ['door', 'school'] : ['white_check_mark', 'school']
+                click: waMeDeepLink,
+                tags: isSalida ? ['door', 'school'] : ['white_check_mark', 'school'],
+                actions: [
+                  {
+                    action: 'view',
+                    label: '📲 Abrir en WhatsApp (Gratis)',
+                    url: waMeDeepLink
+                  }
+                ]
               })
             });
             if (ntfyRes.ok) {
@@ -132,13 +147,12 @@ export async function POST(req: Request) {
     }
 
     // =========================================================================
-    // 4. UltraMsg Gateway (Envío Dual +521 y +52 para números de México)
+    // 4. UltraMsg Gateway (Respaldo secundario si está activo)
     // =========================================================================
     const ultramsgInstance = process.env.ULTRAMSG_INSTANCE_ID || 'instance195445';
     const ultramsgToken = process.env.ULTRAMSG_TOKEN || 'z9tz3q35gul1ilnz';
 
     if (ultramsgInstance && ultramsgToken && phone10) {
-      // En México WhatsApp utiliza JIDs con prefijo 521 (ej. 5216641567419@c.us) o 52
       const targets = [`+521${phone10}`, `+52${phone10}`];
       for (const formattedTo of targets) {
         try {
@@ -171,56 +185,16 @@ export async function POST(req: Request) {
       }
     }
 
-    // =========================================================================
-    // 5. Twilio WhatsApp Gateway (Opcional)
-    // =========================================================================
-    const accountSid = process.env.TWILIO_ACCOUNT_SID;
-    const authToken = process.env.TWILIO_AUTH_TOKEN;
-    const fromNumber = process.env.TWILIO_WHATSAPP_NUMBER;
-
-    if (accountSid && authToken && fromNumber && phone10) {
-      try {
-        const formattedTo = `whatsapp:+521${phone10}`;
-        const formattedFrom = fromNumber.startsWith('whatsapp:')
-          ? fromNumber
-          : `whatsapp:${fromNumber}`;
-
-        const twilioEndpoint = `https://api.twilio.com/2010-04-01/Accounts/${accountSid}/Messages.json`;
-        const basicAuth = Buffer.from(`${accountSid}:${authToken}`).toString('base64');
-
-        const params = new URLSearchParams();
-        params.append('To', formattedTo);
-        params.append('From', formattedFrom);
-        params.append('Body', message);
-
-        const twilioRes = await fetch(twilioEndpoint, {
-          method: 'POST',
-          headers: {
-            Authorization: `Basic ${basicAuth}`,
-            'Content-Type': 'application/x-www-form-urlencoded'
-          },
-          body: params.toString()
-        });
-
-        if (twilioRes.ok) {
-          const twilioData = await twilioRes.json();
-          channelsDelivered.push('twilio');
-          if (!primaryId) primaryId = twilioData.sid;
-        }
-      } catch (err) {
-        console.warn('[Twilio Error]:', err);
-      }
-    }
-
     return NextResponse.json({
       success: true,
-      provider: channelsDelivered.length > 0 ? channelsDelivered.join(', ') : 'ntfy_free_push',
+      provider: channelsDelivered.join(', '),
       channels: channelsDelivered,
+      senderPhone: OFFICIAL_SENDER_PHONE,
+      to: `+${numeroConCodigoPais}`,
+      waMeUrl: waMeDeepLink,
       ntfyTopics: Array.from(ntfyTopics),
-      id: primaryId || `free-push-${Date.now()}`,
-      to: `+52${phone10}`,
-      message:
-        'Notificación enviada gratuitamente al celular del padre/tutor (Push sin cobro + WhatsApp)'
+      id: primaryId || `wa-deeplink-${Date.now()}`,
+      message: `Enlace directo gratuito de WhatsApp generado (${waMeDeepLink}) desde el emisor ${OFFICIAL_SENDER_PHONE}`
     });
   } catch (error: any) {
     console.error('Error en /api/whatsapp/send:', error);

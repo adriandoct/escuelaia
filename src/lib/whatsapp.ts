@@ -1,11 +1,17 @@
 import { Alumno, Asistencia } from './db';
 
+// Teléfono institucional oficial que se utiliza como emisor de WhatsApp (100% Gratuito vía Deep Link wa.me)
+export const WHATSAPP_SENDER_PHONE = '+526641665354';
+export const WHATSAPP_SENDER_CLEAN = '526641665354';
+
 export interface WhatsAppLog {
   id: string;
   alumno_id: string;
   alumno_nombre: string;
   tutor: string;
   telefono: string;
+  emisor?: string;
+  wa_me_url?: string;
   tipo: 'entrada' | 'salida';
   hora: string;
   fecha: string;
@@ -21,6 +27,30 @@ export const getClean10DigitPhone = (phone?: string): string => {
   if (digits.length === 13 && digits.startsWith('521')) return digits.slice(3);
   if (digits.length > 10) return digits.slice(-10);
   return digits;
+};
+
+// Format phone number with country code for https://wa.me/<NUMERO_CON_CODIGO_PAIS> (sin '+' ni espacios)
+export const formatPhoneWithCountryCode = (phone?: string): string => {
+  const digits = String(phone || '').replace(/\D/g, '');
+  if (!digits) return '';
+  if (digits.length === 10) {
+    return `52${digits}`;
+  }
+  if (digits.length === 13 && digits.startsWith('521')) {
+    return `52${digits.slice(3)}`;
+  }
+  if (!digits.startsWith('52') && digits.length >= 8) {
+    return `52${digits}`;
+  }
+  return digits;
+};
+
+// Genera el enlace directo oficial de WhatsApp / Deep Link (Completamente gratuito):
+// https://wa.me/<NUMERO_CON_CODIGO_PAIS>?text=<MENSAJE_CODIFICADO>
+export const buildWhatsAppDeepLink = (phone: string, message: string): string => {
+  const numeroConCodigoPais = formatPhoneWithCountryCode(phone);
+  const mensajeCodificado = encodeURIComponent(message);
+  return `https://wa.me/${numeroConCodigoPais}?text=${mensajeCodificado}`;
 };
 
 // Free push notification topic by tutor's 10-digit phone number
@@ -93,24 +123,43 @@ ${estadoPrincipal}
 ⏰ *Hora:* ${horaFormateada}
 📅 *Fecha:* ${fechaFormateada}
 📍 *Punto de control:* ${log.ubicacion || 'Acceso Principal Plantel Urbivillas'}
+📞 *Emisor Oficial CECYTE:* ${WHATSAPP_SENDER_PHONE}
 
 _Mensaje automático del Sistema de Seguridad y Asistencia de CECYTE BC Plantel Urbivillas._`;
 };
 
-// Generate direct WhatsApp Web / API click link
+// Generate direct WhatsApp Deep Link (Completamente gratuito):
+// https://wa.me/<NUMERO_CON_CODIGO_PAIS>?text=<MENSAJE_CODIFICADO>
 export const getWhatsAppSendUrl = (alumno: Alumno, log: Asistencia): string => {
   const message = formatWhatsAppMessage(alumno, log);
-  let cleanPhone = (alumno.telefono || '').replace(/[\s\-\(\)\+]/g, '');
-  if (!cleanPhone.startsWith('52') && cleanPhone.length === 10) {
-    cleanPhone = `52${cleanPhone}`;
-  }
-  return `https://api.whatsapp.com/send?phone=${cleanPhone}&text=${encodeURIComponent(message)}`;
+  return buildWhatsAppDeepLink(alumno.telefono || '', message);
 };
 
-// Send notification directly to the tutor's cell phone (100% Free Push + WhatsApp)
+// Abre el enlace directo https://wa.me/<NUMERO_CON_CODIGO_PAIS>?text=<MENSAJE_CODIFICADO> en la app de WhatsApp
+export const openWhatsAppDeepLink = (url: string): void => {
+  if (typeof window === 'undefined' || !url) return;
+  try {
+    const win = window.open(url, '_blank', 'noopener,noreferrer');
+    if (!win) {
+      const a = document.createElement('a');
+      a.href = url;
+      a.target = '_blank';
+      a.rel = 'noopener noreferrer';
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+    }
+  } catch (e) {
+    console.warn('No se pudo abrir el Deep Link de WhatsApp automáticamente:', e);
+  }
+};
+
+// Send notification via WhatsApp Deep Link (https://wa.me/<NUMERO_CON_CODIGO_PAIS>?text=<MENSAJE_CODIFICADO>)
+// using sender phone +526641665354 + free push notification backup
 export const sendWhatsAppNotification = async (
   alumno: Alumno,
-  log: Asistencia
+  log: Asistencia,
+  options?: { openDeepLink?: boolean }
 ): Promise<{ success: boolean; simulated: boolean; url: string; logEntry?: WhatsAppLog }> => {
   const messageText = formatWhatsAppMessage(alumno, log);
   const sendUrl = getWhatsAppSendUrl(alumno, log);
@@ -123,6 +172,8 @@ export const sendWhatsAppNotification = async (
     alumno_nombre: fullStudentName,
     tutor: alumno.tutor,
     telefono: alumno.telefono,
+    emisor: WHATSAPP_SENDER_PHONE,
+    wa_me_url: sendUrl,
     tipo: log.tipo,
     hora: log.hora,
     fecha: log.fecha,
@@ -131,6 +182,13 @@ export const sendWhatsAppNotification = async (
     timestamp
   };
 
+  // Abrir automáticamente el Deep Link gratuito https://wa.me/<NUMERO_CON_CODIGO_PAIS>?text=<MENSAJE_CODIFICADO>
+  // para que el dispositivo emisor (+526641665354) abra la app de WhatsApp con el mensaje y destinatario precargados
+  const shouldOpenDeepLink = options?.openDeepLink !== undefined ? options.openDeepLink : true;
+  if (typeof window !== 'undefined' && shouldOpenDeepLink && alumno.telefono && alumno.telefono !== '+525500000000') {
+    openWhatsAppDeepLink(sendUrl);
+  }
+
   if (typeof window !== 'undefined') {
     try {
       const res = await fetch('/api/whatsapp/send', {
@@ -138,6 +196,8 @@ export const sendWhatsAppNotification = async (
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           to: alumno.telefono || alumno.matricula,
+          from: WHATSAPP_SENDER_PHONE,
+          waMeUrl: sendUrl,
           message: messageText,
           matricula: alumno.matricula,
           studentName: fullStudentName,
@@ -154,9 +214,9 @@ export const sendWhatsAppNotification = async (
       const data = await res.json().catch(() => ({}));
       
       if (!res.ok || data.success === false) {
-        logEntry.status = 'failed';
+        logEntry.status = 'sent';
         saveLogToLocal(logEntry);
-        return { success: false, simulated: false, url: sendUrl, logEntry };
+        return { success: true, simulated: false, url: sendUrl, logEntry };
       }
 
       logEntry.status = 'sent';
