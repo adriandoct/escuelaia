@@ -184,7 +184,8 @@ export const sendWhatsAppNotification = async (
 
   // Abrir automáticamente el Deep Link gratuito https://wa.me/<NUMERO_CON_CODIGO_PAIS>?text=<MENSAJE_CODIFICADO>
   // para que el dispositivo emisor (+526641665354) abra la app de WhatsApp con el mensaje y destinatario precargados
-  const shouldOpenDeepLink = options?.openDeepLink !== undefined ? options.openDeepLink : true;
+  // Por defecto NO se abre WhatsApp: el aviso llega como notificación push (ntfy) sin abrir nada.
+  const shouldOpenDeepLink = options?.openDeepLink === true;
   if (typeof window !== 'undefined' && shouldOpenDeepLink && alumno.telefono && alumno.telefono !== '+525500000000') {
     openWhatsAppDeepLink(sendUrl);
   }

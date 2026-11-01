@@ -343,10 +343,6 @@ export default function ParentsDashboardPage() {
       hora: timeStr,
       ubicacion: 'Acceso Principal Plantel Urbivillas'
     };
-    const waMeDeepLink = getWhatsAppSendUrl(selectedStudentForNotify, immediateLog);
-    if (selectedStudentForNotify.telefono) {
-      openWhatsAppDeepLink(waMeDeepLink);
-    }
 
     setIsSendingWhatsApp(true);
     try {
@@ -368,7 +364,7 @@ export default function ParentsDashboardPage() {
 
       if (result.success) {
         showToast(
-          `📲 WhatsApp Directo (wa.me Gratis • Emisor ${WHATSAPP_SENDER_PHONE}) abierto para ${alumno.tutor} (${alumno.telefono}).`
+          `🔔 Notificación push de ${notifyType.toUpperCase()} enviada al celular del tutor ${alumno.tutor} (${alumno.telefono}) sin abrir WhatsApp.`
         );
       } else {
         showToast(`⚠️ Alerta registrada en el sistema. Enlace wa.me generado.`);

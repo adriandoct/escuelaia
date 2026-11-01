@@ -149,8 +149,9 @@ export async function POST(req: Request) {
     // =========================================================================
     // 4. UltraMsg Gateway (Respaldo secundario si está activo)
     // =========================================================================
-    const ultramsgInstance = process.env.ULTRAMSG_INSTANCE_ID || 'instance195445';
-    const ultramsgToken = process.env.ULTRAMSG_TOKEN || 'z9tz3q35gul1ilnz';
+    // La instancia anterior fue detenida por falta de pago: solo se usa si se configura en variables de entorno.
+    const ultramsgInstance = process.env.ULTRAMSG_INSTANCE_ID;
+    const ultramsgToken = process.env.ULTRAMSG_TOKEN;
 
     if (ultramsgInstance && ultramsgToken && phone10) {
       const targets = [`+521${phone10}`, `+52${phone10}`];
