@@ -90,7 +90,7 @@ export async function POST(req: Request) {
                 actions: [
                   {
                     action: 'view',
-                    label: '📲 Abrir en WhatsApp (Gratis)',
+                    label: '📲 Abrir en WhatsApp',
                     url: waMeDeepLink
                   }
                 ]
@@ -147,6 +147,65 @@ export async function POST(req: Request) {
     }
 
     // =========================================================================
+    // 3.5 MENSAJE DE TEXTO (SMS) al celular del tutor
+    //  - TextBee: usa un celular Android propio como puerta de enlace de SMS (TEXTBEE_API_KEY + TEXTBEE_DEVICE_ID)
+    //  - Twilio SMS: TWILIO_ACCOUNT_SID + TWILIO_AUTH_TOKEN + TWILIO_SMS_NUMBER
+    // =========================================================================
+    const smsText = `CECYTE BC Urbivillas: ${isSalida ? 'SALIDA' : 'INGRESO'} de ${studentName || 'su hijo(a)'}${matricula ? ` (Mat. ${matricula})` : ''} a las ${new Date().toLocaleTimeString('es-MX', { hour: '2-digit', minute: '2-digit', timeZone: 'America/Tijuana' })}.`;
+    let smsSent = false;
+
+    const textbeeKey = process.env.TEXTBEE_API_KEY;
+    const textbeeDevice = process.env.TEXTBEE_DEVICE_ID;
+    if (textbeeKey && textbeeDevice && phone10.length === 10) {
+      try {
+        const tbRes = await fetch(
+          `https://api.textbee.dev/api/v1/gateway/devices/${textbeeDevice}/send-sms`,
+          {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'x-api-key': textbeeKey },
+            body: JSON.stringify({ recipients: [`+52${phone10}`], message: smsText })
+          }
+        );
+        if (tbRes.ok) {
+          smsSent = true;
+          channelsDelivered.push('sms:textbee');
+        } else {
+          console.warn('[TextBee SMS Error]:', await tbRes.text());
+        }
+      } catch (err) {
+        console.warn('[TextBee SMS Exception]:', err);
+      }
+    }
+
+    const smsSid = process.env.TWILIO_ACCOUNT_SID;
+    const smsAuth = process.env.TWILIO_AUTH_TOKEN;
+    const smsFrom = process.env.TWILIO_SMS_NUMBER;
+    if (!smsSent && smsSid && smsAuth && smsFrom && phone10.length === 10) {
+      try {
+        const params = new URLSearchParams();
+        params.append('To', `+52${phone10}`);
+        params.append('From', smsFrom);
+        params.append('Body', smsText);
+        const twRes = await fetch(`https://api.twilio.com/2010-04-01/Accounts/${smsSid}/Messages.json`, {
+          method: 'POST',
+          headers: {
+            Authorization: `Basic ${Buffer.from(`${smsSid}:${smsAuth}`).toString('base64')}`,
+            'Content-Type': 'application/x-www-form-urlencoded'
+          },
+          body: params.toString()
+        });
+        if (twRes.ok) {
+          smsSent = true;
+          channelsDelivered.push('sms:twilio');
+        } else {
+          console.warn('[Twilio SMS Error]:', await twRes.text());
+        }
+      } catch (err) {
+        console.warn('[Twilio SMS Exception]:', err);
+      }
+    }
+
+    // =========================================================================
     // 4. UltraMsg Gateway (Respaldo secundario si está activo)
     // =========================================================================
     // La instancia anterior fue detenida por falta de pago: solo se usa si se configura en variables de entorno.
@@ -191,6 +250,7 @@ export async function POST(req: Request) {
       provider: channelsDelivered.join(', '),
       channels: channelsDelivered,
       senderPhone: OFFICIAL_SENDER_PHONE,
+      smsSent,
       to: `+${numeroConCodigoPais}`,
       waMeUrl: waMeDeepLink,
       ntfyTopics: Array.from(ntfyTopics),

@@ -198,6 +198,12 @@ export default function ParentsDashboardPage() {
 
   // Filtered Students
   const filteredStudents = useMemo(() => {
+    // If logged in as a Tutor, strictly lock visibility to their student only!
+    if (user?.role === 'tutor' && user?.matricula) {
+      const targetMat = user.matricula.trim();
+      return students.filter(st => (st.matricula || '').trim() === targetMat);
+    }
+
     return students.filter(st => {
       // Search query filter
       if (searchQuery.trim()) {
@@ -297,7 +303,7 @@ export default function ParentsDashboardPage() {
     try {
       const fullName = `${student.nombre} ${student.apellido_paterno} ${student.apellido_materno || ''}`.trim();
       const nowTime = new Date().toLocaleTimeString('es-MX', { hour: '2-digit', minute: '2-digit' });
-      const testMessage = `🏫 *CECYTE BC - PLANTEL URBIVILLAS*\n🔔 *NOTIFICACIÓN GRATUITA ACTIVADA ($0 SIN COBRO)*\n\n👤 *Alumno:* ${fullName}\n🏷️ *Grupo:* ${student.grado} "${student.grupo}"\n🆔 *Matrícula:* ${student.matricula}\n📞 *Celular Tutor:* ${student.telefono}\n⏰ *Hora:* ${nowTime}\n\n✅ Las alertas de INGRESO y SALIDA llegarán directo al celular del tutor sin ningún costo.`;
+      const testMessage = `🏫 *CECYTE BC - PLANTEL URBIVILLAS*\n🔔 *NOTIFICACIÓN DE ASISTENCIA ACTIVADA*\n\n👤 *Alumno:* ${fullName}\n🏷️ *Grupo:* ${student.grado} "${student.grupo}"\n🆔 *Matrícula:* ${student.matricula}\n📞 *Celular Tutor:* ${student.telefono}\n⏰ *Hora:* ${nowTime}\n\n✅ Las alertas de INGRESO y SALIDA llegarán directo al celular del tutor en tiempo real.`;
 
       await fetch('/api/whatsapp/send', {
         method: 'POST',
@@ -311,7 +317,7 @@ export default function ParentsDashboardPage() {
         })
       });
 
-      showToast(`🔔 Alerta de prueba enviada gratis al celular (${student.telefono}) y al canal ${getStudentNtfyTopic(student.matricula)}.`);
+      showToast(`🔔 Alerta de prueba enviada al celular (${student.telefono}) y al canal ${getStudentNtfyTopic(student.matricula)}.`);
     } catch (err: any) {
       alert('Error al enviar prueba: ' + (err.message || err));
     } finally {
@@ -453,13 +459,15 @@ export default function ParentsDashboardPage() {
             </div>
             <div>
               <h1 className="text-2xl sm:text-3xl font-extrabold text-white tracking-tight flex items-center gap-2">
-                Módulo de Padres de Familia y Tutores
+                {user?.role === 'tutor' ? 'Portal de Consulta para Padres y Tutores' : 'Módulo de Padres de Familia y Tutores'}
                 <span className="text-[10px] uppercase font-bold tracking-widest px-2.5 py-0.5 rounded-full bg-purple-500/20 text-purple-300 border border-purple-500/40">
-                  Control & Alertas
+                  {user?.role === 'tutor' ? 'Tutor Vinculado' : 'Control & Alertas'}
                 </span>
               </h1>
               <p className="text-xs sm:text-sm text-gray-400">
-                Supervisión de tutores asignados, alertas automáticas de ingreso y salida al plantel vía WhatsApp.
+                {user?.role === 'tutor'
+                  ? 'Consulta el estado de asistencia de tu alumno(a) y configura las notificaciones en tu celular.'
+                  : 'Supervisión de tutores asignados, alertas automáticas de ingreso y salida al plantel vía WhatsApp y Push.'}
               </p>
             </div>
           </div>
@@ -477,27 +485,32 @@ export default function ParentsDashboardPage() {
             <span>Actualizar</span>
           </button>
 
-          <button
-            onClick={handleExportDirectory}
-            className="flex items-center space-x-1.5 px-3.5 py-2 rounded-xl bg-purple-600/20 hover:bg-purple-600/30 text-purple-300 border border-purple-500/30 text-xs font-bold transition-all cursor-pointer shadow-sm"
-            title="Descargar lista completa en CSV/Excel"
-          >
-            <Download size={14} />
-            <span>Exportar Directorio</span>
-          </button>
+          {user?.role !== 'tutor' && (
+            <>
+              <button
+                onClick={handleExportDirectory}
+                className="flex items-center space-x-1.5 px-3.5 py-2 rounded-xl bg-purple-600/20 hover:bg-purple-600/30 text-purple-300 border border-purple-500/30 text-xs font-bold transition-all cursor-pointer shadow-sm"
+                title="Descargar lista completa en CSV/Excel"
+              >
+                <Download size={14} />
+                <span>Exportar Directorio</span>
+              </button>
 
-          <Link
-            href="/scanner"
-            className="flex items-center space-x-1.5 px-4 py-2 rounded-xl bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-400 hover:to-blue-500 text-white text-xs font-bold shadow-lg shadow-cyan-500/20 transition-all"
-          >
-            <Building2 size={14} />
-            <span>Ir al Escáner</span>
-          </Link>
+              <Link
+                href="/scanner"
+                className="flex items-center space-x-1.5 px-4 py-2 rounded-xl bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-400 hover:to-blue-500 text-white text-xs font-bold shadow-lg shadow-cyan-500/20 transition-all"
+              >
+                <Building2 size={14} />
+                <span>Ir al Escáner</span>
+              </Link>
+            </>
+          )}
         </div>
       </div>
 
-      {/* Live Metric Cards Grid */}
-      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
+      {/* Live Metric Cards Grid (Only visible for Admins & Order Supervisors) */}
+      {user?.role !== 'tutor' && (
+        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
         {/* Total Students */}
         <div className="p-4 rounded-2xl bg-[#0b0f19] border border-white/5 relative overflow-hidden group hover:border-white/10 transition-all">
           <div className="flex items-center justify-between text-gray-400 text-xs font-medium mb-1">
@@ -580,6 +593,7 @@ export default function ParentsDashboardPage() {
           <div className="text-[10px] text-purple-400/80 mt-1">Enviadas a tutores hoy</div>
         </div>
       </div>
+      )}
 
       {/* Tabs Navigation */}
       <div className="flex border-b border-white/10 space-x-4">
@@ -592,27 +606,30 @@ export default function ParentsDashboardPage() {
           }`}
         >
           <Users size={16} />
-          <span>Directorio Alumnos y Tutores ({filteredStudents.length})</span>
+          <span>{user?.role === 'tutor' ? 'Mi Alumno' : `Directorio Alumnos y Tutores (${filteredStudents.length})`}</span>
         </button>
 
-        <button
-          onClick={() => setActiveTab('history')}
-          className={`pb-3 text-sm font-bold flex items-center space-x-2 border-b-2 transition-all cursor-pointer ${
-            activeTab === 'history'
-              ? 'border-purple-500 text-purple-400'
-              : 'border-transparent text-gray-400 hover:text-gray-200'
-          }`}
-        >
-          <Bell size={16} />
-          <span>Historial de Notificaciones ({waLogs.length})</span>
-        </button>
+        {user?.role !== 'tutor' && (
+          <button
+            onClick={() => setActiveTab('history')}
+            className={`pb-3 text-sm font-bold flex items-center space-x-2 border-b-2 transition-all cursor-pointer ${
+              activeTab === 'history'
+                ? 'border-purple-500 text-purple-400'
+                : 'border-transparent text-gray-400 hover:text-gray-200'
+            }`}
+          >
+            <Bell size={16} />
+            <span>Historial de Notificaciones ({waLogs.length})</span>
+          </button>
+        )}
       </div>
 
       {/* Main Tab Content */}
       {activeTab === 'students' ? (
         <div className="space-y-4">
           
-          {/* Search and Filters Bar */}
+          {/* Search and Filters Bar (Only visible for Admins & Supervisors) */}
+          {user?.role !== 'tutor' && (
           <div className="p-4 rounded-2xl bg-[#0b0f19] border border-white/5 space-y-3">
             <div className="flex flex-col md:flex-row items-stretch md:items-center gap-3">
               
@@ -747,18 +764,28 @@ export default function ParentsDashboardPage() {
               )}
             </div>
           </div>
+          )}
 
           {/* Results Summary Bar */}
           <div className="flex items-center justify-between text-xs text-gray-400 px-1">
             <div>
-              Mostrando <strong className="text-white">{filteredStudents.length}</strong> alumnos
-              {tutorStatusFilter === 'unassigned' && (
-                <span className="text-amber-300 ml-1 font-semibold">
-                  (requieren que el administrador asigne el nombre del tutor)
+              {user?.role === 'tutor' ? (
+                <span className="text-teal-300 font-bold flex items-center space-x-1.5">
+                  <span>👨‍👩‍👧</span>
+                  <span>Alumno vinculado a tu cuenta de tutor:</span>
                 </span>
+              ) : (
+                <>
+                  Mostrando <strong className="text-white">{filteredStudents.length}</strong> alumnos
+                  {tutorStatusFilter === 'unassigned' && (
+                    <span className="text-amber-300 ml-1 font-semibold">
+                      (requieren que el administrador asigne el nombre del tutor)
+                    </span>
+                  )}
+                </>
               )}
             </div>
-            {filteredStudents.length > 0 && (
+            {filteredStudents.length > 0 && user?.role !== 'tutor' && (
               <div className="text-[11px] text-gray-500">
                 Usa los botones verdes y rojos para avisar al padre de familia
               </div>
@@ -934,7 +961,7 @@ export default function ParentsDashboardPage() {
                     {/* Notification Actions for this Student */}
                     <div className="pt-2 border-t border-white/5 space-y-2">
                       <div className="text-[10px] text-gray-400 font-semibold uppercase tracking-wider flex items-center justify-between">
-                        <span>Avisar al Celular del Tutor (Sin Cobro):</span>
+                        <span>Avisar al Celular del Tutor:</span>
                         {isInside && <span className="text-cyan-400 font-bold">● En Plantel</span>}
                       </div>
 
@@ -943,7 +970,7 @@ export default function ParentsDashboardPage() {
                         <button
                           onClick={() => handleOpenNotifyModal(student, 'entrada')}
                           className="py-2 px-2.5 rounded-xl bg-cyan-600/15 hover:bg-cyan-600/30 border border-cyan-500/30 text-cyan-300 hover:text-cyan-200 text-[11px] font-bold transition-all flex items-center justify-center space-x-1 cursor-pointer shadow-sm active:scale-95"
-                          title="Enviar notificación gratuita al celular del tutor avisando que el alumno está en el plantel"
+                          title="Enviar notificación al celular del tutor avisando que el alumno está en el plantel"
                         >
                           <LogIn size={13} className="text-cyan-400" />
                           <span>Avisar Ingreso</span>
@@ -953,21 +980,21 @@ export default function ParentsDashboardPage() {
                         <button
                           onClick={() => handleOpenNotifyModal(student, 'salida')}
                           className="py-2 px-2.5 rounded-xl bg-rose-600/15 hover:bg-rose-600/30 border border-rose-500/30 text-rose-300 hover:text-rose-200 text-[11px] font-bold transition-all flex items-center justify-center space-x-1 cursor-pointer shadow-sm active:scale-95"
-                          title="Enviar notificación gratuita al celular del tutor avisando que el alumno ya salió del plantel"
+                          title="Enviar notificación al celular del tutor avisando que el alumno ya salió del plantel"
                         >
                           <LogOut size={13} className="text-rose-400" />
                           <span>Avisar Salida</span>
                         </button>
                       </div>
 
-                      {/* 100% Free Cell Phone Push Setup & Live Test Button */}
+                      {/* Cell Phone Push Setup & Live Test Button */}
                       <button
                         type="button"
                         onClick={() => setFreePushStudent(student)}
                         className="w-full py-2 px-3 rounded-xl bg-gradient-to-r from-emerald-500/20 via-cyan-500/20 to-blue-500/20 hover:from-emerald-500/30 hover:to-blue-500/30 border border-emerald-500/40 text-emerald-300 text-[11px] font-extrabold transition-all flex items-center justify-center space-x-1.5 cursor-pointer shadow-sm"
                       >
                         <BellRing size={13} className="text-emerald-400 animate-pulse" />
-                        <span>🔔 Notificación Gratis en Celular ($0 Sin Cobro)</span>
+                        <span>🔔 Configurar Notificaciones en Celular</span>
                       </button>
 
                       {/* Direct WhatsApp Web Chat Trigger */}
@@ -1421,7 +1448,7 @@ export default function ParentsDashboardPage() {
                   ) : (
                     <>
                       <Send size={14} />
-                      <span>Registrar y Notificar al Tutor (Gratis)</span>
+                      <span>Registrar y Notificar al Tutor</span>
                     </>
                   )}
                 </button>
@@ -1433,7 +1460,7 @@ export default function ParentsDashboardPage() {
       )}
 
       {/* ========================================================================= */}
-      {/* MODAL: Activar Notificación Gratis en Celular ($0 Sin Cobro)             */}
+      {/* MODAL: Activar Notificación en Celular                                    */}
       {/* ========================================================================= */}
       {freePushStudent && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/85 backdrop-blur-md animate-in fade-in duration-200">
@@ -1446,13 +1473,13 @@ export default function ParentsDashboardPage() {
                 <div>
                   <span className="inline-flex items-center space-x-1 px-2.5 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 text-[10px] font-black uppercase">
                     <Sparkles size={10} />
-                    <span>100% Gratis • $0.00 MXN Sin Cobro</span>
+                    <span>Alertas en Tiempo Real • Notificación Push</span>
                   </span>
                   <h3 className="text-lg font-extrabold text-white mt-0.5">
                     Notificaciones Directas al Celular del Tutor
                   </h3>
                   <p className="text-xs text-gray-400">
-                    Recibe alertas con sonido y vibración en el celular sin pagar suscripciones ni recargas.
+                    Recibe alertas con sonido y vibración en el celular cada vez que se registre asistencia.
                   </p>
                 </div>
               </div>
@@ -1507,7 +1534,7 @@ export default function ParentsDashboardPage() {
               const qrImageUrl = `https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(tutorPortalUrl)}`;
               const studentTopic = getStudentNtfyTopic(freePushStudent.matricula);
               const tutorTopic = getTutorNtfyTopic(freePushStudent.telefono);
-              const waInviteText = `🏫 *CECYTE BC PLANTEL URBIVILLAS*\n🔔 *ACTIVACIÓN DE NOTIFICACIONES GRATIS EN TU CELULAR*\n\nEstimado tutor de *${freePushStudent.nombre} ${freePushStudent.apellido_paterno}* (${freePushStudent.grado} "${freePushStudent.grupo}"), abre este enlace en tu celular para recibir alertas instantáneas con sonido cada vez que tu hijo(a) entre o salga del plantel (100% gratis, sin cobro):\n\n👉 ${tutorPortalUrl}\n\n🔑 Código directo para App ntfy: *${studentTopic}*`;
+              const waInviteText = `🏫 *CECYTE BC PLANTEL URBIVILLAS*\n🔔 *ACTIVACIÓN DE NOTIFICACIONES EN TU CELULAR*\n\nEstimado tutor de *${freePushStudent.nombre} ${freePushStudent.apellido_paterno}* (${freePushStudent.grado} "${freePushStudent.grupo}"), abre este enlace en tu celular para recibir alertas instantáneas con sonido cada vez que tu hijo(a) entre o salga del plantel:\n\n👉 ${tutorPortalUrl}\n\n🔑 Código directo para App ntfy: *${studentTopic}*`;
               const cleanTel = formatPhoneWithCountryCode(freePushStudent.telefono);
               const waInviteUrl = `https://wa.me/${cleanTel}?text=${encodeURIComponent(waInviteText)}`;
 
@@ -1528,7 +1555,7 @@ export default function ParentsDashboardPage() {
                         <span>Opción 1: Escanea con la Cámara del Celular</span>
                       </div>
                       <p className="text-gray-300 leading-relaxed">
-                        El tutor escanea este código QR con su celular (o abre el enlace) y recibe en vivo cada <strong>INGRESO</strong> y <strong>SALIDA</strong> con sonido y vibración, <strong>100% gratis y sin cobro</strong>.
+                        El tutor escanea este código QR con su celular (o abre el enlace) y recibe en vivo cada <strong>INGRESO</strong> y <strong>SALIDA</strong> con sonido y vibración en tiempo real.
                       </p>
                       <div className="flex flex-wrap gap-2 pt-1">
                         <a
@@ -1565,19 +1592,19 @@ export default function ParentsDashboardPage() {
                     </div>
                   </div>
 
-                  {/* Option 2: Free ntfy App for Lock-Screen Push */}
+                  {/* Option 2: ntfy App for Lock-Screen Push */}
                   <div className="p-4 rounded-2xl bg-cyan-950/30 border border-cyan-500/30 space-y-2.5 text-xs">
                     <div className="font-extrabold text-cyan-300 flex items-center justify-between">
                       <span className="flex items-center space-x-1.5">
                         <Bell size={15} />
-                        <span>Opción 2: Notificación Push con Pantalla Bloqueada (App ntfy Gratis)</span>
+                        <span>Opción 2: Notificación Push en Pantalla (App ntfy)</span>
                       </span>
                       <span className="text-[10px] bg-cyan-500/20 text-cyan-300 px-2 py-0.5 rounded font-black">
                         Android / iPhone
                       </span>
                     </div>
                     <p className="text-gray-300 leading-relaxed">
-                      Descarga gratis la app <strong>ntfy</strong> en Play Store o App Store, pulsa el botón <strong>&quot;+&quot;</strong> y pega cualquiera de estos códigos de suscripción:
+                      Descarga la app <strong>ntfy</strong> en Play Store o App Store, pulsa el botón <strong>&quot;+&quot;</strong> y pega cualquiera de estos códigos de suscripción:
                     </p>
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 pt-1">
                       <div className="bg-black/60 border border-cyan-500/30 rounded-xl p-2.5 flex items-center justify-between">
@@ -1632,12 +1659,12 @@ export default function ParentsDashboardPage() {
                       {isTestingFreePush ? (
                         <>
                           <RefreshCw size={15} className="animate-spin" />
-                          <span>Enviando Notificación Gratis al Celular...</span>
+                          <span>Enviando Notificación al Celular...</span>
                         </>
                       ) : (
                         <>
                           <BellRing size={16} />
-                          <span>📲 Probar Notificación al Celular Ahora (Sin Cobro)</span>
+                          <span>📲 Probar Notificación al Celular Ahora</span>
                         </>
                       )}
                     </button>

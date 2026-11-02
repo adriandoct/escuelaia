@@ -3,14 +3,16 @@
 'use client';
 
 import React, { createContext, useContext, useState, useEffect } from 'react';
+import { db } from './db';
 
-export type Role = 'administrador' | 'encargado_orden' | 'docente';
+export type Role = 'administrador' | 'encargado_orden' | 'docente' | 'tutor';
 
 export interface User {
   id: string;
   name: string;
   email: string;
   role: Role;
+  matricula?: string;
   avatarUrl?: string;
   isSuperAdmin?: boolean;
 }
@@ -23,6 +25,7 @@ interface AuthContextType {
   closeLoginModal: () => void;
   loginWithCredentials: (email: string, pass: string) => { success: boolean; error?: string };
   loginWithGoogle: (email: string, name?: string, roleOverride?: Role) => { success: boolean; error?: string };
+  loginWithMatricula: (matricula: string) => Promise<{ success: boolean; error?: string }>;
   logout: () => void;
   usersRolesMap: Record<string, Role>;
   usersPasswordsMap: Record<string, string>;
@@ -204,6 +207,42 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     return { success: true };
   };
 
+  const loginWithMatricula = async (matricula: string): Promise<{ success: boolean; error?: string }> => {
+    const cleanMat = String(matricula || '').trim().replace(/[^a-zA-Z0-9]/g, '').toUpperCase();
+    if (!cleanMat) {
+      return { success: false, error: 'Por favor ingresa la matrícula del alumno (14 dígitos).' };
+    }
+
+    try {
+      const student = await db.getAlumnoByQR(cleanMat);
+      if (!student) {
+        return { 
+          success: false, 
+          error: `No se encontró ningún alumno con la matrícula '${cleanMat}'. Verifica que los dígitos sean correctos.` 
+        };
+      }
+
+      const tutorName = student.tutor && student.tutor !== 'No asignado' && !student.tutor.toLowerCase().startsWith('tutor de')
+        ? student.tutor
+        : `Tutor de ${student.nombre}`;
+
+      const loggedUser: User = {
+        id: `tutor-${student.matricula}`,
+        name: tutorName,
+        email: `tutor.${student.matricula}@cecytebc.edu.mx`,
+        role: 'tutor',
+        matricula: student.matricula,
+        avatarUrl: student.foto_url || `https://api.dicebear.com/7.x/bottts/svg?seed=${student.matricula}`,
+      };
+
+      saveActiveUser(loggedUser);
+      setIsLoginModalOpen(false);
+      return { success: true };
+    } catch (err: any) {
+      return { success: false, error: err.message || 'Error al validar matrícula.' };
+    }
+  };
+
   const logout = () => {
     saveActiveUser(null);
     setIsLoginModalOpen(true);
@@ -301,6 +340,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         closeLoginModal: () => setIsLoginModalOpen(false),
         loginWithCredentials,
         loginWithGoogle,
+        loginWithMatricula,
         logout,
         usersRolesMap,
         usersPasswordsMap,

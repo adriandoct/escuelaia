@@ -40,12 +40,19 @@ import SubirHorariosModal from '@/components/horarios/SubirHorariosModal';
 export default function TeacherDashboardPage() {
   const { user } = useAuth();
   
-  // MAIN NAVIGATION TABS: Asistencias vs Horarios de Grupo vs Reportes Oficiales
+  // Main Navigation Tabs: Asistencias vs Horarios de Grupo vs Reportes Oficiales
   const [activeMainTab, setActiveMainTab] = useState<'asistencias' | 'horarios' | 'reportes'>('asistencias');
   const [horarios, setHorarios] = useState<BloqueHorario[]>([]);
   const [scheduleGroup, setScheduleGroup] = useState<string>('1A');
   const [scheduleGrade, setScheduleGrade] = useState<string>('');
   const [isUploadScheduleModalOpen, setIsUploadScheduleModalOpen] = useState(false);
+
+  // Redirect tutor to parents page
+  useEffect(() => {
+    if (user?.role === 'tutor') {
+      window.location.href = '/dashboard/parents';
+    }
+  }, [user]);
 
   const [students, setStudents] = useState<Alumno[]>([]);
   const [todayLogs, setTodayLogs] = useState<Asistencia[]>([]);
@@ -781,7 +788,7 @@ export default function TeacherDashboardPage() {
           }`}
         >
           <span>📅</span>
-          <span>Horarios de Grupo (Colores por Maestro)</span>
+          <span>{user?.role === 'docente' ? 'Mi Horario Docente' : 'Horarios de Grupo (Colores por Maestro)'}</span>
           {user?.role === 'administrador' && (
             <span className="ml-1 px-1.5 py-0.5 rounded-full bg-amber-400/20 text-amber-300 text-[10px] border border-amber-400/40">
               Admin
@@ -789,18 +796,20 @@ export default function TeacherDashboardPage() {
           )}
         </button>
 
-        <button
-          type="button"
-          onClick={() => setActiveMainTab('reportes')}
-          className={`flex items-center space-x-2 px-4 py-2.5 rounded-xl text-xs sm:text-sm font-extrabold transition-all cursor-pointer whitespace-nowrap ${
-            activeMainTab === 'reportes'
-              ? 'bg-gradient-to-r from-purple-500 to-indigo-600 text-white shadow-lg shadow-purple-500/30 ring-1 ring-purple-300'
-              : 'text-gray-400 hover:text-white hover:bg-white/5'
-          }`}
-        >
-          <span>📑</span>
-          <span>Reporte Oficial de Horarios</span>
-        </button>
+        {user?.role !== 'docente' && (
+          <button
+            type="button"
+            onClick={() => setActiveMainTab('reportes')}
+            className={`flex items-center space-x-2 px-4 py-2.5 rounded-xl text-xs sm:text-sm font-extrabold transition-all cursor-pointer whitespace-nowrap ${
+              activeMainTab === 'reportes'
+                ? 'bg-gradient-to-r from-purple-500 to-indigo-600 text-white shadow-lg shadow-purple-500/30 ring-1 ring-purple-300'
+                : 'text-gray-400 hover:text-white hover:bg-white/5'
+            }`}
+          >
+            <span>📑</span>
+            <span>Reporte Oficial de Horarios</span>
+          </button>
+        )}
       </div>
 
       {/* =========================================================================
@@ -1650,6 +1659,8 @@ export default function TeacherDashboardPage() {
         <HorarioSemanalGrid
           horarios={horarios}
           isAdmin={user?.role === 'administrador'}
+          isDocente={user?.role === 'docente'}
+          teacherName={user?.name}
           onHorariosUpdated={(updated) => setHorarios(updated)}
           selectedGroup={scheduleGroup}
           onSelectGroup={(grp) => setScheduleGroup(grp)}

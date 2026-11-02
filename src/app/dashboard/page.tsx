@@ -2,18 +2,29 @@
 
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import Link from 'next/link';
 import { db, Alumno, Asistencia } from '@/lib/db';
 import { getWhatsAppLogs, WhatsAppLog, clearWhatsAppLogs } from '@/lib/whatsapp';
 import { useAuth } from '@/lib/auth';
 import BarcodeScannerHub from '@/components/BarcodeScannerHub';
 import { 
-  Users, UserCheck, UserX, Clock, PhoneCall, Search, Filter, Download, RotateCcw, AlertTriangle, ArrowUpRight, Check, Send, BookOpen, Shield, HeartHandshake, ArrowRight
+  Users, UserCheck, UserX, Clock, PhoneCall, Search, Filter, Download, RotateCcw, AlertTriangle, ArrowUpRight, Check, Send, BookOpen, Shield, HeartHandshake, ArrowRight, Layers
 } from 'lucide-react';
+
+const OFFICIAL_GROUPS = ['1A', '1B', '1C', '1D', '1E', '3APGM', '3APGA', '3ASCM', '3BPGA', '5APGM', '5BPGM', '5APGA'];
 
 export default function DashboardPage() {
   const { user } = useAuth();
+
+  // Route protection by role
+  useEffect(() => {
+    if (user?.role === 'tutor') {
+      window.location.href = '/dashboard/parents';
+    } else if (user?.role === 'docente') {
+      window.location.href = '/dashboard/teacher';
+    }
+  }, [user]);
 
   const [students, setStudents] = useState<Alumno[]>([]);
   const [logs, setLogs] = useState<Asistencia[]>([]);
@@ -23,6 +34,7 @@ export default function DashboardPage() {
   const [searchQuery, setSearchQuery] = useState('');
   const [typeFilter, setTypeFilter] = useState('');
   const [gradeFilter, setGradeFilter] = useState('');
+  const [groupFilter, setGroupFilter] = useState('');
 
   // Stats States
   const [stats, setStats] = useState({
@@ -126,6 +138,34 @@ export default function DashboardPage() {
     }
   };
 
+  // Compute attendance stats grouped by official group
+  const groupStats = useMemo(() => {
+    const todayStr = new Date().toISOString().split('T')[0];
+    const todayLogs = logs.filter(l => l.fecha === todayStr);
+
+    const studentTodayStatus = new Map<string, 'entrada' | 'salida'>();
+    const sorted = [...todayLogs].sort((a, b) => a.hora.localeCompare(b.hora));
+    sorted.forEach(l => studentTodayStatus.set(l.alumno_id, l.tipo));
+
+    return OFFICIAL_GROUPS.map(grp => {
+      const grpStudents = students.filter(s => s.grupo === grp);
+      const total = grpStudents.length;
+      const presents = grpStudents.filter(s => studentTodayStatus.get(s.id) === 'entrada').length;
+      const absents = total - presents;
+      const rate = total > 0 ? Math.round((presents / total) * 100) : 0;
+      const isVesp = ['1E', '3ASCM', '3BPGA', '5APGM', '5BPGM', '5APGA'].includes(grp);
+
+      return {
+        group: grp,
+        total,
+        presents,
+        absents,
+        rate,
+        turno: isVesp ? 'Vespertino' : 'Matutino'
+      };
+    });
+  }, [students, logs]);
+
   // Filter logs logic
   const filteredLogs = logs.filter(log => {
     const matchesSearch = 
@@ -136,8 +176,9 @@ export default function DashboardPage() {
     
     const matchesType = typeFilter ? log.tipo === typeFilter : true;
     const matchesGrade = gradeFilter ? log.alumno?.grado === gradeFilter : true;
+    const matchesGroup = groupFilter ? log.alumno?.grupo === groupFilter : true;
 
-    return matchesSearch && matchesType && matchesGrade;
+    return matchesSearch && matchesType && matchesGrade && matchesGroup;
   });
 
   // Export to CSV helper
@@ -344,6 +385,98 @@ export default function DashboardPage() {
 
       </div>
 
+      {/* =========================================================================
+          SECCIÓN: ASISTENCIA DE ALUMNOS POR GRUPO (PARA ENCARGADOS DE ORDEN Y ADMIN)
+          ========================================================================= */}
+      <div className="glass-panel p-5 sm:p-6 rounded-3xl border border-cyan-500/30 bg-[#070b14]/90 space-y-4">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+          <div>
+            <div className="flex items-center space-x-2">
+              <span className="p-1.5 rounded-lg bg-cyan-500/10 text-cyan-400">
+                <Layers size={18} />
+              </span>
+              <h3 className="text-base sm:text-lg font-black text-white">
+                Asistencia de Alumnos por Grupo
+              </h3>
+              <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-cyan-500/20 text-cyan-300 border border-cyan-500/40">
+                12 Grupos Oficiales
+              </span>
+            </div>
+            <p className="text-xs text-gray-400 mt-1">
+              Supervisión de disciplina y porcentaje de alumnos en plantel. Haz clic en cualquier grupo para filtrar sus accesos:
+            </p>
+          </div>
+
+          {groupFilter && (
+            <button
+              onClick={() => setGroupFilter('')}
+              className="text-xs text-cyan-400 hover:text-cyan-300 underline font-bold self-start sm:self-auto cursor-pointer"
+            >
+              ✕ Mostrar todos los grupos
+            </button>
+          )}
+        </div>
+
+        {/* Group Cards Grid */}
+        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-3 pt-1">
+          {groupStats.map((grp) => {
+            const isSelected = groupFilter === grp.group;
+            return (
+              <button
+                key={grp.group}
+                type="button"
+                onClick={() => setGroupFilter(isSelected ? '' : grp.group)}
+                className={`p-3 rounded-2xl text-left transition-all cursor-pointer border relative overflow-hidden group ${
+                  isSelected
+                    ? 'bg-cyan-500/20 border-cyan-400 ring-2 ring-cyan-400/50 shadow-lg shadow-cyan-500/20 scale-[1.02]'
+                    : 'bg-black/40 border-white/10 hover:border-cyan-500/40 hover:bg-white/5'
+                }`}
+              >
+                <div className="flex items-center justify-between">
+                  <span className="text-sm font-black font-mono text-white group-hover:text-cyan-300">
+                    {grp.group}
+                  </span>
+                  <span className={`text-[9px] px-1.5 py-0.5 rounded font-bold ${
+                    grp.turno === 'Vespertino' 
+                      ? 'bg-indigo-500/20 text-indigo-300 border border-indigo-500/30' 
+                      : 'bg-amber-500/20 text-amber-300 border border-amber-500/30'
+                  }`}>
+                    {grp.turno === 'Vespertino' ? 'Vesp.' : 'Mat.'}
+                  </span>
+                </div>
+
+                <div className="mt-2 flex items-baseline justify-between text-xs">
+                  <span className="text-[11px] text-gray-400">Presentes:</span>
+                  <span className="font-bold text-white">
+                    <strong className="text-emerald-400">{grp.presents}</strong> / {grp.total}
+                  </span>
+                </div>
+
+                {/* Attendance mini-bar */}
+                <div className="mt-2 space-y-1">
+                  <div className="h-1.5 w-full bg-white/10 rounded-full overflow-hidden">
+                    <div
+                      style={{ width: `${grp.rate}%` }}
+                      className={`h-full rounded-full transition-all ${
+                        grp.rate >= 80 ? 'bg-emerald-400' : grp.rate >= 50 ? 'bg-amber-400' : 'bg-red-400'
+                      }`}
+                    />
+                  </div>
+                  <div className="flex items-center justify-between text-[10px] text-gray-400">
+                    <span>Asistencia</span>
+                    <span className={`font-mono font-bold ${
+                      grp.rate >= 80 ? 'text-emerald-400' : grp.rate >= 50 ? 'text-amber-400' : 'text-red-400'
+                    }`}>
+                      {grp.rate}%
+                    </span>
+                  </div>
+                </div>
+              </button>
+            );
+          })}
+        </div>
+      </div>
+
       {/* Main Grid: Analytical Charts & Live WhatsApp Stream */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
         
@@ -441,6 +574,19 @@ export default function DashboardPage() {
                   <option value="1°">1°</option>
                   <option value="3°">3°</option>
                   <option value="5°">5°</option>
+                </select>
+
+                <select
+                  value={groupFilter}
+                  onChange={(e) => setGroupFilter(e.target.value)}
+                  className="glass-input px-3 py-1.5 rounded-lg text-xs bg-[#090d16] font-mono font-bold"
+                >
+                  <option value="">Todos los Grupos</option>
+                  {OFFICIAL_GROUPS.map((g) => (
+                    <option key={g} value={g}>
+                      Grupo &quot;{g}&quot;
+                    </option>
+                  ))}
                 </select>
               </div>
             </div>

@@ -318,7 +318,7 @@ function TutorMobilePortalContent() {
               <div>
                 <span className="inline-flex items-center space-x-1 px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider bg-emerald-500/20 text-emerald-300 border border-emerald-500/40">
                   <Sparkles size={10} />
-                  <span>100% Gratis • Sin Cobro ($0 MXN)</span>
+                  <span>Alertas Instantáneas • Sistema Push</span>
                 </span>
                 <h1 className="text-lg font-black text-white mt-0.5">
                   CECYTE BC • Avisos al Tutor
@@ -413,7 +413,7 @@ function TutorMobilePortalContent() {
                   <Radio size={15} className={isConnectedSSE ? 'animate-pulse text-emerald-400' : 'text-amber-400'} />
                   <span>
                     {isConnectedSSE
-                      ? 'Conectado en Vivo • Recibiendo Alertas Gratis'
+                      ? 'Conectado en Vivo • Recibiendo Alertas'
                       : 'Sincronizando canal de alertas...'}
                   </span>
                 </span>
@@ -494,11 +494,11 @@ function TutorMobilePortalContent() {
                   <span>¿Quieres recibir alertas con la pantalla apagada?</span>
                 </span>
                 <span className="text-[10px] font-black uppercase px-2 py-0.5 rounded bg-emerald-500/20 text-emerald-300">
-                  Gratis / Sin Cobro
+                  Alertas Push
                 </span>
               </div>
               <p className="text-xs text-gray-300 leading-relaxed">
-                1. Deja esta página abierta o agrégala a tu <strong>Pantalla de Inicio</strong>, O BIEN instala la app gratuita <strong>ntfy</strong> (Android / iPhone) y suscríbete al código de tu hijo(a):
+                1. Deja esta página abierta o agrégala a tu <strong>Pantalla de Inicio</strong>, O BIEN instala la app <strong>ntfy</strong> (Android / iPhone) y suscríbete al código de tu hijo(a):
               </p>
 
               <div className="flex items-center gap-2">
@@ -601,7 +601,7 @@ export default function TutorMobilePortalPage() {
         <div className="min-h-screen bg-[#040812] text-white flex items-center justify-center p-6">
           <div className="text-center space-y-2">
             <div className="w-8 h-8 border-2 border-cyan-400 border-t-transparent rounded-full animate-spin mx-auto" />
-            <p className="text-xs text-gray-400">Cargando Portal Móvil de Notificaciones Gratis...</p>
+            <p className="text-xs text-gray-400">Cargando Portal Móvil de Notificaciones...</p>
           </div>
         </div>
       }

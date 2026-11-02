@@ -33,6 +33,13 @@ export default function HeaderNav() {
             <span>Docente</span>
           </span>
         );
+      case 'tutor':
+        return (
+          <span className="inline-flex items-center space-x-1 px-2.5 py-0.5 rounded-full bg-teal-500/10 border border-teal-500/30 text-teal-400 text-[10px] font-black tracking-wider uppercase">
+            <span>👨‍👩‍👧</span>
+            <span>Tutor</span>
+          </span>
+        );
       default:
         return null;
     }
@@ -57,84 +64,115 @@ export default function HeaderNav() {
             </div>
           </Link>
 
-          {/* Nav Links based on Role */}
+          {/* Nav Links strictly filtered by Role */}
           <nav className="hidden md:flex items-center space-x-2 text-xs font-semibold text-gray-300">
             
-            {/* Admin & Order Supervisor get QR Scanner */}
-            {(!user || user.role === 'administrador' || user.role === 'encargado_orden') && (
-              <Link 
-                href="/scanner" 
-                className="hover:text-cyan-400 transition-colors py-1.5 px-3 rounded-lg hover:bg-white/5 flex items-center space-x-1.5"
-              >
-                <QrCode size={14} className="text-cyan-400" />
-                <span>Escáner QR</span>
-              </Link>
-            )}
-
-            {/* Admin & Order Supervisor get Main Dashboard */}
-            {(!user || user.role === 'administrador' || user.role === 'encargado_orden') && (
-              <Link 
-                href="/dashboard" 
-                className="hover:text-cyan-400 transition-colors py-1.5 px-3 rounded-lg hover:bg-white/5 flex items-center space-x-1.5"
-              >
-                <Shield size={14} className="text-blue-400" />
-                <span>{user ? (user.role === 'encargado_orden' ? 'Panel Disciplinar' : 'Panel Admin') : 'Dashboard Principal'}</span>
-              </Link>
-            )}
-
-            {/* Teacher Panel */}
-            {(!user || user.role === 'administrador' || user.role === 'docente') && (
-              <Link 
-                href="/dashboard/teacher" 
-                className="hover:text-emerald-400 transition-colors py-1.5 px-3 rounded-lg hover:bg-white/5 flex items-center space-x-1.5"
-              >
-                <BookOpen size={14} className="text-emerald-400" />
-                <span>Panel Docente</span>
-              </Link>
-            )}
-
-            {/* Students list */}
-            <Link 
-              href="/dashboard/students" 
-              className="hover:text-cyan-400 transition-colors py-1.5 px-3 rounded-lg hover:bg-white/5 flex items-center space-x-1.5"
-            >
-              <Users size={14} className="text-gray-400" />
-              <span>Alumnos</span>
-            </Link>
-
-            {/* Padres de Familia / Tutores */}
-            {(!user || user.role === 'administrador' || user.role === 'encargado_orden') && (
+            {/* 1. TUTOR: ONLY "Padres / Tutores" */}
+            {user?.role === 'tutor' && (
               <Link 
                 href="/dashboard/parents" 
-                className="hover:text-purple-400 transition-colors py-1.5 px-3 rounded-lg hover:bg-white/5 flex items-center space-x-1.5 text-purple-300 font-bold"
+                className="bg-emerald-500/15 border border-emerald-500/30 text-emerald-300 font-bold py-1.5 px-3.5 rounded-lg flex items-center space-x-2"
                 title="Módulo de Padres de Familia y Tutores"
               >
-                <HeartHandshake size={14} className="text-purple-400" />
+                <HeartHandshake size={15} className="text-emerald-400" />
                 <span>Padres / Tutores</span>
               </Link>
             )}
 
-            {/* Admin QR stickers report */}
-            {(!user || user.role === 'administrador') && (
+            {/* 2. DOCENTE: ONLY "Panel Docente" */}
+            {user?.role === 'docente' && (
               <Link 
-                href="/dashboard/qr-report" 
-                className="hover:text-cyan-400 transition-colors py-1.5 px-3 rounded-lg hover:bg-white/5 flex items-center space-x-1.5 text-cyan-300 font-bold"
-                title="Generar e imprimir etiquetas QR por grupo (1.5x1.5 cm)"
+                href="/dashboard/teacher" 
+                className="bg-emerald-500/15 border border-emerald-500/30 text-emerald-300 font-bold py-1.5 px-3.5 rounded-lg flex items-center space-x-2"
               >
-                <QrCode size={14} className="text-cyan-400" />
-                <span>Reporte QRs (1.5cm)</span>
+                <BookOpen size={15} className="text-emerald-400" />
+                <span>Panel Docente</span>
               </Link>
             )}
 
-            {/* Admin user role manager */}
-            {user?.role === 'administrador' && (
-              <Link 
-                href="/dashboard/roles" 
-                className="hover:text-amber-400 transition-colors py-1.5 px-3 rounded-lg hover:bg-white/5 flex items-center space-x-1.5 text-amber-300 font-bold"
-              >
-                <Sparkles size={14} />
-                <span>Permisos Roles</span>
-              </Link>
+            {/* 3. ENCARGADO DE ORDEN: Escáner QR y Asistencia por Grupo */}
+            {user?.role === 'encargado_orden' && (
+              <>
+                <Link 
+                  href="/scanner" 
+                  className="hover:text-cyan-400 transition-colors py-1.5 px-3 rounded-lg hover:bg-white/5 flex items-center space-x-1.5"
+                >
+                  <QrCode size={14} className="text-cyan-400" />
+                  <span>Escáner QR</span>
+                </Link>
+                <Link 
+                  href="/dashboard" 
+                  className="bg-cyan-500/15 border border-cyan-500/30 text-cyan-300 font-bold py-1.5 px-3.5 rounded-lg flex items-center space-x-1.5"
+                >
+                  <Shield size={14} className="text-cyan-400" />
+                  <span>Asistencia por Grupo</span>
+                </Link>
+              </>
+            )}
+
+            {/* 4. ADMINISTRADOR o Invitado: Acceso Completo */}
+            {(!user || user.role === 'administrador') && (
+              <>
+                <Link 
+                  href="/scanner" 
+                  className="hover:text-cyan-400 transition-colors py-1.5 px-3 rounded-lg hover:bg-white/5 flex items-center space-x-1.5"
+                >
+                  <QrCode size={14} className="text-cyan-400" />
+                  <span>Escáner QR</span>
+                </Link>
+
+                <Link 
+                  href="/dashboard" 
+                  className="hover:text-cyan-400 transition-colors py-1.5 px-3 rounded-lg hover:bg-white/5 flex items-center space-x-1.5"
+                >
+                  <Shield size={14} className="text-blue-400" />
+                  <span>Dashboard</span>
+                </Link>
+
+                <Link 
+                  href="/dashboard/teacher" 
+                  className="hover:text-emerald-400 transition-colors py-1.5 px-3 rounded-lg hover:bg-white/5 flex items-center space-x-1.5"
+                >
+                  <BookOpen size={14} className="text-emerald-400" />
+                  <span>Panel Docente</span>
+                </Link>
+
+                <Link 
+                  href="/dashboard/students" 
+                  className="hover:text-cyan-400 transition-colors py-1.5 px-3 rounded-lg hover:bg-white/5 flex items-center space-x-1.5"
+                >
+                  <Users size={14} className="text-gray-400" />
+                  <span>Alumnos</span>
+                </Link>
+
+                <Link 
+                  href="/dashboard/parents" 
+                  className="hover:text-purple-400 transition-colors py-1.5 px-3 rounded-lg hover:bg-white/5 flex items-center space-x-1.5 text-purple-300 font-bold"
+                >
+                  <HeartHandshake size={14} className="text-purple-400" />
+                  <span>Padres / Tutores</span>
+                </Link>
+
+                {user?.role === 'administrador' && (
+                  <>
+                    <Link 
+                      href="/dashboard/qr-report" 
+                      className="hover:text-cyan-400 transition-colors py-1.5 px-3 rounded-lg hover:bg-white/5 flex items-center space-x-1.5 text-cyan-300 font-bold"
+                    >
+                      <QrCode size={14} className="text-cyan-400" />
+                      <span>Reporte QRs (1.5cm)</span>
+                    </Link>
+
+                    <Link 
+                      href="/dashboard/roles" 
+                      className="hover:text-amber-400 transition-colors py-1.5 px-3 rounded-lg hover:bg-white/5 flex items-center space-x-1.5 text-amber-300 font-bold"
+                    >
+                      <Sparkles size={14} />
+                      <span>Permisos Roles</span>
+                    </Link>
+                  </>
+                )}
+              </>
             )}
 
           </nav>
@@ -192,21 +230,32 @@ export default function HeaderNav() {
 
       {/* Mobile nav links */}
       <div className="md:hidden flex items-center justify-around py-2 border-t border-white/5 bg-black/40 text-[11px] font-semibold text-gray-300">
-        {(!user || user.role === 'administrador' || user.role === 'encargado_orden') && (
-          <Link href="/scanner" className="hover:text-cyan-400 py-1 px-2">🎥 Escáner</Link>
-        )}
-        {(!user || user.role === 'administrador' || user.role === 'encargado_orden') && (
-          <Link href="/dashboard" className="hover:text-cyan-400 py-1 px-2">🛡️ Orden</Link>
-        )}
-        {(!user || user.role === 'administrador' || user.role === 'docente') && (
-          <Link href="/dashboard/teacher" className="hover:text-emerald-400 py-1 px-2">👨‍🏫 Docente</Link>
-        )}
-        <Link href="/dashboard/students" className="hover:text-cyan-400 py-1 px-2">👦 Alumnos</Link>
-        {(!user || user.role === 'administrador' || user.role === 'encargado_orden') && (
-          <Link href="/dashboard/parents" className="hover:text-purple-400 py-1 px-2 text-purple-300">👨‍👩‍👧 Padres</Link>
-        )}
-        {user?.role === 'administrador' && (
-          <Link href="/dashboard/roles" className="hover:text-amber-400 py-1 px-2">⚙️ Roles</Link>
+        {user?.role === 'tutor' ? (
+          <Link href="/dashboard/parents" className="text-teal-400 font-bold py-1 px-3 flex items-center space-x-1.5">
+            <span>👨‍👩‍👧</span>
+            <span>Módulo Padres / Tutores</span>
+          </Link>
+        ) : user?.role === 'docente' ? (
+          <Link href="/dashboard/teacher" className="text-emerald-400 font-bold py-1 px-3 flex items-center space-x-1.5">
+            <span>👨‍🏫</span>
+            <span>Panel Docente (Mi Horario)</span>
+          </Link>
+        ) : user?.role === 'encargado_orden' ? (
+          <>
+            <Link href="/scanner" className="hover:text-cyan-400 py-1 px-2">🎥 Escáner QR</Link>
+            <Link href="/dashboard" className="text-cyan-400 font-bold py-1 px-2">🛡️ Asistencia por Grupo</Link>
+          </>
+        ) : (
+          <>
+            <Link href="/scanner" className="hover:text-cyan-400 py-1 px-2">🎥 Escáner</Link>
+            <Link href="/dashboard" className="hover:text-cyan-400 py-1 px-2">🛡️ Orden</Link>
+            <Link href="/dashboard/teacher" className="hover:text-emerald-400 py-1 px-2">👨‍🏫 Docente</Link>
+            <Link href="/dashboard/students" className="hover:text-cyan-400 py-1 px-2">👦 Alumnos</Link>
+            <Link href="/dashboard/parents" className="hover:text-purple-400 py-1 px-2 text-purple-300">👨‍👩‍👧 Padres</Link>
+            {user?.role === 'administrador' && (
+              <Link href="/dashboard/roles" className="hover:text-amber-400 py-1 px-2">⚙️ Roles</Link>
+            )}
+          </>
         )}
       </div>
     </header>

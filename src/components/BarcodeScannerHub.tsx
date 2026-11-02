@@ -829,14 +829,14 @@ export default function BarcodeScannerHub({ onScanCompleted, className = '' }: B
               {soundEnabled ? <Volume2 size={16} /> : <VolumeX size={16} />}
             </button>
 
-            {/* Indicador de Enlace Directo de WhatsApp / Deep Link Gratuito (Emisor +526641665354) */}
+            {/* Indicador de Enlace Directo de WhatsApp / Deep Link (Emisor +526641665354) */}
             <div
               className="px-3 py-1.5 rounded-xl border border-emerald-500/40 bg-emerald-500/15 text-emerald-300 text-xs font-bold flex items-center space-x-1.5 shadow-[0_0_12px_rgba(16,185,129,0.15)]"
-              title="Enlace directo gratuito https://wa.me/<NUMERO_CON_CODIGO_PAIS>?text=<MENSAJE_CODIFICADO> desde el emisor +526641665354"
+              title="Enlace directo https://wa.me/<NUMERO_CON_CODIGO_PAIS>?text=<MENSAJE_CODIFICADO> desde el emisor +526641665354"
             >
               <Smartphone size={14} className="text-emerald-400" />
-              <span className="hidden sm:inline">📲 WhatsApp wa.me Gratis (+526641665354)</span>
-              <span className="sm:hidden">📲 wa.me Gratis</span>
+              <span className="hidden sm:inline">📲 WhatsApp Directo (+526641665354)</span>
+              <span className="sm:hidden">📲 WhatsApp Directo</span>
             </div>
 
             {/* Hardware Scanner Reconnect / Detect Button */}
@@ -1491,7 +1491,7 @@ export default function BarcodeScannerHub({ onScanCompleted, className = '' }: B
                           title="Abrir enlace directo gratuito https://wa.me/<NUMERO_CON_CODIGO_PAIS>?text=<MENSAJE_CODIFICADO> (Emisor +526641665354)"
                         >
                           <Smartphone size={14} />
-                          <span>📲 Enviar en WhatsApp (wa.me Gratis • +526641665354)</span>
+                          <span>📲 Enviar en WhatsApp (+526641665354)</span>
                         </a>
                       </div>
                     )}

@@ -7,9 +7,13 @@ import { useAuth, Role } from '@/lib/auth';
 import { Shield, Key, Mail, CheckCircle2, AlertCircle, X, Sparkles, UserCheck, Eye, EyeOff } from 'lucide-react';
 
 export default function LoginModal() {
-  const { isLoginModalOpen, closeLoginModal, loginWithCredentials, loginWithGoogle, user, usersPasswordsMap } = useAuth();
+  const { isLoginModalOpen, closeLoginModal, loginWithCredentials, loginWithGoogle, loginWithMatricula, user, usersPasswordsMap } = useAuth();
   
-  const [tab, setTab] = useState<'google' | 'password' | 'demo'>('password');
+  const [tab, setTab] = useState<'password' | 'tutor' | 'google' | 'demo'>('password');
+  
+  // Tutor form state
+  const [tutorMatricula, setTutorMatricula] = useState('');
+  const [isTutorLoading, setIsTutorLoading] = useState(false);
   
   // Google form state
   const [googleEmail, setGoogleEmail] = useState('');
@@ -26,6 +30,32 @@ export default function LoginModal() {
   const [successMessage, setSuccessMessage] = useState('');
 
   if (!isLoginModalOpen) return null;
+
+  const handleTutorSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setErrorMessage('');
+    setSuccessMessage('');
+
+    if (!tutorMatricula.trim()) {
+      setErrorMessage('Por favor ingresa la matrícula del alumno (14 dígitos).');
+      return;
+    }
+
+    setIsTutorLoading(true);
+    try {
+      const res = await loginWithMatricula(tutorMatricula.trim());
+      if (res.success) {
+        setSuccessMessage('¡Acceso concedido! Redirigiendo a tu módulo de tutor...');
+        setTimeout(() => {
+          window.location.href = '/dashboard/parents';
+        }, 1000);
+      } else {
+        setErrorMessage(res.error || 'Matrícula no encontrada en la base de datos.');
+      }
+    } finally {
+      setIsTutorLoading(false);
+    }
+  };
 
   const handleGoogleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -108,46 +138,61 @@ export default function LoginModal() {
             Acceso Institucional CECYTE BC
           </h2>
           <p className="text-xs text-gray-400 max-w-xs mx-auto">
-            Ingresa con tu correo institucional y contraseña asignada o vía Gmail institucional.
+            Ingreso para personal institucional (Docentes, Encargados, Administrador) y Tutores de alumnos.
           </p>
         </div>
 
         {/* Navigation Tabs */}
-        <div className="flex rounded-xl bg-black/40 p-1 border border-white/10 mb-6">
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-1 rounded-xl bg-black/40 p-1 border border-white/10 mb-6">
           <button
+            type="button"
             onClick={() => { setTab('password'); setErrorMessage(''); }}
-            className={`flex-1 py-2.5 px-3 rounded-lg text-xs font-bold transition-all flex items-center justify-center space-x-1.5 cursor-pointer ${
+            className={`py-2 px-2 rounded-lg text-xs font-bold transition-all flex items-center justify-center space-x-1 cursor-pointer ${
               tab === 'password' 
                 ? 'bg-gradient-to-r from-cyan-500 to-blue-600 text-white shadow-md' 
                 : 'text-gray-400 hover:text-white'
             }`}
           >
-            <Key size={14} />
-            <span>Contraseña</span>
+            <Key size={13} />
+            <span>Personal</span>
           </button>
 
           <button
+            type="button"
+            onClick={() => { setTab('tutor'); setErrorMessage(''); }}
+            className={`py-2 px-2 rounded-lg text-xs font-bold transition-all flex items-center justify-center space-x-1 cursor-pointer ${
+              tab === 'tutor' 
+                ? 'bg-gradient-to-r from-emerald-500 to-teal-600 text-white shadow-md' 
+                : 'text-emerald-400 hover:text-emerald-300'
+            }`}
+          >
+            <span>👨‍👩‍👧 Tutor</span>
+          </button>
+
+          <button
+            type="button"
             onClick={() => { setTab('google'); setErrorMessage(''); }}
-            className={`flex-1 py-2.5 px-3 rounded-lg text-xs font-bold transition-all flex items-center justify-center space-x-1.5 cursor-pointer ${
+            className={`py-2 px-2 rounded-lg text-xs font-bold transition-all flex items-center justify-center space-x-1 cursor-pointer ${
               tab === 'google' 
                 ? 'bg-gradient-to-r from-cyan-500 to-blue-600 text-white shadow-md' 
                 : 'text-gray-400 hover:text-white'
             }`}
           >
-            <Mail size={14} />
-            <span>Gmail Institucional</span>
+            <Mail size={13} />
+            <span>Gmail</span>
           </button>
 
           <button
+            type="button"
             onClick={() => { setTab('demo'); setErrorMessage(''); }}
-            className={`flex-1 py-2.5 px-3 rounded-lg text-xs font-bold transition-all flex items-center justify-center space-x-1.5 cursor-pointer ${
+            className={`py-2 px-2 rounded-lg text-xs font-bold transition-all flex items-center justify-center space-x-1 cursor-pointer ${
               tab === 'demo' 
                 ? 'bg-gradient-to-r from-amber-500 to-orange-600 text-white shadow-md' 
                 : 'text-amber-400 hover:text-amber-300'
             }`}
           >
-            <Sparkles size={14} />
-            <span>Cuentas Demo</span>
+            <Sparkles size={13} />
+            <span>Demos</span>
           </button>
         </div>
 
@@ -212,6 +257,54 @@ export default function LoginModal() {
             >
               <Key size={14} />
               <span>Iniciar Sesión con Contraseña</span>
+            </button>
+          </form>
+        )}
+
+        {/* Tab: Tutor Access by Matricula */}
+        {tab === 'tutor' && (
+          <form onSubmit={handleTutorSubmit} className="space-y-4">
+            <div className="p-3.5 rounded-xl bg-emerald-500/10 border border-emerald-500/25 text-emerald-300 text-xs leading-relaxed space-y-1">
+              <div className="font-bold flex items-center space-x-1.5 text-emerald-400">
+                <span>👨‍👩‍👧</span>
+                <span>Acceso Exclusivo para Padres y Tutores</span>
+              </div>
+              <p className="text-[11px] text-gray-300">
+                Ingresa la <strong>matrícula escolar (14 dígitos)</strong> de tu hijo o hija para consultar sus asistencias y recibir reportes directamente en tu teléfono.
+              </p>
+            </div>
+
+            <div className="space-y-1.5">
+              <label className="text-xs font-semibold text-gray-300">
+                Matrícula del Alumno (14 dígitos)
+              </label>
+              <div className="relative">
+                <input
+                  type="text"
+                  maxLength={16}
+                  placeholder="Ej: 25402080282223"
+                  value={tutorMatricula}
+                  onChange={(e) => setTutorMatricula(e.target.value.replace(/\s+/g, ''))}
+                  className="w-full glass-input py-3 px-3.5 rounded-xl text-sm font-mono tracking-wider text-white border border-emerald-500/30 focus:border-emerald-400 focus:outline-none placeholder-gray-500 bg-black/40"
+                  required
+                  autoFocus
+                />
+                <span className="absolute right-3.5 top-1/2 -translate-y-1/2 text-xs text-gray-400 font-mono">
+                  {tutorMatricula.length}/14
+                </span>
+              </div>
+              <p className="text-[10px] text-gray-400">
+                💡 Encuentra la matrícula en la credencial escolar o reporte de calificaciones del alumno.
+              </p>
+            </div>
+
+            <button
+              type="submit"
+              disabled={isTutorLoading || !tutorMatricula.trim()}
+              className="w-full py-3.5 rounded-xl bg-gradient-to-r from-emerald-500 to-teal-600 hover:from-emerald-400 hover:to-teal-500 text-white font-bold text-xs shadow-lg shadow-emerald-500/20 disabled:opacity-50 transition-all flex items-center justify-center space-x-2 cursor-pointer"
+            >
+              <span>{isTutorLoading ? 'Verificando matrícula...' : 'Consultar Mi Alumno'}</span>
+              <span>→</span>
             </button>
           </form>
         )}
@@ -327,6 +420,38 @@ export default function LoginModal() {
                   </div>
                 </div>
                 <UserCheck size={16} className="text-emerald-400 opacity-0 group-hover:opacity-100 transition-opacity" />
+              </button>
+
+              <button
+                type="button"
+                onClick={async () => {
+                  setErrorMessage('');
+                  setSuccessMessage('');
+                  setIsTutorLoading(true);
+                  try {
+                    const res = await loginWithMatricula('25402080282223');
+                    if (res.success) {
+                      setSuccessMessage('¡Acceso como Tutor demo concedido! Redirigiendo...');
+                      setTimeout(() => {
+                        window.location.href = '/dashboard/parents';
+                      }, 800);
+                    }
+                  } finally {
+                    setIsTutorLoading(false);
+                  }
+                }}
+                className="w-full p-3 rounded-xl glass-panel border border-teal-500/30 hover:bg-teal-500/10 transition-all flex items-center justify-between group text-left cursor-pointer"
+              >
+                <div className="flex items-center space-x-3">
+                  <div className="w-8 h-8 rounded-lg bg-teal-500/20 flex items-center justify-center text-teal-400 font-bold">
+                    👨‍👩‍👧
+                  </div>
+                  <div>
+                    <h4 className="text-xs font-bold text-white group-hover:text-teal-400">4. Tutor Alumno (Marco Alejandro Abraham)</h4>
+                    <p className="text-[10px] text-gray-400">Matrícula: 25402080282223 • Acceso directo a su alumno</p>
+                  </div>
+                </div>
+                <UserCheck size={16} className="text-teal-400 opacity-0 group-hover:opacity-100 transition-opacity" />
               </button>
             </div>
           </div>

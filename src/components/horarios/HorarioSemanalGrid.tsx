@@ -25,6 +25,8 @@ import EditarClaseModal from './EditarClaseModal';
 interface HorarioSemanalGridProps {
   horarios: BloqueHorario[];
   isAdmin: boolean;
+  isDocente?: boolean;
+  teacherName?: string;
   onHorariosUpdated: (updated: BloqueHorario[]) => void;
   selectedGroup: string;
   onSelectGroup: (group: string) => void;
@@ -36,6 +38,8 @@ interface HorarioSemanalGridProps {
 export default function HorarioSemanalGrid({
   horarios,
   isAdmin,
+  isDocente = false,
+  teacherName,
   onHorariosUpdated,
   selectedGroup,
   onSelectGroup,
@@ -43,8 +47,31 @@ export default function HorarioSemanalGrid({
   onSelectGrade,
   onOpenReport
 }: HorarioSemanalGridProps) {
+  // All teachers directory across the institution
+  const allTeachers = useMemo(() => {
+    return getMaestrosDirectory(horarios);
+  }, [horarios]);
+
+  // If isDocente, match teacher name and lock view to this teacher
+  const isTeacherLocked = !!isDocente;
+
+  const matchedTeacherName = useMemo(() => {
+    if (!teacherName) return null;
+    const cleanT = teacherName.toLowerCase()
+      .replace(/^(docente|profesor|profesora|profe)\s+/i, '')
+      .replace(/@cecytebc\.edu\.mx/i, '')
+      .trim();
+    if (!cleanT) return null;
+
+    const found = allTeachers.find(t => {
+      const nom = t.nombre.toLowerCase();
+      return nom.includes(cleanT) || cleanT.includes(nom);
+    });
+    return found ? found.nombre : null;
+  }, [allTeachers, teacherName]);
+
   // Primary consultation mode: 'grupo' vs 'maestro'
-  const [consultaModo, setConsultaModo] = useState<'grupo' | 'maestro'>('grupo');
+  const [consultaModo, setConsultaModo] = useState<'grupo' | 'maestro'>(isTeacherLocked ? 'maestro' : 'grupo');
   const [selectedMaestro, setSelectedMaestro] = useState<string>('NATANAEL DURÁN GARCÍA');
   const [teacherTurnoFilter, setTeacherTurnoFilter] = useState<'auto' | 'Matutino' | 'Vespertino' | 'Ambos'>('auto');
   const [maestroSearch, setMaestroSearch] = useState<string>('');
@@ -56,16 +83,22 @@ export default function HorarioSemanalGrid({
   const [editingBloque, setEditingBloque] = useState<BloqueHorario | null>(null);
   const [slotToAdd, setSlotToAdd] = useState<{ dia: DiaSemana; modulo: number } | null>(null);
 
-  // All teachers directory across the institution
-  const allTeachers = useMemo(() => {
-    return getMaestrosDirectory(horarios);
-  }, [horarios]);
+  // Auto-select the teacher when locked or matched
+  React.useEffect(() => {
+    if (isTeacherLocked) {
+      setConsultaModo('maestro');
+      if (matchedTeacherName) {
+        setSelectedMaestro(matchedTeacherName);
+      }
+    }
+  }, [isTeacherLocked, matchedTeacherName]);
 
   // Ensure selectedMaestro is valid
   const activeMaestroName = useMemo(() => {
+    if (isTeacherLocked && matchedTeacherName) return matchedTeacherName;
     if (allTeachers.some(t => t.nombre === selectedMaestro)) return selectedMaestro;
     return allTeachers[0]?.nombre || 'NATANAEL DURÁN GARCÍA';
-  }, [allTeachers, selectedMaestro]);
+  }, [allTeachers, selectedMaestro, isTeacherLocked, matchedTeacherName]);
 
   const activeMaestroInfo = useMemo(() => {
     return allTeachers.find(t => t.nombre === activeMaestroName) || allTeachers[0];
@@ -261,50 +294,60 @@ export default function HorarioSemanalGrid({
       <div className="glass-panel p-4 sm:p-5 rounded-3xl border border-cyan-500/30 bg-[#070b14]/90 space-y-4">
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
           <div>
-            <span className="text-[11px] font-bold uppercase tracking-wider text-cyan-400 block">
-              Modalidad de Consulta de Horarios 2026-2
+            <span className="text-[11px] font-bold uppercase tracking-wider text-emerald-400 block">
+              {isTeacherLocked ? 'Horario Individual del Docente' : 'Modalidad de Consulta de Horarios 2026-2'}
             </span>
             <h3 className="text-lg sm:text-xl font-black text-white">
-              {consultaModo === 'grupo'
-                ? '🏫 Consulta de Horarios por Grupo (12 Grupos)'
-                : '👨‍🏫 Consulta de Horarios por Maestro / Docente'}
+              {isTeacherLocked
+                ? `👨‍🏫 Mi Horario Asignado • ${activeMaestroName}`
+                : consultaModo === 'grupo'
+                  ? '🏫 Consulta de Horarios por Grupo (12 Grupos)'
+                  : '👨‍🏫 Consulta de Horarios por Maestro / Docente'}
             </h3>
           </div>
 
-          {/* Toggle Pills: Por Grupo vs Por Maestro */}
-          <div className="flex items-center space-x-2 p-1.5 rounded-2xl bg-black/60 border border-white/10 self-start md:self-auto">
-            <button
-              type="button"
-              onClick={() => setConsultaModo('grupo')}
-              className={`flex items-center space-x-2 px-4 py-2.5 rounded-xl text-xs sm:text-sm font-extrabold transition-all cursor-pointer ${
-                consultaModo === 'grupo'
-                  ? 'bg-gradient-to-r from-cyan-500 to-blue-600 text-white shadow-lg shadow-cyan-500/30 ring-1 ring-cyan-300'
-                  : 'text-gray-400 hover:text-white hover:bg-white/5'
-              }`}
-            >
-              <Layers size={16} />
-              <span>Consultar por GRUPO (12)</span>
-            </button>
+          {/* Toggle Pills: Por Grupo vs Por Maestro (Hidden for Teachers) */}
+          {!isTeacherLocked ? (
+            <div className="flex items-center space-x-2 p-1.5 rounded-2xl bg-black/60 border border-white/10 self-start md:self-auto">
+              <button
+                type="button"
+                onClick={() => setConsultaModo('grupo')}
+                className={`flex items-center space-x-2 px-4 py-2.5 rounded-xl text-xs sm:text-sm font-extrabold transition-all cursor-pointer ${
+                  consultaModo === 'grupo'
+                    ? 'bg-gradient-to-r from-cyan-500 to-blue-600 text-white shadow-lg shadow-cyan-500/30 ring-1 ring-cyan-300'
+                    : 'text-gray-400 hover:text-white hover:bg-white/5'
+                }`}
+              >
+                <Layers size={16} />
+                <span>Consultar por GRUPO (12)</span>
+              </button>
 
-            <button
-              type="button"
-              onClick={() => setConsultaModo('maestro')}
-              className={`flex items-center space-x-2 px-4 py-2.5 rounded-xl text-xs sm:text-sm font-extrabold transition-all cursor-pointer ${
-                consultaModo === 'maestro'
-                  ? 'bg-gradient-to-r from-purple-500 to-indigo-600 text-white shadow-lg shadow-purple-500/30 ring-1 ring-purple-300'
-                  : 'text-gray-400 hover:text-white hover:bg-white/5'
-              }`}
-            >
-              <UserCheck size={16} />
-              <span>Consultar por MAESTRO ({allTeachers.length})</span>
-            </button>
-          </div>
+              <button
+                type="button"
+                onClick={() => setConsultaModo('maestro')}
+                className={`flex items-center space-x-2 px-4 py-2.5 rounded-xl text-xs sm:text-sm font-extrabold transition-all cursor-pointer ${
+                  consultaModo === 'maestro'
+                    ? 'bg-gradient-to-r from-purple-500 to-indigo-600 text-white shadow-lg shadow-purple-500/30 ring-1 ring-purple-300'
+                    : 'text-gray-400 hover:text-white hover:bg-white/5'
+                }`}
+              >
+                <UserCheck size={16} />
+                <span>Consultar por MAESTRO ({allTeachers.length})</span>
+              </button>
+            </div>
+          ) : (
+            <div className="inline-flex items-center space-x-2 px-3.5 py-2 rounded-xl bg-emerald-500/10 border border-emerald-500/30 text-emerald-300 text-xs font-bold">
+              <span>👨‍🏫 Carga Docente Asignada</span>
+              <span className="w-1.5 h-1.5 rounded-full bg-emerald-400"></span>
+              <span>{activeMaestroInfo?.totalHoras || 0} Horas Semanales</span>
+            </div>
+          )}
         </div>
 
         {/* =========================================================================
             CONTROLS FOR MODE 1: CONSULTAR POR GRUPO
             ========================================================================= */}
-        {consultaModo === 'grupo' && (
+        {!isTeacherLocked && consultaModo === 'grupo' && (
           <div className="pt-3 border-t border-white/10 space-y-3">
             <div className="flex flex-col lg:flex-row items-stretch lg:items-center justify-between gap-3">
               {/* Semestre & Turno filters */}
@@ -414,36 +457,47 @@ export default function HorarioSemanalGrid({
         {consultaModo === 'maestro' && (
           <div className="pt-3 border-t border-white/10 space-y-3">
             <div className="flex flex-col lg:flex-row items-stretch lg:items-center justify-between gap-3">
-              {/* Teacher Picker & Search */}
-              <div className="flex flex-wrap items-center gap-3 flex-1">
-                <div className="flex items-center space-x-2">
-                  <span className="text-xs font-bold text-purple-300 uppercase tracking-wider whitespace-nowrap">
-                    👨‍🏫 Seleccionar Maestro:
-                  </span>
-                  <select
-                    value={activeMaestroName}
-                    onChange={(e) => setSelectedMaestro(e.target.value)}
-                    className="glass-input py-2 px-3 rounded-xl text-xs sm:text-sm text-white font-bold border-purple-500/40"
-                  >
-                    {allTeachers.map(doc => (
-                      <option key={doc.nombre} value={doc.nombre} className="bg-gray-900">
-                        {doc.nombre} ({doc.totalHoras} hrs • Grupos: {doc.grupos.join(', ')})
-                      </option>
-                    ))}
-                  </select>
-                </div>
+              {/* Teacher Picker & Search (Only for Admin / Multi-view) */}
+              {!isTeacherLocked ? (
+                <div className="flex flex-wrap items-center gap-3 flex-1">
+                  <div className="flex items-center space-x-2">
+                    <span className="text-xs font-bold text-purple-300 uppercase tracking-wider whitespace-nowrap">
+                      👨‍🏫 Seleccionar Maestro:
+                    </span>
+                    <select
+                      value={activeMaestroName}
+                      onChange={(e) => setSelectedMaestro(e.target.value)}
+                      className="glass-input py-2 px-3 rounded-xl text-xs sm:text-sm text-white font-bold border-purple-500/40"
+                    >
+                      {allTeachers.map(doc => (
+                        <option key={doc.nombre} value={doc.nombre} className="bg-gray-900">
+                          {doc.nombre} ({doc.totalHoras} hrs • Grupos: {doc.grupos.join(', ')})
+                        </option>
+                      ))}
+                    </select>
+                  </div>
 
-                <div className="relative flex-1 min-w-[200px] max-w-xs">
-                  <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500" />
-                  <input
-                    type="text"
-                    value={maestroSearch}
-                    onChange={(e) => setMaestroSearch(e.target.value)}
-                    placeholder="Filtrar maestro, materia o grupo..."
-                    className="w-full glass-input pl-8 pr-3 py-1.5 rounded-xl text-xs text-white"
-                  />
+                  <div className="relative flex-1 min-w-[200px] max-w-xs">
+                    <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500" />
+                    <input
+                      type="text"
+                      value={maestroSearch}
+                      onChange={(e) => setMaestroSearch(e.target.value)}
+                      placeholder="Filtrar maestro, materia o grupo..."
+                      className="w-full glass-input pl-8 pr-3 py-1.5 rounded-xl text-xs text-white"
+                    />
+                  </div>
                 </div>
-              </div>
+              ) : (
+                <div className="flex items-center space-x-2 flex-1">
+                  <span className="text-xs font-bold text-emerald-400">
+                    👨‍🏫 {activeMaestroName}
+                  </span>
+                  <span className="text-[11px] text-gray-400 font-mono">
+                    • Grupos asignados: {activeMaestroInfo?.grupos.join(', ') || 'N/A'}
+                  </span>
+                </div>
+              )}
 
               {/* Shift view selector for Teacher */}
               <div className="flex items-center space-x-1.5">
@@ -470,31 +524,33 @@ export default function HorarioSemanalGrid({
               </div>
             </div>
 
-            {/* Quick Teacher Chips */}
-            <div className="pt-2 border-t border-white/5 flex items-center flex-wrap gap-1.5">
-              <span className="text-[11px] font-bold text-gray-400 uppercase tracking-wider mr-1">
-                Maestros:
-              </span>
-              {filteredTeachersList.map(doc => {
-                const isSelected = activeMaestroName === doc.nombre;
-                return (
-                  <button
-                    key={doc.nombre}
-                    type="button"
-                    onClick={() => setSelectedMaestro(doc.nombre)}
-                    className={`px-2.5 py-1 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center space-x-1.5 border ${
-                      isSelected
-                        ? `${doc.palette.badgeBg} ${doc.palette.badgeBorder} text-white ring-2 ring-white scale-[1.03] shadow-lg`
-                        : 'glass-panel border-white/10 text-gray-300 hover:text-white hover:bg-white/10'
-                    }`}
-                  >
-                    <span className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: doc.palette.accent }}></span>
-                    <span>{doc.nombre}</span>
-                    <span className="text-[10px] font-mono opacity-75">({doc.totalHoras}h)</span>
-                  </button>
-                );
-              })}
-            </div>
+            {/* Quick Teacher Chips (Only for Admin / Multi-view) */}
+            {!isTeacherLocked && (
+              <div className="pt-2 border-t border-white/5 flex items-center flex-wrap gap-1.5">
+                <span className="text-[11px] font-bold text-gray-400 uppercase tracking-wider mr-1">
+                  Maestros:
+                </span>
+                {filteredTeachersList.map(doc => {
+                  const isSelected = activeMaestroName === doc.nombre;
+                  return (
+                    <button
+                      key={doc.nombre}
+                      type="button"
+                      onClick={() => setSelectedMaestro(doc.nombre)}
+                      className={`px-2.5 py-1 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center space-x-1.5 border ${
+                        isSelected
+                          ? `${doc.palette.badgeBg} ${doc.palette.badgeBorder} text-white ring-2 ring-white scale-[1.03] shadow-lg`
+                          : 'glass-panel border-white/10 text-gray-300 hover:text-white hover:bg-white/10'
+                      }`}
+                    >
+                      <span className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: doc.palette.accent }}></span>
+                      <span>{doc.nombre}</span>
+                      <span className="text-[10px] font-mono opacity-75">({doc.totalHoras}h)</span>
+                    </button>
+                  );
+                })}
+              </div>
+            )}
           </div>
         )}
       </div>
