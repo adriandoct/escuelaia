@@ -115,8 +115,8 @@ export default function HeaderNav() {
               </>
             )}
 
-            {/* 4. ADMINISTRADOR o Invitado: Acceso Completo */}
-            {(!user || user.role === 'administrador') && (
+            {/* 4. ADMINISTRADOR: Acceso Completo */}
+            {user?.role === 'administrador' && (
               <>
                 <Link 
                   href="/scanner" 
@@ -158,27 +158,44 @@ export default function HeaderNav() {
                   <span>Padres / Tutores</span>
                 </Link>
 
-                {user?.role === 'administrador' && (
-                  <>
-                    <Link 
-                      href="/dashboard/qr-report" 
-                      className="hover:text-cyan-400 transition-colors py-1.5 px-3 rounded-lg hover:bg-white/5 flex items-center space-x-1.5 text-cyan-300 font-bold"
-                    >
-                      <QrCode size={14} className="text-cyan-400" />
-                      <span>Reporte QRs (1.5cm)</span>
-                    </Link>
+                <Link 
+                  href="/dashboard/qr-report" 
+                  className="hover:text-cyan-400 transition-colors py-1.5 px-3 rounded-lg hover:bg-white/5 flex items-center space-x-1.5 text-cyan-300 font-bold"
+                >
+                  <QrCode size={14} className="text-cyan-400" />
+                  <span>Reporte QRs (1.5cm)</span>
+                </Link>
 
-                    {(user?.isSuperAdmin || user?.email === 'admin@admin.com') && (
-                      <Link 
-                        href="/dashboard/roles" 
-                        className="hover:text-amber-400 transition-colors py-1.5 px-3 rounded-lg hover:bg-white/5 flex items-center space-x-1.5 text-amber-300 font-bold"
-                      >
-                        <Sparkles size={14} />
-                        <span>Permisos Roles</span>
-                      </Link>
-                    )}
-                  </>
+                {(user?.isSuperAdmin || user?.email === 'admin@admin.com') && (
+                  <Link 
+                    href="/dashboard/roles" 
+                    className="hover:text-amber-400 transition-colors py-1.5 px-3 rounded-lg hover:bg-white/5 flex items-center space-x-1.5 text-amber-300 font-bold"
+                  >
+                    <Sparkles size={14} />
+                    <span>Permisos Roles</span>
+                  </Link>
                 )}
+              </>
+            )}
+
+            {/* 5. Invitado / Sin Sesión: Solicitar autenticación */}
+            {!user && (
+              <>
+                <Link 
+                  href="/scanner" 
+                  className="hover:text-cyan-400 transition-colors py-1.5 px-3 rounded-lg hover:bg-white/5 flex items-center space-x-1.5"
+                >
+                  <QrCode size={14} className="text-cyan-400" />
+                  <span>Escáner QR</span>
+                </Link>
+
+                <button
+                  onClick={openLoginModal}
+                  className="bg-cyan-500/15 border border-cyan-500/30 text-cyan-300 hover:text-white hover:bg-cyan-500/25 py-1.5 px-3 rounded-lg transition-all flex items-center space-x-1.5 font-bold cursor-pointer"
+                >
+                  <LogIn size={14} />
+                  <span>Iniciar Sesión</span>
+                </button>
               </>
             )}
 
@@ -251,6 +268,13 @@ export default function HeaderNav() {
           <>
             <Link href="/scanner" className="hover:text-cyan-400 py-1 px-2">🎥 Escáner QR</Link>
             <Link href="/dashboard" className="text-cyan-400 font-bold py-1 px-2">🛡️ Asistencia por Grupo</Link>
+          </>
+        ) : !user ? (
+          <>
+            <Link href="/scanner" className="hover:text-cyan-400 py-1 px-3">🎥 Escáner QR</Link>
+            <button onClick={openLoginModal} className="text-cyan-400 font-bold py-1 px-3 flex items-center space-x-1 cursor-pointer">
+              <span>🔑 Iniciar Sesión</span>
+            </button>
           </>
         ) : (
           <>

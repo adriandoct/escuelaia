@@ -88,26 +88,30 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       localStorage.setItem('dojoia_users_passwords', JSON.stringify(DEFAULT_USERS_PASSWORDS));
     }
 
-    // Load active session
+    // Load active session (only if explicitly authenticated by the user)
     const savedUser = localStorage.getItem('dojoia_active_user');
-    if (savedUser) {
+    const wasExplicitlyLoggedIn = localStorage.getItem('dojoia_user_explicitly_logged_in') === 'true';
+
+    if (savedUser && wasExplicitlyLoggedIn) {
       try {
-        setUser(JSON.parse(savedUser));
+        const parsed = JSON.parse(savedUser);
+        if (parsed && parsed.email) {
+          setUser(parsed);
+        } else {
+          setUser(null);
+          setIsLoginModalOpen(true);
+        }
       } catch (e) {
         console.error('Error loading stored active user:', e);
+        setUser(null);
+        setIsLoginModalOpen(true);
       }
     } else {
-      // Default initial session: Superadmin admin@admin.com
-      const defaultUser: User = {
-        id: 'super-admin-1',
-        name: 'Administrador General',
-        email: 'admin@admin.com',
-        role: 'administrador',
-        isSuperAdmin: true,
-        avatarUrl: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&q=80&w=200&h=200',
-      };
-      setUser(defaultUser);
-      localStorage.setItem('dojoia_active_user', JSON.stringify(defaultUser));
+      // By default: DO NOT enter as administrator. Always require explicit authentication.
+      localStorage.removeItem('dojoia_active_user');
+      localStorage.removeItem('dojoia_user_explicitly_logged_in');
+      setUser(null);
+      setIsLoginModalOpen(true);
     }
   }, []);
 
@@ -169,6 +173,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     };
 
     saveActiveUser(loggedUser);
+    localStorage.setItem('dojoia_user_explicitly_logged_in', 'true');
     setIsLoginModalOpen(false);
     return { success: true };
   };
@@ -203,6 +208,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     };
 
     saveActiveUser(loggedUser);
+    localStorage.setItem('dojoia_user_explicitly_logged_in', 'true');
     setIsLoginModalOpen(false);
     return { success: true };
   };
@@ -236,6 +242,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       };
 
       saveActiveUser(loggedUser);
+      localStorage.setItem('dojoia_user_explicitly_logged_in', 'true');
       setIsLoginModalOpen(false);
       return { success: true };
     } catch (err: any) {
@@ -244,6 +251,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   const logout = () => {
+    localStorage.removeItem('dojoia_user_explicitly_logged_in');
     saveActiveUser(null);
     setIsLoginModalOpen(true);
   };

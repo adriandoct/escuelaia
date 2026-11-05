@@ -21,8 +21,8 @@ export default function LoginModal() {
   const [selectedRole, setSelectedRole] = useState<Role>('docente');
   
   // Credentials form state
-  const [credentialsEmail, setCredentialsEmail] = useState('admin@admin.com');
-  const [credentialsPass, setCredentialsPass] = useState('12345678Cecyte');
+  const [credentialsEmail, setCredentialsEmail] = useState('');
+  const [credentialsPass, setCredentialsPass] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   
   // Error / Success alert state

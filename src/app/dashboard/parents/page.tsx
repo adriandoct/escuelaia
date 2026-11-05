@@ -42,7 +42,15 @@ export const hasAssignedTutor = (tutor?: string): boolean => {
 };
 
 export default function ParentsDashboardPage() {
-  const { user } = useAuth();
+  const { user, openLoginModal } = useAuth();
+
+  useEffect(() => {
+    if (!user) {
+      openLoginModal();
+    } else if (user.role === 'docente') {
+      window.location.href = '/dashboard/teacher';
+    }
+  }, [user, openLoginModal]);
 
   // Core Data States
   const [students, setStudents] = useState<Alumno[]>([]);
@@ -432,6 +440,26 @@ export default function ParentsDashboardPage() {
     link.click();
     document.body.removeChild(link);
   };
+
+  if (!user) {
+    return (
+      <div className="flex-1 flex flex-col items-center justify-center py-24 text-center space-y-4">
+        <div className="w-16 h-16 rounded-3xl bg-teal-500/10 border border-teal-500/20 text-teal-400 flex items-center justify-center text-3xl shadow-xl">
+          👨‍👩‍👧
+        </div>
+        <h2 className="text-2xl font-bold text-white">Módulo de Padres y Tutores</h2>
+        <p className="text-gray-400 text-sm max-w-md">
+          Para consultar la asistencia de tu hijo(a) o gestionar los avisos a tutores, por favor identifícate.
+        </p>
+        <button
+          onClick={openLoginModal}
+          className="px-6 py-3 rounded-xl bg-gradient-to-r from-emerald-500 to-teal-600 text-white font-bold text-xs shadow-lg shadow-emerald-500/25 hover:opacity-90 transition-all cursor-pointer"
+        >
+          Acceso Padres / Tutores
+        </button>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6 pb-16">

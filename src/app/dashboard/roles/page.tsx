@@ -12,6 +12,7 @@ import {
 export default function RolesManagementPage() {
   const { 
     user, 
+    openLoginModal,
     usersRolesMap, 
     usersPasswordsMap, 
     assignUserRole, 
@@ -55,6 +56,14 @@ export default function RolesManagementPage() {
         <p className="text-gray-400 text-sm max-w-md">
           Este panel de configuración de privilegios y gestión de roles está restringido exclusivamente al <span className="text-amber-400 font-semibold">Superadministrador</span> (admin@admin.com).
         </p>
+        {!user && (
+          <button
+            onClick={openLoginModal}
+            className="px-6 py-2.5 rounded-xl bg-gradient-to-r from-amber-500 to-orange-600 text-white font-bold text-xs shadow-lg shadow-amber-500/25 hover:opacity-90 transition-all cursor-pointer"
+          >
+            Iniciar Sesión como Superadmin
+          </button>
+        )}
       </div>
     );
   }

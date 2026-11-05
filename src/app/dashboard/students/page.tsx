@@ -14,7 +14,15 @@ import {
 import BulkUploadModal from '@/components/BulkUploadModal';
 
 export default function StudentsPage() {
-  const { user } = useAuth();
+  const { user, openLoginModal } = useAuth();
+
+  useEffect(() => {
+    if (!user) {
+      openLoginModal();
+    } else if (user.role === 'tutor') {
+      window.location.href = '/dashboard/parents';
+    }
+  }, [user, openLoginModal]);
 
   const [students, setStudents] = useState<Alumno[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
@@ -273,6 +281,26 @@ export default function StudentsPage() {
   const handlePrint = () => {
     window.print();
   };
+
+  if (!user) {
+    return (
+      <div className="flex-1 flex flex-col items-center justify-center py-24 text-center space-y-4">
+        <div className="w-16 h-16 rounded-3xl bg-cyan-500/10 border border-cyan-500/20 text-cyan-400 flex items-center justify-center text-3xl shadow-xl">
+          🔒
+        </div>
+        <h2 className="text-2xl font-bold text-white">Identificación Requerida</h2>
+        <p className="text-gray-400 text-sm max-w-md">
+          Para acceder al directorio de alumnos y credenciales escolares, por favor inicia sesión.
+        </p>
+        <button
+          onClick={openLoginModal}
+          className="px-6 py-3 rounded-xl bg-gradient-to-r from-cyan-500 to-blue-600 text-white font-bold text-xs shadow-lg shadow-cyan-500/25 hover:opacity-90 transition-all cursor-pointer"
+        >
+          Iniciar Sesión
+        </button>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-8 pb-10">

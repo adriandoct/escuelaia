@@ -15,16 +15,18 @@ import {
 const OFFICIAL_GROUPS = ['1A', '1B', '1C', '1D', '1E', '3APGM', '3APGA', '3ASCM', '3BPGA', '5APGM', '5BPGM', '5APGA'];
 
 export default function DashboardPage() {
-  const { user } = useAuth();
+  const { user, openLoginModal } = useAuth();
 
   // Route protection by role
   useEffect(() => {
-    if (user?.role === 'tutor') {
+    if (!user) {
+      openLoginModal();
+    } else if (user.role === 'tutor') {
       window.location.href = '/dashboard/parents';
-    } else if (user?.role === 'docente') {
+    } else if (user.role === 'docente') {
       window.location.href = '/dashboard/teacher';
     }
-  }, [user]);
+  }, [user, openLoginModal]);
 
   const [students, setStudents] = useState<Alumno[]>([]);
   const [logs, setLogs] = useState<Asistencia[]>([]);
@@ -247,6 +249,26 @@ export default function DashboardPage() {
   };
 
   const chartData = getChartData();
+
+  if (!user) {
+    return (
+      <div className="flex-1 flex flex-col items-center justify-center py-24 text-center space-y-4">
+        <div className="w-16 h-16 rounded-3xl bg-cyan-500/10 border border-cyan-500/20 text-cyan-400 flex items-center justify-center text-3xl shadow-xl">
+          🔒
+        </div>
+        <h2 className="text-2xl font-bold text-white">Identificación Institucional Requerida</h2>
+        <p className="text-gray-400 text-sm max-w-md">
+          Para acceder a las métricas del plantel y supervisión disciplinar, por favor inicia sesión con tu cuenta.
+        </p>
+        <button
+          onClick={openLoginModal}
+          className="px-6 py-3 rounded-xl bg-gradient-to-r from-cyan-500 to-blue-600 text-white font-bold text-xs shadow-lg shadow-cyan-500/25 hover:opacity-90 transition-all cursor-pointer"
+        >
+          Iniciar Sesión
+        </button>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-8 pb-10 flex-1 flex flex-col">

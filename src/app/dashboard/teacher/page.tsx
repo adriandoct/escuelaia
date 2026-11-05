@@ -38,7 +38,7 @@ import ReporteHorariosPorGrupo from '@/components/horarios/ReporteHorariosPorGru
 import SubirHorariosModal from '@/components/horarios/SubirHorariosModal';
 
 export default function TeacherDashboardPage() {
-  const { user } = useAuth();
+  const { user, openLoginModal } = useAuth();
   
   // Main Navigation Tabs: Asistencias vs Horarios de Grupo vs Reportes Oficiales
   const [activeMainTab, setActiveMainTab] = useState<'asistencias' | 'horarios' | 'reportes'>('asistencias');
@@ -47,12 +47,14 @@ export default function TeacherDashboardPage() {
   const [scheduleGrade, setScheduleGrade] = useState<string>('');
   const [isUploadScheduleModalOpen, setIsUploadScheduleModalOpen] = useState(false);
 
-  // Redirect tutor to parents page
+  // Authentication check & redirects
   useEffect(() => {
-    if (user?.role === 'tutor') {
+    if (!user) {
+      openLoginModal();
+    } else if (user.role === 'tutor') {
       window.location.href = '/dashboard/parents';
     }
-  }, [user]);
+  }, [user, openLoginModal]);
 
   const [students, setStudents] = useState<Alumno[]>([]);
   const [todayLogs, setTodayLogs] = useState<Asistencia[]>([]);
@@ -757,6 +759,26 @@ export default function TeacherDashboardPage() {
 
     return { present, late, absent, justified, totalPart };
   }, [classStudents, getStudentCurrentStatus, getStudentParticipations]);
+
+  if (!user) {
+    return (
+      <div className="flex-1 flex flex-col items-center justify-center py-24 text-center space-y-4">
+        <div className="w-16 h-16 rounded-3xl bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 flex items-center justify-center text-3xl shadow-xl">
+          👨‍🏫
+        </div>
+        <h2 className="text-2xl font-bold text-white">Acceso al Panel Docente</h2>
+        <p className="text-gray-400 text-sm max-w-md">
+          Para realizar el pase de lista y consultar tu horario de clases, por favor inicia sesión con tu cuenta docente.
+        </p>
+        <button
+          onClick={openLoginModal}
+          className="px-6 py-3 rounded-xl bg-gradient-to-r from-emerald-500 to-teal-500 text-black font-bold text-xs shadow-lg shadow-emerald-500/25 hover:opacity-90 transition-all cursor-pointer"
+        >
+          Iniciar Sesión
+        </button>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6 pb-12 flex-1 flex flex-col">
