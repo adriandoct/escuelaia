@@ -3,21 +3,21 @@
 'use client';
 
 import React, { useState, useEffect, useRef, useCallback } from 'react';
-import { 
-  Barcode, 
-  Camera, 
+import {
+  Barcode,
+  Camera,
   CameraOff,
-  CheckCircle, 
-  AlertTriangle, 
-  Volume2, 
-  VolumeX, 
-  Usb, 
-  ArrowRight, 
-  Sparkles, 
-  Clock, 
-  UserCheck, 
-  Check, 
-  X, 
+  CheckCircle,
+  AlertTriangle,
+  Volume2,
+  VolumeX,
+  Usb,
+  ArrowRight,
+  Sparkles,
+  Clock,
+  UserCheck,
+  Check,
+  X,
   Smartphone,
   ShieldCheck,
   Zap,
@@ -60,7 +60,7 @@ export default function BarcodeScannerHub({ onScanCompleted, className = '' }: B
   const [manualCode, setManualCode] = useState('');
   const [isProcessing, setIsProcessing] = useState(false);
   const [sampleStudents, setSampleStudents] = useState<Alumno[]>([]);
-  
+
   // Camera Scanner States (Webcam / Optical USB scanner)
   const [isCameraActive, setIsCameraActive] = useState(false);
   const [cameraLoading, setCameraLoading] = useState(false);
@@ -286,12 +286,12 @@ export default function BarcodeScannerHub({ onScanCompleted, className = '' }: B
 
     try {
       const overrideVal = activeTab === 'auto' ? undefined : activeTab;
-      const deviceName = source === 'hardware_scanner' 
-        ? 'Lector ZKTeco / USB Barcode' 
+      const deviceName = source === 'hardware_scanner'
+        ? 'Lector ZKTeco / USB Barcode'
         : source === 'camera_scanner'
           ? 'Cámara Escáner Dashboard'
-          : source === 'webhid' 
-            ? 'Lector USB WebHID' 
+          : source === 'webhid'
+            ? 'Lector USB WebHID'
             : 'Entrada Manual Dashboard';
 
       const operatorName = user?.name || 'Terminal de Acceso Autónomo (Sin sesión)';
@@ -327,7 +327,7 @@ export default function BarcodeScannerHub({ onScanCompleted, className = '' }: B
             spread: 60,
             origin: { y: 0.6 }
           });
-        } catch {}
+        } catch { }
 
         setActiveScan({
           success: true,
@@ -349,7 +349,7 @@ export default function BarcodeScannerHub({ onScanCompleted, className = '' }: B
         setTimeout(async () => {
           try {
             await html5ScannerRef.current.resume();
-          } catch {}
+          } catch { }
         }, 3000);
       }
 
@@ -373,7 +373,7 @@ export default function BarcodeScannerHub({ onScanCompleted, className = '' }: B
       if (isCameraActive && html5ScannerRef.current) {
         try {
           await html5ScannerRef.current.pause(true);
-        } catch {}
+        } catch { }
       }
 
       // Pre-fill default pass type
@@ -487,8 +487,8 @@ export default function BarcodeScannerHub({ onScanCompleted, className = '' }: B
       }
 
       // Register attendance in database
-      const deviceLabel = isHardwareScannerConnected 
-        ? `Lector Físico (${detectedScannerName})` 
+      const deviceLabel = isHardwareScannerConnected
+        ? `Lector Físico (${detectedScannerName})`
         : 'Lector ZKTeco Código de Barras';
 
       const { asistencia, alumno } = await db.registrarAsistencia(
@@ -511,7 +511,7 @@ export default function BarcodeScannerHub({ onScanCompleted, className = '' }: B
           spread: 70,
           origin: { y: 0.6 }
         });
-      } catch {}
+      } catch { }
 
       // Close Authorization Modal
       setUnregisteredModal(null);
@@ -521,7 +521,7 @@ export default function BarcodeScannerHub({ onScanCompleted, className = '' }: B
         setTimeout(async () => {
           try {
             await html5ScannerRef.current.resume();
-          } catch {}
+          } catch { }
         }, 1500);
       }
 
@@ -593,8 +593,8 @@ export default function BarcodeScannerHub({ onScanCompleted, className = '' }: B
       const html5QrCode = new Html5Qrcode(videoElementId);
       html5ScannerRef.current = html5QrCode;
 
-      const config = { 
-        fps: 12, 
+      const config = {
+        fps: 12,
         qrbox: { width: 280, height: 180 },
         aspectRatio: 1.777
       };
@@ -606,11 +606,11 @@ export default function BarcodeScannerHub({ onScanCompleted, className = '' }: B
           if (html5ScannerRef.current && html5ScannerRef.current.isScanning) {
             try {
               await html5ScannerRef.current.pause(true);
-            } catch {}
+            } catch { }
           }
           await handleBarcodeDetected(decodedText, 'camera_scanner');
         },
-        () => {}
+        () => { }
       );
 
       setIsCameraActive(true);
@@ -681,42 +681,39 @@ export default function BarcodeScannerHub({ onScanCompleted, className = '' }: B
         <div className="absolute top-0 inset-x-0 h-[2px] bg-gradient-to-r from-transparent via-cyan-400 to-transparent"></div>
 
         <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
-          
+
           {/* Status Left Side */}
           <div className="space-y-1.5">
             <div className="flex flex-wrap items-center gap-2.5">
-              
+
               {/* Hardware Scanner Live Status Indicator */}
-              <span className={`inline-flex items-center space-x-1.5 px-3 py-1 rounded-full border text-xs font-black tracking-wide transition-all ${
-                isReceivingSignal
+              <span className={`inline-flex items-center space-x-1.5 px-3 py-1 rounded-full border text-xs font-black tracking-wide transition-all ${isReceivingSignal
                   ? 'bg-cyan-500/25 border-cyan-400 text-cyan-300 shadow-[0_0_15px_rgba(6,182,212,0.6)] animate-pulse'
                   : isHardwareScannerConnected
                     ? 'bg-emerald-500/15 border-emerald-500/40 text-emerald-300 shadow-[0_0_12px_rgba(16,185,129,0.25)]'
                     : 'bg-cyan-500/10 border-cyan-500/30 text-cyan-400'
-              }`}>
+                }`}>
                 <span className="flex h-2 w-2 relative">
-                  <span className={`animate-ping absolute inline-flex h-full w-full rounded-full opacity-75 ${
-                    isReceivingSignal ? 'bg-cyan-400' : isHardwareScannerConnected ? 'bg-emerald-400' : 'bg-cyan-400'
-                  }`}></span>
-                  <span className={`relative inline-flex rounded-full h-2 w-2 ${
-                    isReceivingSignal ? 'bg-cyan-400' : isHardwareScannerConnected ? 'bg-emerald-400' : 'bg-cyan-500'
-                  }`}></span>
+                  <span className={`animate-ping absolute inline-flex h-full w-full rounded-full opacity-75 ${isReceivingSignal ? 'bg-cyan-400' : isHardwareScannerConnected ? 'bg-emerald-400' : 'bg-cyan-400'
+                    }`}></span>
+                  <span className={`relative inline-flex rounded-full h-2 w-2 ${isReceivingSignal ? 'bg-cyan-400' : isHardwareScannerConnected ? 'bg-emerald-400' : 'bg-cyan-500'
+                    }`}></span>
                 </span>
                 <Barcode size={14} className={isReceivingSignal ? 'text-cyan-300 animate-bounce' : isHardwareScannerConnected ? 'text-emerald-400' : 'text-cyan-400'} />
                 <span>
-                  {isReceivingSignal 
-                    ? '⚡ LEYENDO CÓDIGO DE BARRAS...' 
+                  {isReceivingSignal
+                    ? '⚡ LEYENDO CÓDIGO DE BARRAS...'
                     : isJowvdyDetected
                       ? 'ESCÁNER JOWVDY CONECTADO Y ACTIVO'
-                      : isHardwareScannerConnected 
-                        ? 'ESCÁNER FÍSICO CONECTADO Y ACTIVO' 
+                      : isHardwareScannerConnected
+                        ? 'ESCÁNER FÍSICO CONECTADO Y ACTIVO'
                         : 'ESCÁNER LISTO / MODO WEDGE ACTIVO'}
                 </span>
               </span>
 
               {/* JOWVDY Specific Badge */}
               {isJowvdyDetected && (
-                <span 
+                <span
                   className="text-[11px] font-black px-3 py-0.5 rounded-lg bg-emerald-500/20 text-emerald-300 border border-emerald-500/50 flex items-center space-x-1.5 shadow-[0_0_15px_rgba(16,185,129,0.3)] animate-pulse"
                   title={jowvdyDetails ? `Dispositivo: ${jowvdyDetails.model} | S/N: ${jowvdyDetails.serialNumber} | Estado: ${jowvdyDetails.status}` : 'Escáner JOWVDY USB'}
                 >
@@ -742,11 +739,10 @@ export default function BarcodeScannerHub({ onScanCompleted, className = '' }: B
               )}
 
               {/* Camera State Badge */}
-              <span className={`text-[11px] font-bold px-2.5 py-0.5 rounded-lg border flex items-center space-x-1 ${
-                isCameraActive 
-                  ? 'bg-cyan-500/15 text-cyan-300 border-cyan-500/30' 
+              <span className={`text-[11px] font-bold px-2.5 py-0.5 rounded-lg border flex items-center space-x-1 ${isCameraActive
+                  ? 'bg-cyan-500/15 text-cyan-300 border-cyan-500/30'
                   : 'bg-white/5 text-gray-400 border-white/5'
-              }`}>
+                }`}>
                 <Camera size={12} />
                 <span>{isCameraActive ? 'Cámara Web Activa' : 'Cámara Web en Pausa'}</span>
               </span>
@@ -765,7 +761,7 @@ export default function BarcodeScannerHub({ onScanCompleted, className = '' }: B
 
           {/* Controls Right Side */}
           <div className="flex flex-wrap items-center gap-2">
-            
+
             {/* Camera Activation Button */}
             {!isCameraActive ? (
               <button
@@ -804,11 +800,10 @@ export default function BarcodeScannerHub({ onScanCompleted, className = '' }: B
                   key={tab}
                   type="button"
                   onClick={() => setActiveTab(tab)}
-                  className={`px-3 py-1.5 rounded-lg text-[11px] font-bold uppercase tracking-wider transition-all cursor-pointer ${
-                    activeTab === tab
+                  className={`px-3 py-1.5 rounded-lg text-[11px] font-bold uppercase tracking-wider transition-all cursor-pointer ${activeTab === tab
                       ? 'bg-gradient-to-r from-cyan-500 to-blue-600 text-black shadow-md shadow-cyan-500/15'
                       : 'text-gray-400 hover:text-white'
-                  }`}
+                    }`}
                 >
                   {tab === 'auto' ? '✨ Auto' : tab === 'entrada' ? '🟢 Entrada' : '🚪 Salida'}
                 </button>
@@ -819,11 +814,10 @@ export default function BarcodeScannerHub({ onScanCompleted, className = '' }: B
             <button
               type="button"
               onClick={() => setSoundEnabled(!soundEnabled)}
-              className={`p-2 rounded-xl border transition-all cursor-pointer ${
-                soundEnabled 
-                  ? 'bg-cyan-500/10 border-cyan-500/30 text-cyan-400 hover:bg-cyan-500/20' 
+              className={`p-2 rounded-xl border transition-all cursor-pointer ${soundEnabled
+                  ? 'bg-cyan-500/10 border-cyan-500/30 text-cyan-400 hover:bg-cyan-500/20'
                   : 'bg-white/5 border-white/10 text-gray-400 hover:text-white'
-              }`}
+                }`}
               title={soundEnabled ? 'Sonido activado (clic para silenciar)' : 'Sonido silenciado (clic para activar)'}
             >
               {soundEnabled ? <Volume2 size={16} /> : <VolumeX size={16} />}
@@ -874,7 +868,7 @@ export default function BarcodeScannerHub({ onScanCompleted, className = '' }: B
         {/* Live Video Camera Viewport (When camera is active) */}
         <div className={`${isCameraActive ? 'block mt-4' : 'hidden'}`}>
           <div className="relative mx-auto max-w-xl rounded-2xl overflow-hidden border-2 border-cyan-500/40 bg-black/80 shadow-[0_0_25px_rgba(6,182,212,0.2)]">
-            
+
             {/* HTML5 QR Code Mount Element */}
             <div id={videoElementId} className="w-full min-h-[220px]"></div>
 
@@ -908,7 +902,7 @@ export default function BarcodeScannerHub({ onScanCompleted, className = '' }: B
 
         {/* Quick input bar & Test samples */}
         <div className="mt-4 pt-3.5 border-t border-white/5 flex flex-col md:flex-row items-center justify-between gap-3">
-          
+
           {/* Manual / Barcode Gun Landing Input */}
           <form onSubmit={handleManualFormSubmit} className="w-full md:w-auto flex-1 max-w-md flex items-center gap-2">
             <div className="relative flex-1">
@@ -988,7 +982,7 @@ export default function BarcodeScannerHub({ onScanCompleted, className = '' }: B
           {/* Quick test buttons */}
           {sampleStudents.length > 0 && (
             <div className="flex flex-wrap items-center gap-1.5 text-xs text-gray-400">
-              <span className="text-[11px] text-gray-500 hidden sm:inline">Probar alumno demo:</span>
+              <span className="text-[11px] text-gray-500 hidden sm:inline">Probar matrícula:</span>
               {sampleStudents.map((s) => (
                 <button
                   key={s.id}
@@ -1022,7 +1016,7 @@ export default function BarcodeScannerHub({ onScanCompleted, className = '' }: B
       {unregisteredModal && unregisteredModal.isOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/85 backdrop-blur-md animate-fadeIn">
           <div className="relative max-w-lg w-full rounded-3xl p-6 border border-cyan-500/40 bg-gradient-to-b from-[#09111e] via-[#060c16] to-[#040810] shadow-2xl shadow-cyan-500/20 text-white space-y-5">
-            
+
             {/* Top Close Button */}
             <button
               type="button"
@@ -1050,7 +1044,7 @@ export default function BarcodeScannerHub({ onScanCompleted, className = '' }: B
 
             {/* Form */}
             <form onSubmit={handleConfirmAuthorization} className="space-y-4">
-              
+
               {/* STEP 1: PREGUNTAR QUIÉN AUTORIZA EL ACCESO (Docente, Administrador, Encargado de Orden) */}
               <div className="space-y-2">
                 <label className="text-xs font-bold text-cyan-300 flex items-center space-x-1.5">
@@ -1059,16 +1053,15 @@ export default function BarcodeScannerHub({ onScanCompleted, className = '' }: B
                 </label>
 
                 <div className="grid grid-cols-3 gap-2.5">
-                  
+
                   {/* Rol 1: Docente */}
                   <button
                     type="button"
                     onClick={() => handleRoleSelection('docente')}
-                    className={`p-3 rounded-2xl border text-left transition-all cursor-pointer flex flex-col justify-between ${
-                      selectedRole === 'docente'
+                    className={`p-3 rounded-2xl border text-left transition-all cursor-pointer flex flex-col justify-between ${selectedRole === 'docente'
                         ? 'bg-emerald-500/20 border-emerald-400 text-emerald-300 shadow-[0_0_15px_rgba(16,185,129,0.3)] ring-1 ring-emerald-400'
                         : 'bg-white/5 border-white/10 text-gray-400 hover:bg-white/10 hover:text-white'
-                    }`}
+                      }`}
                   >
                     <div className="flex items-center justify-between w-full">
                       <BookOpen size={18} className={selectedRole === 'docente' ? 'text-emerald-400' : 'text-gray-400'} />
@@ -1084,11 +1077,10 @@ export default function BarcodeScannerHub({ onScanCompleted, className = '' }: B
                   <button
                     type="button"
                     onClick={() => handleRoleSelection('administrador')}
-                    className={`p-3 rounded-2xl border text-left transition-all cursor-pointer flex flex-col justify-between ${
-                      selectedRole === 'administrador'
+                    className={`p-3 rounded-2xl border text-left transition-all cursor-pointer flex flex-col justify-between ${selectedRole === 'administrador'
                         ? 'bg-amber-500/20 border-amber-400 text-amber-300 shadow-[0_0_15px_rgba(245,158,11,0.3)] ring-1 ring-amber-400'
                         : 'bg-white/5 border-white/10 text-gray-400 hover:bg-white/10 hover:text-white'
-                    }`}
+                      }`}
                   >
                     <div className="flex items-center justify-between w-full">
                       <Crown size={18} className={selectedRole === 'administrador' ? 'text-amber-400' : 'text-gray-400'} />
@@ -1104,11 +1096,10 @@ export default function BarcodeScannerHub({ onScanCompleted, className = '' }: B
                   <button
                     type="button"
                     onClick={() => handleRoleSelection('encargado_orden')}
-                    className={`p-3 rounded-2xl border text-left transition-all cursor-pointer flex flex-col justify-between ${
-                      selectedRole === 'encargado_orden'
+                    className={`p-3 rounded-2xl border text-left transition-all cursor-pointer flex flex-col justify-between ${selectedRole === 'encargado_orden'
                         ? 'bg-cyan-500/20 border-cyan-400 text-cyan-300 shadow-[0_0_15px_rgba(6,182,212,0.3)] ring-1 ring-cyan-400'
                         : 'bg-white/5 border-white/10 text-gray-400 hover:bg-white/10 hover:text-white'
-                    }`}
+                      }`}
                   >
                     <div className="flex items-center justify-between w-full">
                       <Shield size={18} className={selectedRole === 'encargado_orden' ? 'text-cyan-400' : 'text-gray-400'} />
@@ -1206,18 +1197,16 @@ export default function BarcodeScannerHub({ onScanCompleted, className = '' }: B
                   <button
                     type="button"
                     onClick={() => setRegPassType('entrada')}
-                    className={`px-3 py-1 rounded-lg text-xs font-bold transition-all cursor-pointer ${
-                      regPassType === 'entrada' ? 'bg-emerald-500 text-black shadow-md' : 'text-gray-400 hover:text-white'
-                    }`}
+                    className={`px-3 py-1 rounded-lg text-xs font-bold transition-all cursor-pointer ${regPassType === 'entrada' ? 'bg-emerald-500 text-black shadow-md' : 'text-gray-400 hover:text-white'
+                      }`}
                   >
                     🟢 Entrada
                   </button>
                   <button
                     type="button"
                     onClick={() => setRegPassType('salida')}
-                    className={`px-3 py-1 rounded-lg text-xs font-bold transition-all cursor-pointer ${
-                      regPassType === 'salida' ? 'bg-blue-500 text-black shadow-md' : 'text-gray-400 hover:text-white'
-                    }`}
+                    className={`px-3 py-1 rounded-lg text-xs font-bold transition-all cursor-pointer ${regPassType === 'salida' ? 'bg-blue-500 text-black shadow-md' : 'text-gray-400 hover:text-white'
+                      }`}
                   >
                     🚪 Salida
                   </button>
@@ -1229,18 +1218,16 @@ export default function BarcodeScannerHub({ onScanCompleted, className = '' }: B
                 <button
                   type="button"
                   onClick={() => setRegistrationMode('full')}
-                  className={`pb-1 font-bold cursor-pointer transition-colors ${
-                    registrationMode === 'full' ? 'text-cyan-400 border-b-2 border-cyan-400' : 'text-gray-400 hover:text-white'
-                  }`}
+                  className={`pb-1 font-bold cursor-pointer transition-colors ${registrationMode === 'full' ? 'text-cyan-400 border-b-2 border-cyan-400' : 'text-gray-400 hover:text-white'
+                    }`}
                 >
                   📝 Alta Completa de Alumno
                 </button>
                 <button
                   type="button"
                   onClick={() => setRegistrationMode('quick')}
-                  className={`pb-1 font-bold cursor-pointer transition-colors ${
-                    registrationMode === 'quick' ? 'text-cyan-400 border-b-2 border-cyan-400' : 'text-gray-400 hover:text-white'
-                  }`}
+                  className={`pb-1 font-bold cursor-pointer transition-colors ${registrationMode === 'quick' ? 'text-cyan-400 border-b-2 border-cyan-400' : 'text-gray-400 hover:text-white'
+                    }`}
                 >
                   ⚡ Pase Rápido / Emergencia
                 </button>
@@ -1389,14 +1376,13 @@ export default function BarcodeScannerHub({ onScanCompleted, className = '' }: B
       {/* ========================================================================= */}
       {activeScan && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-md animate-fadeIn">
-          <div className={`relative max-w-md w-full rounded-3xl p-6 border shadow-2xl transition-all ${
-            activeScan.success 
+          <div className={`relative max-w-md w-full rounded-3xl p-6 border shadow-2xl transition-all ${activeScan.success
               ? activeScan.duplicate
                 ? 'bg-gradient-to-b from-[#181308] to-[#0d0904] border-amber-500/40 shadow-amber-500/10'
                 : 'bg-gradient-to-b from-[#081714] to-[#040c0a] border-emerald-500/40 shadow-emerald-500/15'
               : 'bg-gradient-to-b from-[#1c0a0a] to-[#0d0404] border-red-500/40 shadow-red-500/15'
-          }`}>
-            
+            }`}>
+
             {/* Top close button */}
             <button
               onClick={() => setActiveScan(null)}
@@ -1415,11 +1401,10 @@ export default function BarcodeScannerHub({ onScanCompleted, className = '' }: B
                       <span>Registro Repetido (&lt; 30s)</span>
                     </span>
                   ) : (
-                    <span className={`px-3 py-1 rounded-full flex items-center space-x-1.5 ${
-                      activeScan.asistencia?.tipo === 'entrada'
+                    <span className={`px-3 py-1 rounded-full flex items-center space-x-1.5 ${activeScan.asistencia?.tipo === 'entrada'
                         ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30'
                         : 'bg-blue-500/20 text-blue-400 border border-blue-500/30'
-                    }`}>
+                      }`}>
                       <CheckCircle size={14} />
                       <span>{activeScan.asistencia?.tipo === 'entrada' ? '✅ Entrada Registrada' : '🚪 Salida Registrada'}</span>
                     </span>
@@ -1435,7 +1420,7 @@ export default function BarcodeScannerHub({ onScanCompleted, className = '' }: B
               {/* Student Details */}
               {activeScan.success && activeScan.student && activeScan.asistencia && (
                 <div className="space-y-4 pt-1">
-                  
+
                   {/* Photo Avatar */}
                   <div className="relative mx-auto w-24 h-24 rounded-2xl overflow-hidden border-2 border-white/15 shadow-xl bg-gray-900">
                     {/* eslint-disable-next-line @next/next/no-img-element */}

@@ -10,10 +10,15 @@ import { LogIn, LogOut, Shield, User, Sparkles, BookOpen, QrCode, Users, HeartHa
 export default function HeaderNav() {
   const { user, openLoginModal, logout } = useAuth();
 
-  const getRoleBadge = (role?: Role) => {
+  const getRoleBadge = (role?: Role, isSuperAdmin?: boolean) => {
     switch (role) {
       case 'administrador':
-        return (
+        return isSuperAdmin ? (
+          <span className="inline-flex items-center space-x-1 px-2.5 py-0.5 rounded-full bg-amber-500/20 border border-amber-500/50 text-amber-300 text-[10px] font-black tracking-wider uppercase shadow-sm">
+            <span>👑</span>
+            <span>Superadmin</span>
+          </span>
+        ) : (
           <span className="inline-flex items-center space-x-1 px-2.5 py-0.5 rounded-full bg-amber-500/10 border border-amber-500/30 text-amber-400 text-[10px] font-black tracking-wider uppercase">
             <span>👑</span>
             <span>Administrador</span>
@@ -163,13 +168,15 @@ export default function HeaderNav() {
                       <span>Reporte QRs (1.5cm)</span>
                     </Link>
 
-                    <Link 
-                      href="/dashboard/roles" 
-                      className="hover:text-amber-400 transition-colors py-1.5 px-3 rounded-lg hover:bg-white/5 flex items-center space-x-1.5 text-amber-300 font-bold"
-                    >
-                      <Sparkles size={14} />
-                      <span>Permisos Roles</span>
-                    </Link>
+                    {(user?.isSuperAdmin || user?.email === 'admin@admin.com') && (
+                      <Link 
+                        href="/dashboard/roles" 
+                        className="hover:text-amber-400 transition-colors py-1.5 px-3 rounded-lg hover:bg-white/5 flex items-center space-x-1.5 text-amber-300 font-bold"
+                      >
+                        <Sparkles size={14} />
+                        <span>Permisos Roles</span>
+                      </Link>
+                    )}
                   </>
                 )}
               </>
@@ -185,7 +192,7 @@ export default function HeaderNav() {
               <div className="hidden sm:flex flex-col items-end">
                 <div className="flex items-center space-x-2">
                   <span className="text-xs font-bold text-white max-w-[140px] truncate">{user.name}</span>
-                  {getRoleBadge(user.role)}
+                  {getRoleBadge(user.role, user.isSuperAdmin || user.email === 'admin@admin.com')}
                 </div>
                 <span className="text-[10px] text-gray-400 font-mono">{user.email}</span>
               </div>
@@ -252,7 +259,7 @@ export default function HeaderNav() {
             <Link href="/dashboard/teacher" className="hover:text-emerald-400 py-1 px-2">👨‍🏫 Docente</Link>
             <Link href="/dashboard/students" className="hover:text-cyan-400 py-1 px-2">👦 Alumnos</Link>
             <Link href="/dashboard/parents" className="hover:text-purple-400 py-1 px-2 text-purple-300">👨‍👩‍👧 Padres</Link>
-            {user?.role === 'administrador' && (
+            {(user?.isSuperAdmin || user?.email === 'admin@admin.com') && (
               <Link href="/dashboard/roles" className="hover:text-amber-400 py-1 px-2">⚙️ Roles</Link>
             )}
           </>

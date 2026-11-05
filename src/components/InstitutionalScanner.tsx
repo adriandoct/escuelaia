@@ -1229,7 +1229,7 @@ export default function InstitutionalScanner() {
           <div className="glass-panel p-5 rounded-3xl border border-cyan-500/20 space-y-3.5 bg-gradient-to-b from-[#0d1424] to-[#070a12]">
             <div className="flex items-center space-x-2">
               <span className="text-base">⚡</span>
-              <h3 className="text-sm font-bold text-white">Prueba Rápida de Alumno Demo</h3>
+              <h3 className="text-sm font-bold text-white">Prueba Rápida de Alumno</h3>
             </div>
             <p className="text-gray-400 text-xs">Simula el paso de una credencial para comprobar sonido, confeti y WhatsApp:</p>
 

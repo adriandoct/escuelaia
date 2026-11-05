@@ -9,7 +9,7 @@ import { Shield, Key, Mail, CheckCircle2, AlertCircle, X, Sparkles, UserCheck, E
 export default function LoginModal() {
   const { isLoginModalOpen, closeLoginModal, loginWithCredentials, loginWithGoogle, loginWithMatricula, user, usersPasswordsMap } = useAuth();
   
-  const [tab, setTab] = useState<'password' | 'tutor' | 'google' | 'demo'>('password');
+  const [tab, setTab] = useState<'password' | 'tutor' | 'google'>('password');
   
   // Tutor form state
   const [tutorMatricula, setTutorMatricula] = useState('');
@@ -94,21 +94,6 @@ export default function LoginModal() {
     }
   };
 
-  const handleDemoLogin = (email: string, pass: string) => {
-    setErrorMessage('');
-    setSuccessMessage('');
-    
-    const res = loginWithCredentials(email, pass);
-    if (res.success) {
-      setSuccessMessage(`Sesión iniciada correctamente con ${email}`);
-      setTimeout(() => {
-        setSuccessMessage('');
-      }, 1500);
-    } else {
-      setErrorMessage(res.error || 'Error al ingresar con cuenta demo.');
-    }
-  };
-
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-md animate-fade-in">
       <div 
@@ -143,7 +128,7 @@ export default function LoginModal() {
         </div>
 
         {/* Navigation Tabs */}
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-1 rounded-xl bg-black/40 p-1 border border-white/10 mb-6">
+        <div className="grid grid-cols-3 gap-1 rounded-xl bg-black/40 p-1 border border-white/10 mb-6">
           <button
             type="button"
             onClick={() => { setTab('password'); setErrorMessage(''); }}
@@ -180,19 +165,6 @@ export default function LoginModal() {
           >
             <Mail size={13} />
             <span>Gmail</span>
-          </button>
-
-          <button
-            type="button"
-            onClick={() => { setTab('demo'); setErrorMessage(''); }}
-            className={`py-2 px-2 rounded-lg text-xs font-bold transition-all flex items-center justify-center space-x-1 cursor-pointer ${
-              tab === 'demo' 
-                ? 'bg-gradient-to-r from-amber-500 to-orange-600 text-white shadow-md' 
-                : 'text-amber-400 hover:text-amber-300'
-            }`}
-          >
-            <Sparkles size={13} />
-            <span>Demos</span>
           </button>
         </div>
 
@@ -361,100 +333,6 @@ export default function LoginModal() {
               <span>→</span>
             </button>
           </form>
-        )}
-
-        {/* Tab 3: Quick Demo Credentials */}
-        {tab === 'demo' && (
-          <div className="space-y-3">
-            <p className="text-xs text-amber-300 bg-amber-500/10 p-2.5 rounded-xl border border-amber-500/20 leading-relaxed text-center font-medium">
-              ⚡ Haz clic en cualquiera de las siguientes cuentas para ingresar de inmediato con su contraseña asignada:
-            </p>
-
-            <div className="space-y-2 pt-1">
-              <button
-                type="button"
-                onClick={() => handleDemoLogin('admin@admin.com', usersPasswordsMap['admin@admin.com'] || '12345678Cecyte')}
-                className="w-full p-3 rounded-xl glass-panel border border-amber-500/30 hover:bg-amber-500/10 transition-all flex items-center justify-between group text-left cursor-pointer"
-              >
-                <div className="flex items-center space-x-3">
-                  <div className="w-8 h-8 rounded-lg bg-amber-500/20 flex items-center justify-center text-amber-400 font-bold">
-                    👑
-                  </div>
-                  <div>
-                    <h4 className="text-xs font-bold text-white group-hover:text-amber-400">1. Administrador (Control Total)</h4>
-                    <p className="text-[10px] text-gray-400">admin@admin.com • Clave: {usersPasswordsMap['admin@admin.com'] || '12345678Cecyte'}</p>
-                  </div>
-                </div>
-                <UserCheck size={16} className="text-amber-400 opacity-0 group-hover:opacity-100 transition-opacity" />
-              </button>
-
-              <button
-                type="button"
-                onClick={() => handleDemoLogin('prefecto.juan@cecytebc.edu.mx', usersPasswordsMap['prefecto.juan@cecytebc.edu.mx'] || 'Cecyte2026!')}
-                className="w-full p-3 rounded-xl glass-panel border border-cyan-500/30 hover:bg-cyan-500/10 transition-all flex items-center justify-between group text-left cursor-pointer"
-              >
-                <div className="flex items-center space-x-3">
-                  <div className="w-8 h-8 rounded-lg bg-cyan-500/20 flex items-center justify-center text-cyan-400 font-bold">
-                    🛡️
-                  </div>
-                  <div>
-                    <h4 className="text-xs font-bold text-white group-hover:text-cyan-400">2. Encargado de Orden (Disciplinar)</h4>
-                    <p className="text-[10px] text-gray-400">prefecto.juan@cecytebc.edu.mx • Clave: {usersPasswordsMap['prefecto.juan@cecytebc.edu.mx'] || 'Cecyte2026!'}</p>
-                  </div>
-                </div>
-                <UserCheck size={16} className="text-cyan-400 opacity-0 group-hover:opacity-100 transition-opacity" />
-              </button>
-
-              <button
-                type="button"
-                onClick={() => handleDemoLogin('docente.marcos@cecytebc.edu.mx', usersPasswordsMap['docente.marcos@cecytebc.edu.mx'] || 'Cecyte2026!')}
-                className="w-full p-3 rounded-xl glass-panel border border-emerald-500/30 hover:bg-emerald-500/10 transition-all flex items-center justify-between group text-left cursor-pointer"
-              >
-                <div className="flex items-center space-x-3">
-                  <div className="w-8 h-8 rounded-lg bg-emerald-500/20 flex items-center justify-center text-emerald-400 font-bold">
-                    👨‍🏫
-                  </div>
-                  <div>
-                    <h4 className="text-xs font-bold text-white group-hover:text-emerald-400">3. Docente (Pase de Lista)</h4>
-                    <p className="text-[10px] text-gray-400">docente.marcos@cecytebc.edu.mx • Clave: {usersPasswordsMap['docente.marcos@cecytebc.edu.mx'] || 'Cecyte2026!'}</p>
-                  </div>
-                </div>
-                <UserCheck size={16} className="text-emerald-400 opacity-0 group-hover:opacity-100 transition-opacity" />
-              </button>
-
-              <button
-                type="button"
-                onClick={async () => {
-                  setErrorMessage('');
-                  setSuccessMessage('');
-                  setIsTutorLoading(true);
-                  try {
-                    const res = await loginWithMatricula('25402080282223');
-                    if (res.success) {
-                      setSuccessMessage('¡Acceso como Tutor demo concedido! Redirigiendo...');
-                      setTimeout(() => {
-                        window.location.href = '/dashboard/parents';
-                      }, 800);
-                    }
-                  } finally {
-                    setIsTutorLoading(false);
-                  }
-                }}
-                className="w-full p-3 rounded-xl glass-panel border border-teal-500/30 hover:bg-teal-500/10 transition-all flex items-center justify-between group text-left cursor-pointer"
-              >
-                <div className="flex items-center space-x-3">
-                  <div className="w-8 h-8 rounded-lg bg-teal-500/20 flex items-center justify-center text-teal-400 font-bold">
-                    👨‍👩‍👧
-                  </div>
-                  <div>
-                    <h4 className="text-xs font-bold text-white group-hover:text-teal-400">4. Tutor Alumno (Marco Alejandro Abraham)</h4>
-                    <p className="text-[10px] text-gray-400">Matrícula: 25402080282223 • Acceso directo a su alumno</p>
-                  </div>
-                </div>
-                <UserCheck size={16} className="text-teal-400 opacity-0 group-hover:opacity-100 transition-opacity" />
-              </button>
-            </div>
-          </div>
         )}
 
       </div>

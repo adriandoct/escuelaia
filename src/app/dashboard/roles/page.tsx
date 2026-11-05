@@ -43,16 +43,17 @@ export default function RolesManagementPage() {
   const [editPassword, setEditPassword] = useState('');
   const [showEditPassword, setShowEditPassword] = useState(false);
 
-  // Access control check
-  if (user?.role !== 'administrador') {
+  // Access control check: Only Superadmin has access to role permissions
+  const isSuperAdmin = user?.isSuperAdmin || user?.email === 'admin@admin.com';
+  if (!isSuperAdmin) {
     return (
       <div className="flex-1 flex flex-col items-center justify-center py-20 text-center space-y-4">
         <div className="w-16 h-16 rounded-full bg-red-500/10 border border-red-500/20 text-red-400 flex items-center justify-center text-3xl">
           <Lock size={32} />
         </div>
-        <h2 className="text-2xl font-bold text-white">Acceso Restringido</h2>
+        <h2 className="text-2xl font-bold text-white">Acceso Exclusivo de Superadministrador</h2>
         <p className="text-gray-400 text-sm max-w-md">
-          Este panel de configuración de privilegios y gestión de usuarios requiere permisos de <span className="text-amber-400 font-semibold">Administrador</span>.
+          Este panel de configuración de privilegios y gestión de roles está restringido exclusivamente al <span className="text-amber-400 font-semibold">Superadministrador</span> (admin@admin.com).
         </p>
       </div>
     );
