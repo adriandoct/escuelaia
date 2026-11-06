@@ -4,21 +4,16 @@
 
 import React, { useState } from 'react';
 import { useAuth, Role } from '@/lib/auth';
-import { Shield, Key, Mail, CheckCircle2, AlertCircle, X, Sparkles, UserCheck, Eye, EyeOff } from 'lucide-react';
+import { Key, CheckCircle2, AlertCircle, X, Eye, EyeOff } from 'lucide-react';
 
 export default function LoginModal() {
-  const { isLoginModalOpen, closeLoginModal, loginWithCredentials, loginWithGoogle, loginWithMatricula, user, usersPasswordsMap } = useAuth();
+  const { isLoginModalOpen, closeLoginModal, loginWithCredentials, loginWithMatricula, user, usersPasswordsMap } = useAuth();
   
-  const [tab, setTab] = useState<'password' | 'tutor' | 'google'>('password');
+  const [tab, setTab] = useState<'password' | 'tutor'>('password');
   
   // Tutor form state
   const [tutorMatricula, setTutorMatricula] = useState('');
   const [isTutorLoading, setIsTutorLoading] = useState(false);
-  
-  // Google form state
-  const [googleEmail, setGoogleEmail] = useState('');
-  const [googleName, setGoogleName] = useState('');
-  const [selectedRole, setSelectedRole] = useState<Role>('docente');
   
   // Credentials form state
   const [credentialsEmail, setCredentialsEmail] = useState('');
@@ -54,27 +49,6 @@ export default function LoginModal() {
       }
     } finally {
       setIsTutorLoading(false);
-    }
-  };
-
-  const handleGoogleSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    setErrorMessage('');
-    setSuccessMessage('');
-
-    if (!googleEmail) {
-      setErrorMessage('Ingresa un correo institucional.');
-      return;
-    }
-
-    const res = loginWithGoogle(googleEmail, googleName, selectedRole);
-    if (res.success) {
-      setSuccessMessage('¡Acceso institucional concedido correctamente!');
-      setTimeout(() => {
-        setSuccessMessage('');
-      }, 1500);
-    } else {
-      setErrorMessage(res.error || 'Error al iniciar sesión.');
     }
   };
 
@@ -127,44 +101,31 @@ export default function LoginModal() {
           </p>
         </div>
 
-        {/* Navigation Tabs */}
-        <div className="grid grid-cols-3 gap-1 rounded-xl bg-black/40 p-1 border border-white/10 mb-6">
+        {/* Navigation Tabs (2 Tabs: Personal y Tutor) */}
+        <div className="grid grid-cols-2 gap-1.5 rounded-xl bg-black/40 p-1 border border-white/10 mb-6">
           <button
             type="button"
             onClick={() => { setTab('password'); setErrorMessage(''); }}
-            className={`py-2 px-2 rounded-lg text-xs font-bold transition-all flex items-center justify-center space-x-1 cursor-pointer ${
+            className={`py-2.5 px-3 rounded-lg text-xs font-bold transition-all flex items-center justify-center space-x-1.5 cursor-pointer ${
               tab === 'password' 
                 ? 'bg-gradient-to-r from-cyan-500 to-blue-600 text-white shadow-md' 
                 : 'text-gray-400 hover:text-white'
             }`}
           >
-            <Key size={13} />
+            <Key size={14} />
             <span>Personal</span>
           </button>
 
           <button
             type="button"
             onClick={() => { setTab('tutor'); setErrorMessage(''); }}
-            className={`py-2 px-2 rounded-lg text-xs font-bold transition-all flex items-center justify-center space-x-1 cursor-pointer ${
+            className={`py-2.5 px-3 rounded-lg text-xs font-bold transition-all flex items-center justify-center space-x-1.5 cursor-pointer ${
               tab === 'tutor' 
                 ? 'bg-gradient-to-r from-emerald-500 to-teal-600 text-white shadow-md' 
                 : 'text-emerald-400 hover:text-emerald-300'
             }`}
           >
             <span>👨‍👩‍👧 Tutor</span>
-          </button>
-
-          <button
-            type="button"
-            onClick={() => { setTab('google'); setErrorMessage(''); }}
-            className={`py-2 px-2 rounded-lg text-xs font-bold transition-all flex items-center justify-center space-x-1 cursor-pointer ${
-              tab === 'google' 
-                ? 'bg-gradient-to-r from-cyan-500 to-blue-600 text-white shadow-md' 
-                : 'text-gray-400 hover:text-white'
-            }`}
-          >
-            <Mail size={13} />
-            <span>Gmail</span>
           </button>
         </div>
 
@@ -276,60 +237,6 @@ export default function LoginModal() {
               className="w-full py-3.5 rounded-xl bg-gradient-to-r from-emerald-500 to-teal-600 hover:from-emerald-400 hover:to-teal-500 text-white font-bold text-xs shadow-lg shadow-emerald-500/20 disabled:opacity-50 transition-all flex items-center justify-center space-x-2 cursor-pointer"
             >
               <span>{isTutorLoading ? 'Verificando matrícula...' : 'Consultar Mi Alumno'}</span>
-              <span>→</span>
-            </button>
-          </form>
-        )}
-
-        {/* Tab 2: Google Institutional Login Form */}
-        {tab === 'google' && (
-          <form onSubmit={handleGoogleSubmit} className="space-y-4">
-            <div className="space-y-1.5">
-              <label className="text-xs font-semibold text-gray-300">Correo Institucional Gmail</label>
-              <div className="relative">
-                <input
-                  type="email"
-                  placeholder="ejemplo@cecytebc.edu.mx"
-                  value={googleEmail}
-                  onChange={(e) => setGoogleEmail(e.target.value)}
-                  className="w-full glass-input py-2.5 px-3.5 rounded-xl text-xs text-white placeholder-gray-500 border border-white/10 focus:border-cyan-500 focus:outline-none"
-                  required
-                />
-                <span className="absolute right-3 top-1/2 -translate-y-1/2 text-[10px] font-bold text-cyan-400 bg-cyan-500/10 px-2 py-0.5 rounded border border-cyan-500/20">
-                  @cecytebc.edu.mx
-                </span>
-              </div>
-            </div>
-
-            <div className="space-y-1.5">
-              <label className="text-xs font-semibold text-gray-300">Nombre del Usuario (Opcional)</label>
-              <input
-                type="text"
-                placeholder="Nombre Completo"
-                value={googleName}
-                onChange={(e) => setGoogleName(e.target.value)}
-                className="w-full glass-input py-2.5 px-3.5 rounded-xl text-xs text-white placeholder-gray-500 border border-white/10 focus:border-cyan-500 focus:outline-none"
-              />
-            </div>
-
-            <div className="space-y-1.5">
-              <label className="text-xs font-semibold text-gray-300">Rol Institucional Asignado</label>
-              <select
-                value={selectedRole}
-                onChange={(e) => setSelectedRole(e.target.value as Role)}
-                className="w-full glass-input py-2.5 px-3.5 rounded-xl text-xs text-white border border-white/10 focus:border-cyan-500 focus:outline-none bg-[#0e1422]"
-              >
-                <option value="docente">👨‍🏫 Docente (Pase de lista por grupo)</option>
-                <option value="encargado_orden">🛡️ Encargado de Orden (Escáner y Disciplina)</option>
-                <option value="administrador">👑 Administrador (Control Total)</option>
-              </select>
-            </div>
-
-            <button
-              type="submit"
-              className="w-full py-3 rounded-xl bg-gradient-to-r from-cyan-500 to-blue-600 text-white font-bold text-xs shadow-lg shadow-cyan-500/20 hover:opacity-95 transition-all flex items-center justify-center space-x-2 cursor-pointer pt-3"
-            >
-              <span>Acceder con Google Institucional</span>
               <span>→</span>
             </button>
           </form>

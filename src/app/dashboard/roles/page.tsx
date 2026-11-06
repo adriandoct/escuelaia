@@ -304,7 +304,7 @@ export default function RolesManagementPage() {
 
           <form onSubmit={handleAddUser} className="space-y-4">
             <div className="space-y-1.5">
-              <label className="text-xs font-semibold text-gray-300">Correo Institucional Gmail</label>
+              <label className="text-xs font-semibold text-gray-300">Correo Institucional (@cecytebc.edu.mx)</label>
               <div className="relative">
                 <input
                   type="email"
