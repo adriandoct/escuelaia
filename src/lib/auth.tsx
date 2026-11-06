@@ -63,30 +63,82 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [usersRolesMap, setUsersRolesMap] = useState<Record<string, Role>>(DEFAULT_USERS_ROLES);
   const [usersPasswordsMap, setUsersPasswordsMap] = useState<Record<string, string>>(DEFAULT_USERS_PASSWORDS);
 
+  const persistRolesLocally = (roles?: Record<string, Role>, passwords?: Record<string, string>) => {
+    if (typeof window === 'undefined') return;
+    try {
+      if (roles) {
+        const serializedRoles = JSON.stringify(roles);
+        localStorage.setItem('dojoia_users_roles', serializedRoles);
+        localStorage.setItem('dojoia_users_roles_vault', serializedRoles);
+      }
+      if (passwords) {
+        const serializedPass = JSON.stringify(passwords);
+        localStorage.setItem('dojoia_users_passwords', serializedPass);
+        localStorage.setItem('dojoia_users_passwords_vault', serializedPass);
+      }
+    } catch (e) {
+      console.error('Error saving roles/passwords to local storage:', e);
+    }
+  };
+
   useEffect(() => {
     if (typeof window === 'undefined') return;
 
-    // Load custom role mappings
-    const savedRoles = localStorage.getItem('dojoia_users_roles');
+    // 1. Cargar roles locales de ambas bóvedas combinados con los por defecto
+    let initialRoles: Record<string, Role> = { ...DEFAULT_USERS_ROLES };
+    const savedRoles = localStorage.getItem('dojoia_users_roles') || localStorage.getItem('dojoia_users_roles_vault');
     if (savedRoles) {
       try {
-        setUsersRolesMap(JSON.parse(savedRoles));
+        const parsed = JSON.parse(savedRoles);
+        if (parsed && typeof parsed === 'object') {
+          initialRoles = { ...initialRoles, ...parsed };
+        }
       } catch (e) {
         console.error('Error loading stored user roles:', e);
       }
     }
+    setUsersRolesMap(initialRoles);
 
-    // Load custom passwords
-    const savedPasswords = localStorage.getItem('dojoia_users_passwords');
+    // 2. Cargar contraseñas locales
+    let initialPasswords: Record<string, string> = { ...DEFAULT_USERS_PASSWORDS };
+    const savedPasswords = localStorage.getItem('dojoia_users_passwords') || localStorage.getItem('dojoia_users_passwords_vault');
     if (savedPasswords) {
       try {
-        setUsersPasswordsMap({ ...DEFAULT_USERS_PASSWORDS, ...JSON.parse(savedPasswords) });
+        const parsedPass = JSON.parse(savedPasswords);
+        if (parsedPass && typeof parsedPass === 'object') {
+          initialPasswords = { ...initialPasswords, ...parsedPass };
+        }
       } catch (e) {
         console.error('Error loading stored user passwords:', e);
       }
-    } else {
-      localStorage.setItem('dojoia_users_passwords', JSON.stringify(DEFAULT_USERS_PASSWORDS));
     }
+    setUsersPasswordsMap(initialPasswords);
+    persistRolesLocally(initialRoles, initialPasswords);
+
+    // 3. Sincronizar con el servidor (/api/roles) para persistencia permanente en la nube
+    fetch('/api/roles')
+      .then(res => res.json())
+      .then(data => {
+        if (data && data.success) {
+          if (data.roles && typeof data.roles === 'object') {
+            setUsersRolesMap(prev => {
+              const merged = { ...DEFAULT_USERS_ROLES, ...prev, ...data.roles };
+              persistRolesLocally(merged);
+              return merged;
+            });
+          }
+          if (data.passwords && typeof data.passwords === 'object') {
+            setUsersPasswordsMap(prev => {
+              const mergedPass = { ...DEFAULT_USERS_PASSWORDS, ...prev, ...data.passwords };
+              persistRolesLocally(undefined, mergedPass);
+              return mergedPass;
+            });
+          }
+        }
+      })
+      .catch(err => {
+        console.warn('Nota: Trabajando con roles locales offline:', err);
+      });
 
     // Load active session (only if explicitly authenticated by the user)
     const savedUser = localStorage.getItem('dojoia_active_user');
@@ -260,7 +312,14 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     const cleanEmail = email.trim().toLowerCase();
     const updatedMap = { ...usersRolesMap, [cleanEmail]: newRole };
     setUsersRolesMap(updatedMap);
-    localStorage.setItem('dojoia_users_roles', JSON.stringify(updatedMap));
+    persistRolesLocally(updatedMap);
+
+    // Persistir en servidor permanentemente
+    fetch('/api/roles', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action: 'assignRole', email: cleanEmail, role: newRole })
+    }).catch(err => console.error('Error sincronizando rol en servidor:', err));
 
     // If current logged-in user is updated, sync their active session role
     if (user && user.email.toLowerCase() === cleanEmail) {
@@ -272,20 +331,34 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     const cleanEmail = email.trim().toLowerCase();
     const updatedPasswords = { ...usersPasswordsMap, [cleanEmail]: newPassword };
     setUsersPasswordsMap(updatedPasswords);
-    localStorage.setItem('dojoia_users_passwords', JSON.stringify(updatedPasswords));
+    persistRolesLocally(usersRolesMap, updatedPasswords);
+
+    // Persistir en servidor permanentemente
+    fetch('/api/roles', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action: 'assignPassword', email: cleanEmail, password: newPassword })
+    }).catch(err => console.error('Error sincronizando contraseña en servidor:', err));
   };
 
   const addUserAccount = (email: string, role: Role, password?: string) => {
     const cleanEmail = email.trim().toLowerCase();
     const updatedRoles = { ...usersRolesMap, [cleanEmail]: role };
     setUsersRolesMap(updatedRoles);
-    localStorage.setItem('dojoia_users_roles', JSON.stringify(updatedRoles));
 
+    let updatedPasswords = usersPasswordsMap;
     if (password) {
-      const updatedPasswords = { ...usersPasswordsMap, [cleanEmail]: password };
+      updatedPasswords = { ...usersPasswordsMap, [cleanEmail]: password };
       setUsersPasswordsMap(updatedPasswords);
-      localStorage.setItem('dojoia_users_passwords', JSON.stringify(updatedPasswords));
     }
+    persistRolesLocally(updatedRoles, updatedPasswords);
+
+    // Persistir en servidor permanentemente
+    fetch('/api/roles', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action: 'addUser', email: cleanEmail, role, password })
+    }).catch(err => console.error('Error sincronizando nuevo usuario en servidor:', err));
   };
 
   const updateUserAccount = (oldEmail: string, newEmail: string, newRole: Role, newPassword?: string) => {
@@ -293,21 +366,31 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     const cleanNew = newEmail.trim().toLowerCase();
 
     const updatedRoles = { ...usersRolesMap };
-    delete updatedRoles[cleanOld];
+    if (cleanOld !== cleanNew) {
+      delete updatedRoles[cleanOld];
+    }
     updatedRoles[cleanNew] = newRole;
     setUsersRolesMap(updatedRoles);
-    localStorage.setItem('dojoia_users_roles', JSON.stringify(updatedRoles));
 
     const updatedPasswords = { ...usersPasswordsMap };
     const prevPass = updatedPasswords[cleanOld];
-    delete updatedPasswords[cleanOld];
+    if (cleanOld !== cleanNew) {
+      delete updatedPasswords[cleanOld];
+    }
     if (newPassword) {
       updatedPasswords[cleanNew] = newPassword;
     } else if (prevPass) {
       updatedPasswords[cleanNew] = prevPass;
     }
     setUsersPasswordsMap(updatedPasswords);
-    localStorage.setItem('dojoia_users_passwords', JSON.stringify(updatedPasswords));
+    persistRolesLocally(updatedRoles, updatedPasswords);
+
+    // Persistir en servidor permanentemente
+    fetch('/api/roles', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action: 'updateUser', oldEmail: cleanOld, newEmail: cleanNew, role: newRole, password: newPassword })
+    }).catch(err => console.error('Error sincronizando edición de usuario en servidor:', err));
 
     // Sync active session if it was this user
     if (user && user.email.toLowerCase() === cleanOld) {
@@ -330,12 +413,19 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     const updatedRoles = { ...usersRolesMap };
     delete updatedRoles[cleanEmail];
     setUsersRolesMap(updatedRoles);
-    localStorage.setItem('dojoia_users_roles', JSON.stringify(updatedRoles));
 
     const updatedPasswords = { ...usersPasswordsMap };
     delete updatedPasswords[cleanEmail];
     setUsersPasswordsMap(updatedPasswords);
-    localStorage.setItem('dojoia_users_passwords', JSON.stringify(updatedPasswords));
+
+    persistRolesLocally(updatedRoles, updatedPasswords);
+
+    // Persistir en servidor permanentemente
+    fetch('/api/roles', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action: 'deleteUser', email: cleanEmail })
+    }).catch(err => console.error('Error sincronizando eliminación de usuario en servidor:', err));
   };
 
   return (

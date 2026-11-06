@@ -1,0 +1,18 @@
+{
+  "roles": {
+    "admin@admin.com": "administrador",
+    "admin.general@cecytebc.edu.mx": "administrador",
+    "orden.general@cecytebc.edu.mx": "encargado_orden",
+    "prefecto.juan@cecytebc.edu.mx": "encargado_orden",
+    "docente.marcos@cecytebc.edu.mx": "docente",
+    "profesora.mariana@cecytebc.edu.mx": "docente"
+  },
+  "passwords": {
+    "admin@admin.com": "12345678Cecyte",
+    "admin.general@cecytebc.edu.mx": "Cecyte2026!",
+    "orden.general@cecytebc.edu.mx": "Cecyte2026!",
+    "prefecto.juan@cecytebc.edu.mx": "Cecyte2026!",
+    "docente.marcos@cecytebc.edu.mx": "Cecyte2026!",
+    "profesora.mariana@cecytebc.edu.mx": "Cecyte2026!"
+  }
+}
