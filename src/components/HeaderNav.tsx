@@ -115,8 +115,8 @@ export default function HeaderNav() {
               </>
             )}
 
-            {/* 4. ADMINISTRADOR: Acceso Completo */}
-            {user?.role === 'administrador' && (
+            {/* 4. ADMINISTRADOR Y SUPERADMIN: Acceso Completo */}
+            {(user?.role === 'administrador' || user?.isSuperAdmin || user?.email === 'admin@admin.com') && (
               <>
                 <Link 
                   href="/scanner" 
@@ -283,6 +283,9 @@ export default function HeaderNav() {
             <Link href="/dashboard/teacher" className="hover:text-emerald-400 py-1 px-2">👨‍🏫 Docente</Link>
             <Link href="/dashboard/students" className="hover:text-cyan-400 py-1 px-2">👦 Alumnos</Link>
             <Link href="/dashboard/parents" className="hover:text-purple-400 py-1 px-2 text-purple-300">👨‍👩‍👧 Padres</Link>
+            {(user?.role === 'administrador' || user?.isSuperAdmin || user?.email === 'admin@admin.com') && (
+              <Link href="/dashboard/qr-report" className="hover:text-cyan-400 py-1 px-2 text-cyan-300 font-bold">🖨️ QRs 1.5cm</Link>
+            )}
             {(user?.isSuperAdmin || user?.email === 'admin@admin.com') && (
               <Link href="/dashboard/roles" className="hover:text-amber-400 py-1 px-2">⚙️ Roles</Link>
             )}

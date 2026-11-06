@@ -316,7 +316,7 @@ export default function StudentsPage() {
 
         <div className="flex flex-wrap items-center gap-3">
           {/* Action Buttons ONLY for Admin / Superadmin */}
-          {user?.role === 'administrador' ? (
+          {(user?.role === 'administrador' || user?.isSuperAdmin || user?.email === 'admin@admin.com') ? (
             <>
               {/* Botón Exclusivo Superadmin: Eliminar Base de Datos de Alumnos */}
               {(user?.isSuperAdmin || user?.email === 'admin@admin.com' || user?.role === 'administrador') && (

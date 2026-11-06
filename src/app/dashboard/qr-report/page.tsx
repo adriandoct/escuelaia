@@ -9,11 +9,12 @@ import { useAuth } from '@/lib/auth';
 import QRCode from 'qrcode';
 import { 
   Printer, ArrowLeft, Search, CheckCircle2, 
-  Scissors
+  Scissors, Lock
 } from 'lucide-react';
 
 export default function QRReportPage() {
-  const { user } = useAuth();
+  const { user, openLoginModal } = useAuth();
+  const isAllowed = Boolean(user && (user.role === 'administrador' || user.isSuperAdmin || user.email === 'admin@admin.com'));
 
   const [students, setStudents] = useState<Alumno[]>([]);
   const [selectedGroup, setSelectedGroup] = useState<string>('3APGA');
@@ -24,8 +25,9 @@ export default function QRReportPage() {
   const [qrCodeDataUrls, setQrCodeDataUrls] = useState<Record<string, string>>({});
   const [isGeneratingQRs, setIsGeneratingQRs] = useState<boolean>(true);
 
-  // Load students
+  // Load students only if user is authorized
   useEffect(() => {
+    if (!isAllowed) return;
     const load = async () => {
       try {
         const data = await db.getAlumnos();
@@ -35,7 +37,7 @@ export default function QRReportPage() {
       }
     };
     load();
-  }, []);
+  }, [isAllowed]);
 
   // Groups and grades options
   const availableGroups = useMemo(() => {
@@ -122,6 +124,52 @@ export default function QRReportPage() {
   // Estimate sheets: ~64 to 72 labels fit on a Letter page with 1.5cm QR + text
   const estimatedLabelsPerPage = 64;
   const estimatedPages = Math.ceil(filteredStudents.length / estimatedLabelsPerPage) || 1;
+
+  if (!user) {
+    return (
+      <div className="min-h-screen bg-[#07090e] text-white flex flex-col items-center justify-center py-20 px-4 text-center space-y-4">
+        <div className="w-16 h-16 rounded-full bg-cyan-500/10 border border-cyan-500/20 text-cyan-400 flex items-center justify-center text-3xl">
+          <Lock size={32} />
+        </div>
+        <h2 className="text-2xl font-bold text-white">Identificación Requerida</h2>
+        <p className="text-gray-400 text-sm max-w-md">
+          Esta opción es exclusiva para el Superusuario y Administradores de la institución. Por favor inicia sesión.
+        </p>
+        <button
+          onClick={openLoginModal}
+          className="px-6 py-2.5 rounded-xl bg-gradient-to-r from-cyan-500 to-blue-600 text-white font-bold text-xs shadow-lg shadow-cyan-500/25 hover:opacity-90 transition-all cursor-pointer"
+        >
+          Iniciar Sesión
+        </button>
+      </div>
+    );
+  }
+
+  if (!isAllowed) {
+    return (
+      <div className="min-h-screen bg-[#07090e] text-white flex flex-col items-center justify-center py-20 px-4 text-center space-y-4">
+        <div className="w-16 h-16 rounded-full bg-red-500/10 border border-red-500/20 text-red-400 flex items-center justify-center text-3xl">
+          <Lock size={32} />
+        </div>
+        <h2 className="text-2xl font-bold text-white">Acceso Restringido</h2>
+        <p className="text-gray-400 text-sm max-w-md">
+          Esta opción es solo para el Superusuario y los Administradores. Tu rol actual (<span className="text-amber-400 font-semibold capitalize">{user.role}</span>) no cuenta con autorización para generar o imprimir etiquetas QR.
+        </p>
+        <Link
+          href={
+            user.role === 'tutor' 
+              ? '/dashboard/parents' 
+              : user.role === 'docente' 
+              ? '/dashboard/teacher' 
+              : '/dashboard'
+          }
+          className="px-6 py-2.5 rounded-xl bg-white/10 hover:bg-white/20 text-white font-bold text-xs transition-all"
+        >
+          Regresar a mi Panel
+        </Link>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-[#07090e] text-white">
