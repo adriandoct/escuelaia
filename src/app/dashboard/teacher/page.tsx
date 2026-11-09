@@ -37,6 +37,23 @@ import HorarioSemanalGrid from '@/components/horarios/HorarioSemanalGrid';
 import ReporteHorariosPorGrupo from '@/components/horarios/ReporteHorariosPorGrupo';
 import SubirHorariosModal from '@/components/horarios/SubirHorariosModal';
 
+function matchTeacher(userName?: string, maestroSchedule?: string): boolean {
+  if (!userName || !maestroSchedule) return false;
+  const u = userName.toLowerCase()
+    .replace(/^(docente|profesor|profesora|profe)\s+/i, '')
+    .replace(/@cecytebc\.edu\.mx/i, '')
+    .normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+    .trim();
+  const m = maestroSchedule.toLowerCase()
+    .normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+    .trim();
+  if (u === m || u.includes(m) || m.includes(u)) return true;
+  const uParts = u.split(/\s+/).filter(p => p.length > 2);
+  const mParts = m.split(/\s+/).filter(p => p.length > 2);
+  const matches = uParts.filter(p => mParts.includes(p));
+  return matches.length >= 2;
+}
+
 export default function TeacherDashboardPage() {
   const { user, openLoginModal } = useAuth();
   
@@ -67,35 +84,38 @@ export default function TeacherDashboardPage() {
   // Detect assigned groups and subjects for the authenticated teacher from Horarios
   const teacherScheduleInfo = useMemo(() => {
     if (!user || user.role !== 'docente' || !user.name) {
-      return { isDocente: false, hasSchedule: false, groups: [] as string[], grades: ['1°', '3°', '5°'], materias: [] as string[] };
+      return {
+        isDocente: false,
+        hasSchedule: false,
+        groups: [] as string[],
+        grades: ['1°', '3°', '5°'],
+        materias: [] as string[],
+        materiaToGroups: {} as Record<string, string[]>
+      };
     }
 
-    const cleanT = user.name.toLowerCase()
-      .replace(/^(docente|profesor|profesora|profe)\s+/i, '')
-      .replace(/@cecytebc\.edu\.mx/i, '')
-      .normalize('NFD').replace(/[\u0300-\u036f]/g, '')
-      .trim();
-    const parts = cleanT.split(' ').filter(p => p.length > 2);
-
-    const matchedBlocks = horarios.filter(h => {
-      const norm = (h.maestro || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
-      return parts.some(p => norm.includes(p));
-    });
+    const matchedBlocks = horarios.filter(h => matchTeacher(user.name, h.maestro));
 
     const groupsSet = new Set<string>();
     const gradesSet = new Set<string>();
     const materiasSet = new Set<string>();
+    const materiaToGroups: Record<string, string[]> = {};
 
     matchedBlocks.forEach(b => {
-      if (b.grupo) {
-        const grp = b.grupo.trim();
+      const grp = b.grupo?.trim();
+      const mat = b.materia?.trim();
+      if (grp) {
         groupsSet.add(grp);
         if (grp.startsWith('1')) gradesSet.add('1°');
         else if (grp.startsWith('3')) gradesSet.add('3°');
         else if (grp.startsWith('5')) gradesSet.add('5°');
       }
-      if (b.materia) {
-        materiasSet.add(b.materia.trim());
+      if (mat) {
+        materiasSet.add(mat);
+        if (grp) {
+          if (!materiaToGroups[mat]) materiaToGroups[mat] = [];
+          if (!materiaToGroups[mat].includes(grp)) materiaToGroups[mat].push(grp);
+        }
       }
     });
 
@@ -108,7 +128,8 @@ export default function TeacherDashboardPage() {
       hasSchedule: sortedGroups.length > 0,
       groups: sortedGroups,
       grades: sortedGrades.length > 0 ? sortedGrades : ['1°', '3°', '5°'],
-      materias: sortedMaterias
+      materias: sortedMaterias,
+      materiaToGroups
     };
   }, [user, horarios]);
 
@@ -161,18 +182,7 @@ export default function TeacherDashboardPage() {
   // Subjects assigned to the logged-in docente in THIS selected group specifically
   const myGroupMaterias = useMemo(() => {
     if (!user || user.role !== 'docente' || !user.name) return [];
-    const cleanT = user.name.toLowerCase()
-      .replace(/^(docente|profesor|profesora|profe)\s+/i, '')
-      .replace(/@cecytebc\.edu\.mx/i, '')
-      .normalize('NFD').replace(/[\u0300-\u036f]/g, '')
-      .trim();
-    const parts = cleanT.split(' ').filter(p => p.length > 2);
-
-    const docBlocks = groupScheduleBlocks.filter(h => {
-      const norm = (h.maestro || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
-      return parts.some(p => norm.includes(p));
-    });
-
+    const docBlocks = groupScheduleBlocks.filter(h => matchTeacher(user.name, h.maestro));
     return [...new Set(docBlocks.map(b => b.materia?.trim()).filter(Boolean))] as string[];
   }, [user, groupScheduleBlocks]);
 
@@ -183,6 +193,48 @@ export default function TeacherDashboardPage() {
     }
     return groupMaterias;
   }, [groupMaterias, myGroupMaterias]);
+
+  // Mapping of all subjects in school to the groups that take them
+  const allMateriasToGroups = useMemo(() => {
+    const map: Record<string, string[]> = {};
+    horarios.forEach(h => {
+      const mat = h.materia?.trim();
+      const grp = h.grupo?.trim();
+      if (mat && grp) {
+        if (!map[mat]) map[mat] = [];
+        if (!map[mat].includes(grp)) map[mat].push(grp);
+      }
+    });
+    return map;
+  }, [horarios]);
+
+  // Groups that belong to the active selectedMateria
+  const groupsForSelectedMateria = useMemo(() => {
+    if (selectedMateria === 'all') return [];
+    const teacherGrps = (user?.role === 'docente') ? (teacherScheduleInfo.materiaToGroups[selectedMateria] || []) : [];
+    if (teacherGrps.length > 0) return teacherGrps;
+    return allMateriasToGroups[selectedMateria] || [];
+  }, [selectedMateria, user, teacherScheduleInfo, allMateriasToGroups]);
+
+  // Function to change the group based on the selected materia
+  const handleSelectMateria = useCallback((mat: string) => {
+    setSelectedMateria(mat);
+    if (mat === 'all') return;
+
+    const teacherGrps = (user?.role === 'docente') ? (teacherScheduleInfo.materiaToGroups[mat] || []) : [];
+    const allGrps = allMateriasToGroups[mat] || [];
+    const validGroups = teacherGrps.length > 0 ? teacherGrps : allGrps;
+
+    if (validGroups.length > 0) {
+      // If current selectedGroup does not belong to this materia, change to the first group that takes it
+      if (!validGroups.includes(selectedGroup)) {
+        const targetGroup = validGroups[0];
+        const targetGrade = targetGroup.startsWith('1') ? '1°' : targetGroup.startsWith('3') ? '3°' : '5°';
+        setSelectedGrade(targetGrade);
+        setSelectedGroup(targetGroup);
+      }
+    }
+  }, [teacherScheduleInfo, allMateriasToGroups, user, selectedGroup]);
 
   // Keep selectedMateria strictly synchronized with the currently selected group
   useEffect(() => {
@@ -1300,19 +1352,28 @@ export default function TeacherDashboardPage() {
                   ? allGrGroups.filter(grp => teacherScheduleInfo.groups.includes(grp))
                   : allGrGroups;
                 return grps.length > 0 ? grps : allGrGroups;
-              })().map((grp) => (
-                <button
-                  key={grp}
-                  onClick={() => setSelectedGroup(grp)}
-                  className={`px-3 py-1.5 rounded-xl text-xs font-mono font-bold transition-all cursor-pointer ${
-                    selectedGroup === grp
-                      ? 'bg-gradient-to-r from-emerald-500 to-teal-600 text-white shadow-md shadow-emerald-500/20'
-                      : 'glass-panel text-gray-400 hover:text-white'
-                  }`}
-                >
-                  {grp}
-                </button>
-              ))}
+              })().map((grp) => {
+                const takesCurrentMateria = selectedMateria !== 'all' && groupsForSelectedMateria.includes(grp);
+                return (
+                  <button
+                    key={grp}
+                    onClick={() => setSelectedGroup(grp)}
+                    className={`px-3 py-1.5 rounded-xl text-xs font-mono font-bold transition-all cursor-pointer flex items-center space-x-1 ${
+                      selectedGroup === grp
+                        ? 'bg-gradient-to-r from-emerald-500 to-teal-600 text-white shadow-md shadow-emerald-500/20 ring-1 ring-emerald-300'
+                        : takesCurrentMateria
+                        ? 'bg-cyan-500/15 border border-cyan-500/40 text-cyan-300 hover:bg-cyan-500/25'
+                        : 'glass-panel text-gray-400 hover:text-white'
+                    }`}
+                    title={takesCurrentMateria ? `Grupo que cursa ${selectedMateria}` : `Grupo ${grp}`}
+                  >
+                    <span>{grp}</span>
+                    {takesCurrentMateria && selectedGroup !== grp && (
+                      <span className="w-1.5 h-1.5 rounded-full bg-cyan-400"></span>
+                    )}
+                  </button>
+                );
+              })}
             </div>
 
           </div>
@@ -1377,58 +1438,96 @@ export default function TeacherDashboardPage() {
         </div>
 
         {/* Subjects Selector Bar */}
-        <div className="pt-2 border-t border-white/5 flex flex-col md:flex-row items-start md:items-center justify-between gap-3">
-          <div className="flex items-center space-x-2 text-xs font-bold text-gray-400 uppercase tracking-wider">
-            <BookOpen size={14} className="text-cyan-400" />
-            <span>Materia en Edición ({selectedGroup}):</span>
-          </div>
+        <div className="pt-2 border-t border-white/5 space-y-2.5">
+          <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-3">
+            <div className="flex items-center space-x-2 text-xs font-bold text-gray-400 uppercase tracking-wider">
+              <BookOpen size={14} className="text-cyan-400" />
+              <span>Materia en Edición:</span>
+            </div>
 
-          <div className="flex items-center flex-wrap gap-1.5 w-full md:w-auto">
-            <button
-              onClick={() => setSelectedMateria('all')}
-              className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
-                selectedMateria === 'all'
-                  ? 'bg-gradient-to-r from-cyan-500 to-blue-600 text-white shadow-md shadow-cyan-500/20 ring-1 ring-cyan-300'
-                  : 'glass-panel text-gray-400 hover:text-white'
-              }`}
-            >
-              ⭐ Todas las Materias (Global)
-            </button>
-
-            {/* Materias asignadas al docente titular en este grupo específico */}
-            {myGroupMaterias.map(mat => (
+            <div className="flex items-center flex-wrap gap-1.5 w-full md:w-auto">
               <button
-                key={mat}
-                onClick={() => setSelectedMateria(mat)}
-                className={`px-2.5 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center space-x-1.5 ${
-                  selectedMateria === mat
-                    ? 'bg-gradient-to-r from-emerald-500 to-teal-600 text-white shadow-md shadow-emerald-500/20 ring-1 ring-emerald-300'
-                    : 'bg-emerald-500/10 border border-emerald-500/30 text-emerald-300 hover:bg-emerald-500/20'
-                }`}
-                title={`Materia asignada a ${user?.name} en el grupo ${selectedGroup}`}
-              >
-                <span>📘</span>
-                <span>{mat}</span>
-                <span className="text-[10px] bg-emerald-400/20 px-1 py-0.5 rounded text-emerald-200">Mi Materia</span>
-              </button>
-            ))}
-
-            {/* Otras materias de la retícula de este grupo específico */}
-            {otherGroupMaterias.map(mat => (
-              <button
-                key={mat}
-                onClick={() => setSelectedMateria(mat)}
-                className={`px-2.5 py-1.5 rounded-xl text-xs font-semibold transition-all cursor-pointer ${
-                  selectedMateria === mat
-                    ? 'bg-gradient-to-r from-cyan-600 to-blue-600 text-white shadow-md shadow-cyan-500/20 ring-1 ring-cyan-300'
+                onClick={() => setSelectedMateria('all')}
+                className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+                  selectedMateria === 'all'
+                    ? 'bg-gradient-to-r from-cyan-500 to-blue-600 text-white shadow-md shadow-cyan-500/20 ring-1 ring-cyan-300'
                     : 'glass-panel text-gray-400 hover:text-white'
                 }`}
-                title={`Materia oficial de la retícula de ${selectedGroup}`}
               >
-                {mat}
+                ⭐ Todas las Materias (Global)
               </button>
-            ))}
+
+              {/* Materias asignadas al docente titular (al seleccionar cambia automáticamente al grupo correspondiente) */}
+              {user?.role === 'docente' && teacherScheduleInfo.materias.map(mat => {
+                const grps = teacherScheduleInfo.materiaToGroups[mat] || [];
+                const isActive = selectedMateria === mat;
+                return (
+                  <button
+                    key={mat}
+                    onClick={() => handleSelectMateria(mat)}
+                    className={`px-2.5 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center space-x-1.5 ${
+                      isActive
+                        ? 'bg-gradient-to-r from-emerald-500 to-teal-600 text-white shadow-md shadow-emerald-500/20 ring-1 ring-emerald-300'
+                        : 'bg-emerald-500/10 border border-emerald-500/30 text-emerald-300 hover:bg-emerald-500/20'
+                    }`}
+                    title={`Materia asignada a ${user?.name}. Grupos: ${grps.join(', ')}. Haz clic para cambiar a su grupo.`}
+                  >
+                    <span>📘</span>
+                    <span>{mat}</span>
+                    <span className="text-[10px] bg-emerald-400/20 px-1.5 py-0.5 rounded text-emerald-200 font-mono">
+                      {grps.join(', ')}
+                    </span>
+                  </button>
+                );
+              })}
+
+              {/* Otras materias de la retícula de este grupo específico */}
+              {(user?.role !== 'docente' ? groupMaterias : otherGroupMaterias).map(mat => (
+                <button
+                  key={mat}
+                  onClick={() => handleSelectMateria(mat)}
+                  className={`px-2.5 py-1.5 rounded-xl text-xs font-semibold transition-all cursor-pointer ${
+                    selectedMateria === mat
+                      ? 'bg-gradient-to-r from-cyan-600 to-blue-600 text-white shadow-md shadow-cyan-500/20 ring-1 ring-cyan-300'
+                      : 'glass-panel text-gray-400 hover:text-white'
+                  }`}
+                  title={`Materia de la retícula oficial de ${selectedGroup}`}
+                >
+                  {mat}
+                </button>
+              ))}
+            </div>
           </div>
+
+          {/* Quick switcher de grupos cuando la materia seleccionada se imparte en varios grupos */}
+          {selectedMateria !== 'all' && groupsForSelectedMateria.length > 1 && (
+            <div className="flex items-center flex-wrap gap-2 pt-1 border-t border-white/5 text-xs">
+              <span className="text-gray-400 font-semibold flex items-center space-x-1">
+                <span>🔄</span>
+                <span>Grupos que cursan <strong>{selectedMateria}</strong>:</span>
+              </span>
+              <div className="flex items-center flex-wrap gap-1.5">
+                {groupsForSelectedMateria.map(g => (
+                  <button
+                    key={g}
+                    onClick={() => {
+                      const gr = g.startsWith('1') ? '1°' : g.startsWith('3') ? '3°' : '5°';
+                      setSelectedGrade(gr);
+                      setSelectedGroup(g);
+                    }}
+                    className={`px-2.5 py-1 rounded-lg text-xs font-mono font-bold transition-all cursor-pointer flex items-center space-x-1 ${
+                      selectedGroup === g
+                        ? 'bg-gradient-to-r from-emerald-500 to-teal-500 text-black shadow-md shadow-emerald-500/25 ring-1 ring-emerald-300 font-black'
+                        : 'bg-emerald-500/10 border border-emerald-500/30 text-emerald-300 hover:bg-emerald-500/20'
+                    }`}
+                  >
+                    <span>Grupo {g}</span>
+                    {selectedGroup === g && <span>✓</span>}
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
         </div>
 
       </div>
@@ -1551,6 +1650,29 @@ export default function TeacherDashboardPage() {
                   <span className="px-2.5 py-0.5 rounded-md bg-cyan-500/10 text-cyan-300 text-xs font-semibold border border-cyan-500/30">
                     ⭐ Todas las Materias
                   </span>
+                )}
+                {selectedMateria !== 'all' && groupsForSelectedMateria.length > 1 && (
+                  <div className="flex items-center space-x-1 pl-2 border-l border-white/10">
+                    <span className="text-[11px] text-gray-400">Grupos:</span>
+                    {groupsForSelectedMateria.map(g => (
+                      <button
+                        key={g}
+                        onClick={() => {
+                          const gr = g.startsWith('1') ? '1°' : g.startsWith('3') ? '3°' : '5°';
+                          setSelectedGrade(gr);
+                          setSelectedGroup(g);
+                        }}
+                        className={`px-2 py-0.5 rounded-md text-xs font-mono font-bold transition-all cursor-pointer ${
+                          selectedGroup === g
+                            ? 'bg-emerald-400 text-black shadow-sm font-black'
+                            : 'bg-emerald-500/10 text-emerald-300 hover:bg-emerald-500/20 border border-emerald-500/30'
+                        }`}
+                        title={`Cambiar a grupo ${g} para ${selectedMateria}`}
+                      >
+                        {g}
+                      </button>
+                    ))}
+                  </div>
                 )}
               </h3>
               <p className="text-xs text-gray-400 mt-0.5">
@@ -1713,9 +1835,37 @@ export default function TeacherDashboardPage() {
           
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
             <div>
-              <h3 className="text-lg font-bold text-white flex items-center space-x-2">
+              <h3 className="text-lg font-bold text-white flex items-center flex-wrap gap-2">
                 <span>Lista Detallada - {selectedGrade} Grado &quot;{selectedGroup}&quot;</span>
                 <span className="text-xs font-normal text-gray-400">({classStudents.length} alumnos inscritos)</span>
+                {selectedMateria !== 'all' && (
+                  <span className="px-2.5 py-0.5 rounded-md bg-cyan-500/10 text-cyan-300 text-xs font-semibold border border-cyan-500/30">
+                    📖 {selectedMateria}
+                  </span>
+                )}
+                {selectedMateria !== 'all' && groupsForSelectedMateria.length > 1 && (
+                  <div className="flex items-center space-x-1 pl-2 border-l border-white/10">
+                    <span className="text-[11px] text-gray-400">Grupos:</span>
+                    {groupsForSelectedMateria.map(g => (
+                      <button
+                        key={g}
+                        onClick={() => {
+                          const gr = g.startsWith('1') ? '1°' : g.startsWith('3') ? '3°' : '5°';
+                          setSelectedGrade(gr);
+                          setSelectedGroup(g);
+                        }}
+                        className={`px-2 py-0.5 rounded-md text-xs font-mono font-bold transition-all cursor-pointer ${
+                          selectedGroup === g
+                            ? 'bg-emerald-400 text-black shadow-sm font-black'
+                            : 'bg-emerald-500/10 text-emerald-300 hover:bg-emerald-500/20 border border-emerald-500/30'
+                        }`}
+                        title={`Cambiar a grupo ${g} para ${selectedMateria}`}
+                      >
+                        {g}
+                      </button>
+                    ))}
+                  </div>
+                )}
               </h3>
               <p className="text-xs text-gray-400 mt-0.5">
                 Clase seleccionada: <strong className="text-emerald-400">{formatDateShort(selectedDate)}</strong> • Materia: <strong className="text-cyan-400">{selectedMateria === 'all' ? 'Todas las Materias' : selectedMateria}</strong>
