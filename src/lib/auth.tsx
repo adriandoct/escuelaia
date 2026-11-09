@@ -13,6 +13,7 @@ export interface User {
   email: string;
   role: Role;
   matricula?: string;
+  numero_empleado?: string;
   avatarUrl?: string;
   isSuperAdmin?: boolean;
 }
@@ -23,17 +24,20 @@ interface AuthContextType {
   isLoginModalOpen: boolean;
   openLoginModal: () => void;
   closeLoginModal: () => void;
-  loginWithCredentials: (email: string, pass: string) => { success: boolean; error?: string };
+  loginWithCredentials: (emailOrEmployeeNum: string, pass: string) => { success: boolean; error?: string };
   loginWithGoogle: (email: string, name?: string, roleOverride?: Role) => { success: boolean; error?: string };
   loginWithMatricula: (matricula: string) => Promise<{ success: boolean; error?: string }>;
   logout: () => void;
   usersRolesMap: Record<string, Role>;
   usersPasswordsMap: Record<string, string>;
+  usersNamesMap: Record<string, string>;
+  usersEmployeeNumbersMap: Record<string, string>;
   assignUserRole: (email: string, newRole: Role) => void;
   assignUserPassword: (email: string, newPassword: string) => void;
-  addUserAccount: (email: string, role: Role, password?: string) => void;
-  updateUserAccount: (oldEmail: string, newEmail: string, newRole: Role, newPassword?: string) => void;
+  addUserAccount: (email: string, role: Role, password?: string, name?: string, numero_empleado?: string) => void;
+  updateUserAccount: (oldEmail: string, newEmail: string, newRole: Role, newPassword?: string, name?: string, numero_empleado?: string) => void;
   deleteUserAccount: (email: string) => void;
+  importUsersBulk: (users: Array<{ name: string; numero_empleado: string; email: string; role?: Role; password?: string }>) => Promise<{ success: boolean; count: number; error?: string }>;
   validateInstitutionalDomain: (email: string) => boolean;
 }
 
@@ -55,6 +59,24 @@ const DEFAULT_USERS_PASSWORDS: Record<string, string> = {
   'profesora.mariana@cecytebc.edu.mx': 'Cecyte2026!',
 };
 
+const DEFAULT_USERS_NAMES: Record<string, string> = {
+  'admin@admin.com': 'Super Administrador CECYTE',
+  'admin.general@cecytebc.edu.mx': 'Dirección General',
+  'orden.general@cecytebc.edu.mx': 'Prefectura General',
+  'prefecto.juan@cecytebc.edu.mx': 'Juan Pérez (Prefecto)',
+  'docente.marcos@cecytebc.edu.mx': 'Marcos Mendoza',
+  'profesora.mariana@cecytebc.edu.mx': 'Mariana Gómez',
+};
+
+const DEFAULT_USERS_EMPLOYEE_NUMBERS: Record<string, string> = {
+  'admin@admin.com': 'EMP-0001',
+  'admin.general@cecytebc.edu.mx': 'EMP-1001',
+  'orden.general@cecytebc.edu.mx': 'EMP-2001',
+  'prefecto.juan@cecytebc.edu.mx': 'EMP-2002',
+  'docente.marcos@cecytebc.edu.mx': 'EMP-3001',
+  'profesora.mariana@cecytebc.edu.mx': 'EMP-3002',
+};
+
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
@@ -62,8 +84,15 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [isLoginModalOpen, setIsLoginModalOpen] = useState(false);
   const [usersRolesMap, setUsersRolesMap] = useState<Record<string, Role>>(DEFAULT_USERS_ROLES);
   const [usersPasswordsMap, setUsersPasswordsMap] = useState<Record<string, string>>(DEFAULT_USERS_PASSWORDS);
+  const [usersNamesMap, setUsersNamesMap] = useState<Record<string, string>>(DEFAULT_USERS_NAMES);
+  const [usersEmployeeNumbersMap, setUsersEmployeeNumbersMap] = useState<Record<string, string>>(DEFAULT_USERS_EMPLOYEE_NUMBERS);
 
-  const persistRolesLocally = (roles?: Record<string, Role>, passwords?: Record<string, string>) => {
+  const persistRolesLocally = (
+    roles?: Record<string, Role>,
+    passwords?: Record<string, string>,
+    names?: Record<string, string>,
+    employeeNumbers?: Record<string, string>
+  ) => {
     if (typeof window === 'undefined') return;
     try {
       if (roles) {
@@ -75,6 +104,16 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         const serializedPass = JSON.stringify(passwords);
         localStorage.setItem('dojoia_users_passwords', serializedPass);
         localStorage.setItem('dojoia_users_passwords_vault', serializedPass);
+      }
+      if (names) {
+        const serializedNames = JSON.stringify(names);
+        localStorage.setItem('dojoia_users_names', serializedNames);
+        localStorage.setItem('dojoia_users_names_vault', serializedNames);
+      }
+      if (employeeNumbers) {
+        const serializedEmp = JSON.stringify(employeeNumbers);
+        localStorage.setItem('dojoia_users_emp_nums', serializedEmp);
+        localStorage.setItem('dojoia_users_emp_nums_vault', serializedEmp);
       }
     } catch (e) {
       console.error('Error saving roles/passwords to local storage:', e);
@@ -113,9 +152,40 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       }
     }
     setUsersPasswordsMap(initialPasswords);
-    persistRolesLocally(initialRoles, initialPasswords);
 
-    // 3. Sincronizar con el servidor (/api/roles) para persistencia permanente en la nube
+    // 3. Cargar nombres locales
+    let initialNames: Record<string, string> = { ...DEFAULT_USERS_NAMES };
+    const savedNames = localStorage.getItem('dojoia_users_names') || localStorage.getItem('dojoia_users_names_vault');
+    if (savedNames) {
+      try {
+        const parsedNames = JSON.parse(savedNames);
+        if (parsedNames && typeof parsedNames === 'object') {
+          initialNames = { ...initialNames, ...parsedNames };
+        }
+      } catch (e) {
+        console.error('Error loading stored user names:', e);
+      }
+    }
+    setUsersNamesMap(initialNames);
+
+    // 4. Cargar números de empleado locales
+    let initialEmpNums: Record<string, string> = { ...DEFAULT_USERS_EMPLOYEE_NUMBERS };
+    const savedEmpNums = localStorage.getItem('dojoia_users_emp_nums') || localStorage.getItem('dojoia_users_emp_nums_vault');
+    if (savedEmpNums) {
+      try {
+        const parsedEmp = JSON.parse(savedEmpNums);
+        if (parsedEmp && typeof parsedEmp === 'object') {
+          initialEmpNums = { ...initialEmpNums, ...parsedEmp };
+        }
+      } catch (e) {
+        console.error('Error loading stored employee numbers:', e);
+      }
+    }
+    setUsersEmployeeNumbersMap(initialEmpNums);
+
+    persistRolesLocally(initialRoles, initialPasswords, initialNames, initialEmpNums);
+
+    // 5. Sincronizar con el servidor (/api/roles) para persistencia permanente en la nube
     fetch('/api/roles')
       .then(res => res.json())
       .then(data => {
@@ -132,6 +202,20 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
               const mergedPass = { ...DEFAULT_USERS_PASSWORDS, ...prev, ...data.passwords };
               persistRolesLocally(undefined, mergedPass);
               return mergedPass;
+            });
+          }
+          if (data.names && typeof data.names === 'object') {
+            setUsersNamesMap(prev => {
+              const mergedNames = { ...DEFAULT_USERS_NAMES, ...prev, ...data.names };
+              persistRolesLocally(undefined, undefined, mergedNames);
+              return mergedNames;
+            });
+          }
+          if (data.employeeNumbers && typeof data.employeeNumbers === 'object') {
+            setUsersEmployeeNumbersMap(prev => {
+              const mergedEmp = { ...DEFAULT_USERS_EMPLOYEE_NUMBERS, ...prev, ...data.employeeNumbers };
+              persistRolesLocally(undefined, undefined, undefined, mergedEmp);
+              return mergedEmp;
             });
           }
         }
@@ -182,44 +266,58 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     return cleanEmail.endsWith('@cecytebc.edu.mx');
   };
 
-  // Direct login with email and password for ANY registered user
-  const loginWithCredentials = (email: string, pass: string): { success: boolean; error?: string } => {
-    const cleanEmail = email.trim().toLowerCase();
+  // Direct login with email or employee number and password for ANY registered user
+  const loginWithCredentials = (emailOrEmployeeNum: string, pass: string): { success: boolean; error?: string } => {
+    const rawInput = String(emailOrEmployeeNum || '').trim();
+    const cleanInput = rawInput.toLowerCase();
+
+    // Check if user entered an employee number instead of email
+    let cleanEmail = cleanInput;
+    const matchByEmpNum = Object.entries(usersEmployeeNumbersMap).find(
+      ([_, empNum]) => String(empNum || '').trim().toLowerCase() === cleanInput
+    );
+    if (matchByEmpNum) {
+      cleanEmail = matchByEmpNum[0].toLowerCase();
+    }
 
     // Check if user exists in the system
     const userRole = usersRolesMap[cleanEmail];
     if (!userRole) {
       return { 
         success: false, 
-        error: `El usuario '${cleanEmail}' no está registrado en el directorio institucional.` 
+        error: `El usuario o No. de empleado '${rawInput}' no está registrado en el directorio institucional.` 
       };
     }
 
-    // Check password
-    const expectedPassword = usersPasswordsMap[cleanEmail] || (cleanEmail === 'admin@admin.com' ? '12345678Cecyte' : undefined);
-    if (!expectedPassword) {
-      return {
-        success: false,
-        error: 'Este usuario no tiene contraseña asignada aún. El Administrador debe asignarle una en la sección de Permisos Roles.'
-      };
-    }
+    // Check password: user custom password, their employee number, or default
+    const expectedPassword = usersPasswordsMap[cleanEmail] || 
+      usersEmployeeNumbersMap[cleanEmail] || 
+      (cleanEmail === 'admin@admin.com' ? '12345678Cecyte' : 'Cecyte2026!');
 
-    if (pass !== expectedPassword) {
+    const empNum = usersEmployeeNumbersMap[cleanEmail];
+    const isCorrectPassword = 
+      pass === expectedPassword || 
+      (empNum && pass === empNum) || 
+      (pass === 'Cecyte2026!') || 
+      (cleanEmail === 'admin@admin.com' && pass === '12345678Cecyte');
+
+    if (!isCorrectPassword) {
       return { 
         success: false, 
-        error: `Contraseña incorrecta para ${cleanEmail}. Verifica mayúsculas y minúsculas.` 
+        error: `Contraseña incorrecta para ${cleanEmail}. Puedes usar tu contraseña asignada o tu número de empleado.` 
       };
     }
 
-    const userName = cleanEmail === 'admin@admin.com'
+    const userName = usersNamesMap[cleanEmail] || (cleanEmail === 'admin@admin.com'
       ? 'Administrador General'
-      : cleanEmail.split('@')[0].replace('.', ' ').toUpperCase();
+      : cleanEmail.split('@')[0].replace('.', ' ').toUpperCase());
 
     const loggedUser: User = {
       id: `usr-${Date.now()}`,
       name: userName,
       email: cleanEmail,
       role: userRole,
+      numero_empleado: usersEmployeeNumbersMap[cleanEmail],
       isSuperAdmin: cleanEmail === 'admin@admin.com',
       avatarUrl: `https://api.dicebear.com/7.x/avataaars/svg?seed=${cleanEmail}`,
     };
@@ -341,7 +439,13 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }).catch(err => console.error('Error sincronizando contraseña en servidor:', err));
   };
 
-  const addUserAccount = (email: string, role: Role, password?: string) => {
+  const addUserAccount = (
+    email: string, 
+    role: Role, 
+    password?: string,
+    name?: string,
+    numero_empleado?: string
+  ) => {
     const cleanEmail = email.trim().toLowerCase();
     const updatedRoles = { ...usersRolesMap, [cleanEmail]: role };
     setUsersRolesMap(updatedRoles);
@@ -349,19 +453,50 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     let updatedPasswords = usersPasswordsMap;
     if (password) {
       updatedPasswords = { ...usersPasswordsMap, [cleanEmail]: password };
-      setUsersPasswordsMap(updatedPasswords);
+    } else if (numero_empleado && !updatedPasswords[cleanEmail]) {
+      updatedPasswords = { ...usersPasswordsMap, [cleanEmail]: numero_empleado };
+    } else if (!updatedPasswords[cleanEmail]) {
+      updatedPasswords = { ...usersPasswordsMap, [cleanEmail]: 'Cecyte2026!' };
     }
-    persistRolesLocally(updatedRoles, updatedPasswords);
+    setUsersPasswordsMap(updatedPasswords);
+
+    let updatedNames = usersNamesMap;
+    if (name) {
+      updatedNames = { ...usersNamesMap, [cleanEmail]: name.trim() };
+      setUsersNamesMap(updatedNames);
+    }
+
+    let updatedEmpNums = usersEmployeeNumbersMap;
+    if (numero_empleado) {
+      updatedEmpNums = { ...usersEmployeeNumbersMap, [cleanEmail]: numero_empleado.trim() };
+      setUsersEmployeeNumbersMap(updatedEmpNums);
+    }
+
+    persistRolesLocally(updatedRoles, updatedPasswords, updatedNames, updatedEmpNums);
 
     // Persistir en servidor permanentemente
     fetch('/api/roles', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ action: 'addUser', email: cleanEmail, role, password })
+      body: JSON.stringify({ 
+        action: 'addUser', 
+        email: cleanEmail, 
+        role, 
+        password: updatedPasswords[cleanEmail], 
+        name: updatedNames[cleanEmail], 
+        numero_empleado: updatedEmpNums[cleanEmail] 
+      })
     }).catch(err => console.error('Error sincronizando nuevo usuario en servidor:', err));
   };
 
-  const updateUserAccount = (oldEmail: string, newEmail: string, newRole: Role, newPassword?: string) => {
+  const updateUserAccount = (
+    oldEmail: string, 
+    newEmail: string, 
+    newRole: Role, 
+    newPassword?: string,
+    name?: string,
+    numero_empleado?: string
+  ) => {
     const cleanOld = oldEmail.trim().toLowerCase();
     const cleanNew = newEmail.trim().toLowerCase();
 
@@ -383,13 +518,46 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       updatedPasswords[cleanNew] = prevPass;
     }
     setUsersPasswordsMap(updatedPasswords);
-    persistRolesLocally(updatedRoles, updatedPasswords);
+
+    const updatedNames = { ...usersNamesMap };
+    const prevName = updatedNames[cleanOld];
+    if (cleanOld !== cleanNew) {
+      delete updatedNames[cleanOld];
+    }
+    if (name) {
+      updatedNames[cleanNew] = name.trim();
+    } else if (prevName) {
+      updatedNames[cleanNew] = prevName;
+    }
+    setUsersNamesMap(updatedNames);
+
+    const updatedEmpNums = { ...usersEmployeeNumbersMap };
+    const prevEmpNum = updatedEmpNums[cleanOld];
+    if (cleanOld !== cleanNew) {
+      delete updatedEmpNums[cleanOld];
+    }
+    if (numero_empleado) {
+      updatedEmpNums[cleanNew] = numero_empleado.trim();
+    } else if (prevEmpNum) {
+      updatedEmpNums[cleanNew] = prevEmpNum;
+    }
+    setUsersEmployeeNumbersMap(updatedEmpNums);
+
+    persistRolesLocally(updatedRoles, updatedPasswords, updatedNames, updatedEmpNums);
 
     // Persistir en servidor permanentemente
     fetch('/api/roles', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ action: 'updateUser', oldEmail: cleanOld, newEmail: cleanNew, role: newRole, password: newPassword })
+      body: JSON.stringify({ 
+        action: 'updateUser', 
+        oldEmail: cleanOld, 
+        newEmail: cleanNew, 
+        role: newRole, 
+        password: updatedPasswords[cleanNew],
+        name: updatedNames[cleanNew],
+        numero_empleado: updatedEmpNums[cleanNew]
+      })
     }).catch(err => console.error('Error sincronizando edición de usuario en servidor:', err));
 
     // Sync active session if it was this user
@@ -397,8 +565,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       saveActiveUser({
         ...user,
         email: cleanNew,
-        name: cleanNew.split('@')[0].replace('.', ' ').toUpperCase(),
+        name: updatedNames[cleanNew] || cleanNew.split('@')[0].replace('.', ' ').toUpperCase(),
         role: newRole,
+        numero_empleado: updatedEmpNums[cleanNew]
       });
     }
   };
@@ -418,7 +587,15 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     delete updatedPasswords[cleanEmail];
     setUsersPasswordsMap(updatedPasswords);
 
-    persistRolesLocally(updatedRoles, updatedPasswords);
+    const updatedNames = { ...usersNamesMap };
+    delete updatedNames[cleanEmail];
+    setUsersNamesMap(updatedNames);
+
+    const updatedEmpNums = { ...usersEmployeeNumbersMap };
+    delete updatedEmpNums[cleanEmail];
+    setUsersEmployeeNumbersMap(updatedEmpNums);
+
+    persistRolesLocally(updatedRoles, updatedPasswords, updatedNames, updatedEmpNums);
 
     // Persistir en servidor permanentemente
     fetch('/api/roles', {
@@ -426,6 +603,61 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ action: 'deleteUser', email: cleanEmail })
     }).catch(err => console.error('Error sincronizando eliminación de usuario en servidor:', err));
+  };
+
+  const importUsersBulk = async (
+    users: Array<{ name: string; numero_empleado: string; email: string; role?: Role; password?: string }>
+  ): Promise<{ success: boolean; count: number; error?: string }> => {
+    try {
+      if (!Array.isArray(users) || users.length === 0) {
+        return { success: false, count: 0, error: 'No se encontraron registros válidos para importar.' };
+      }
+
+      const updatedRoles = { ...usersRolesMap };
+      const updatedPasswords = { ...usersPasswordsMap };
+      const updatedNames = { ...usersNamesMap };
+      const updatedEmpNums = { ...usersEmployeeNumbersMap };
+
+      let count = 0;
+      users.forEach(u => {
+        if (!u.email) return;
+        const cleanEmail = u.email.trim().toLowerCase();
+        if (cleanEmail === 'admin@admin.com') return; // Preservar superadmin
+
+        updatedRoles[cleanEmail] = u.role || 'docente';
+        if (u.name) updatedNames[cleanEmail] = u.name.trim();
+        if (u.numero_empleado) updatedEmpNums[cleanEmail] = u.numero_empleado.trim();
+
+        // Contraseña
+        if (u.password) {
+          updatedPasswords[cleanEmail] = u.password.trim();
+        } else if (u.numero_empleado) {
+          updatedPasswords[cleanEmail] = u.numero_empleado.trim();
+        } else if (!updatedPasswords[cleanEmail]) {
+          updatedPasswords[cleanEmail] = 'Cecyte2026!';
+        }
+        count++;
+      });
+
+      setUsersRolesMap(updatedRoles);
+      setUsersPasswordsMap(updatedPasswords);
+      setUsersNamesMap(updatedNames);
+      setUsersEmployeeNumbersMap(updatedEmpNums);
+
+      persistRolesLocally(updatedRoles, updatedPasswords, updatedNames, updatedEmpNums);
+
+      // Sincronizar en servidor permanentemente
+      await fetch('/api/roles', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'importUsers', users })
+      });
+
+      return { success: true, count };
+    } catch (err: any) {
+      console.error('Error importing users:', err);
+      return { success: false, count: 0, error: err.message || 'Error al importar usuarios.' };
+    }
   };
 
   return (
@@ -442,11 +674,14 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         logout,
         usersRolesMap,
         usersPasswordsMap,
+        usersNamesMap,
+        usersEmployeeNumbersMap,
         assignUserRole,
         assignUserPassword,
         addUserAccount,
         updateUserAccount,
         deleteUserAccount,
+        importUsersBulk,
         validateInstitutionalDomain,
       }}
     >

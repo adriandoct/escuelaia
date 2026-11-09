@@ -152,10 +152,10 @@ export default function LoginModal() {
             </div>
 
             <div className="space-y-1.5">
-              <label className="text-xs font-semibold text-gray-300">Correo Institucional o Administrador</label>
+              <label className="text-xs font-semibold text-gray-300">Correo Institucional o Número de Empleado</label>
               <input
-                type="email"
-                placeholder="ejemplo@cecytebc.edu.mx o admin@admin.com"
+                type="text"
+                placeholder="ejemplo@cecytebc.edu.mx o No. de Empleado (Ej: EMP-3001)"
                 value={credentialsEmail}
                 onChange={(e) => setCredentialsEmail(e.target.value)}
                 className="w-full glass-input py-2.5 px-3.5 rounded-xl text-xs text-white border border-white/10 focus:border-cyan-500 focus:outline-none"

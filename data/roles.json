@@ -14,5 +14,21 @@
     "prefecto.juan@cecytebc.edu.mx": "Cecyte2026!",
     "docente.marcos@cecytebc.edu.mx": "Cecyte2026!",
     "profesora.mariana@cecytebc.edu.mx": "Cecyte2026!"
+  },
+  "names": {
+    "admin@admin.com": "Super Administrador CECYTE",
+    "admin.general@cecytebc.edu.mx": "Dirección General",
+    "orden.general@cecytebc.edu.mx": "Prefectura General",
+    "prefecto.juan@cecytebc.edu.mx": "Juan Pérez (Prefecto)",
+    "docente.marcos@cecytebc.edu.mx": "Marcos Mendoza",
+    "profesora.mariana@cecytebc.edu.mx": "Mariana Gómez"
+  },
+  "employeeNumbers": {
+    "admin@admin.com": "EMP-0001",
+    "admin.general@cecytebc.edu.mx": "EMP-1001",
+    "orden.general@cecytebc.edu.mx": "EMP-2001",
+    "prefecto.juan@cecytebc.edu.mx": "EMP-2002",
+    "docente.marcos@cecytebc.edu.mx": "EMP-3001",
+    "profesora.mariana@cecytebc.edu.mx": "EMP-3002"
   }
 }

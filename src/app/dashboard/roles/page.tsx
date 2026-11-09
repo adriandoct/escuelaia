@@ -6,8 +6,10 @@ import React, { useState } from 'react';
 import { useAuth, Role } from '@/lib/auth';
 import { 
   Shield, CheckCircle2, Lock, Plus, Trash2, Key, Edit, X, Check, 
-  Mail, AlertCircle, Eye, EyeOff, Sparkles, UserCheck 
+  Mail, AlertCircle, Eye, EyeOff, Sparkles, UserCheck, Upload,
+  FileSpreadsheet, FileText, Hash, User
 } from 'lucide-react';
+import ImportPersonalModal from '@/components/ImportPersonalModal';
 
 export default function RolesManagementPage() {
   const { 
@@ -15,20 +17,28 @@ export default function RolesManagementPage() {
     openLoginModal,
     usersRolesMap, 
     usersPasswordsMap, 
+    usersNamesMap,
+    usersEmployeeNumbersMap,
     assignUserRole, 
     assignUserPassword, 
     addUserAccount, 
     updateUserAccount, 
     deleteUserAccount, 
+    importUsersBulk,
     validateInstitutionalDomain 
   } = useAuth();
   
   // Create / add form state
+  const [newName, setNewName] = useState('');
+  const [newEmpNum, setNewEmpNum] = useState('');
   const [newEmail, setNewEmail] = useState('');
   const [newRole, setNewRole] = useState<Role>('docente');
   const [newPassword, setNewPassword] = useState('Cecyte2026!');
   const [showNewPassword, setShowNewPassword] = useState(false);
   const [feedback, setFeedback] = useState<{ message: string; type: 'success' | 'error' } | null>(null);
+
+  // Import Modal state
+  const [isImportModalOpen, setIsImportModalOpen] = useState(false);
 
   // Password Modal state
   const [isPasswordModalOpen, setIsPasswordModalOpen] = useState(false);
@@ -39,6 +49,8 @@ export default function RolesManagementPage() {
   // Edit User Modal state
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const [editOriginalEmail, setEditOriginalEmail] = useState('');
+  const [editName, setEditName] = useState('');
+  const [editEmpNum, setEditEmpNum] = useState('');
   const [editEmail, setEditEmail] = useState('');
   const [editRole, setEditRole] = useState<Role>('docente');
   const [editPassword, setEditPassword] = useState('');
@@ -88,12 +100,20 @@ export default function RolesManagementPage() {
       return;
     }
 
-    addUserAccount(cleanEmail, newRole, newPassword.trim() || 'Cecyte2026!');
+    addUserAccount(
+      cleanEmail, 
+      newRole, 
+      newPassword.trim() || newEmpNum.trim() || 'Cecyte2026!',
+      newName.trim(),
+      newEmpNum.trim()
+    );
     setFeedback({ 
       message: `Usuario '${cleanEmail}' registrado exitosamente con rol '${newRole.toUpperCase()}' y contraseña asignada.`, 
       type: 'success' 
     });
 
+    setNewName('');
+    setNewEmpNum('');
     setNewEmail('');
     setNewPassword('Cecyte2026!');
   };
@@ -101,7 +121,7 @@ export default function RolesManagementPage() {
   // Open password modal
   const handleOpenPasswordModal = (email: string) => {
     setTargetPasswordEmail(email);
-    setInputPassword(usersPasswordsMap[email] || '');
+    setInputPassword(usersPasswordsMap[email] || usersEmployeeNumbersMap[email] || '');
     setShowInputPassword(false);
     setIsPasswordModalOpen(true);
   };
@@ -126,6 +146,8 @@ export default function RolesManagementPage() {
   const handleOpenEditModal = (email: string, currentRole: Role) => {
     setEditOriginalEmail(email);
     setEditEmail(email);
+    setEditName(usersNamesMap[email] || '');
+    setEditEmpNum(usersEmployeeNumbersMap[email] || '');
     setEditRole(currentRole);
     setEditPassword(usersPasswordsMap[email] || '');
     setShowEditPassword(false);
@@ -147,7 +169,14 @@ export default function RolesManagementPage() {
       return;
     }
 
-    updateUserAccount(editOriginalEmail, cleanEmail, editRole, editPassword.trim() || undefined);
+    updateUserAccount(
+      editOriginalEmail, 
+      cleanEmail, 
+      editRole, 
+      editPassword.trim() || undefined,
+      editName.trim(),
+      editEmpNum.trim()
+    );
     setIsEditModalOpen(false);
     setFeedback({
       message: `Datos del usuario ${cleanEmail} actualizados correctamente.`,
@@ -187,9 +216,18 @@ export default function RolesManagementPage() {
           </div>
           <h2 className="text-3xl font-extrabold text-white tracking-tight">Gestión de Usuarios, Roles y Contraseñas</h2>
           <p className="text-gray-400 text-sm">
-            Edita usuarios, asigna contraseñas directas para su ingreso y administra permisos institucionales.
+            Edita usuarios, importa personal masivamente desde Word o Excel y administra permisos institucionales.
           </p>
         </div>
+
+        <button
+          onClick={() => setIsImportModalOpen(true)}
+          className="flex items-center space-x-2 px-5 py-3 rounded-2xl bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-400 hover:to-blue-500 text-black font-extrabold text-xs shadow-lg shadow-cyan-500/25 transition-all cursor-pointer shrink-0"
+          title="Importar lista de personal institucional desde archivo Word o Excel"
+        >
+          <Upload size={16} />
+          <span>Importar Personal (Word / Excel)</span>
+        </button>
       </div>
 
       {/* Privileges Matrix Grid */}
@@ -304,6 +342,32 @@ export default function RolesManagementPage() {
 
           <form onSubmit={handleAddUser} className="space-y-4">
             <div className="space-y-1.5">
+              <label className="text-xs font-semibold text-gray-300">Nombre Completo del Empleado</label>
+              <div className="relative">
+                <input
+                  type="text"
+                  placeholder="Ej: Mtro. Carlos Ruiz González"
+                  value={newName}
+                  onChange={(e) => setNewName(e.target.value)}
+                  className="w-full glass-input py-2.5 px-3 rounded-xl text-xs text-white placeholder-gray-500"
+                />
+              </div>
+            </div>
+
+            <div className="space-y-1.5">
+              <label className="text-xs font-semibold text-gray-300">Número de Empleado (Clave / ID)</label>
+              <div className="relative">
+                <input
+                  type="text"
+                  placeholder="Ej: EMP-3005 o 54201"
+                  value={newEmpNum}
+                  onChange={(e) => setNewEmpNum(e.target.value)}
+                  className="w-full glass-input py-2.5 px-3 rounded-xl text-xs text-white placeholder-gray-500 font-mono"
+                />
+              </div>
+            </div>
+
+            <div className="space-y-1.5">
               <label className="text-xs font-semibold text-gray-300">Correo Institucional (@cecytebc.edu.mx)</label>
               <div className="relative">
                 <input
@@ -369,16 +433,32 @@ export default function RolesManagementPage() {
 
         {/* Right Side: Users Directory Table (2 cols) */}
         <div className="lg:col-span-2 glass-panel p-6 rounded-3xl space-y-4">
-          <div className="flex items-center justify-between">
-            <h3 className="text-base font-bold text-white">Directorio de Usuarios Institucionales y Permisos</h3>
-            <span className="text-xs font-mono text-cyan-400 font-bold">{usersList.length} Registrados</span>
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+            <div>
+              <h3 className="text-base font-bold text-white">Directorio de Usuarios Institucionales y Permisos</h3>
+              <p className="text-[11px] text-gray-400">Personal habilitado para autenticarse con correo o número de empleado.</p>
+            </div>
+            <div className="flex items-center space-x-2">
+              <button
+                type="button"
+                onClick={() => setIsImportModalOpen(true)}
+                className="flex items-center space-x-1.5 px-3 py-1.5 rounded-xl bg-cyan-500/15 hover:bg-cyan-500/25 border border-cyan-500/30 text-cyan-300 text-xs font-bold transition-all cursor-pointer"
+              >
+                <Upload size={13} />
+                <span>Importar Word / Excel</span>
+              </button>
+              <span className="text-xs font-mono text-cyan-400 font-bold bg-cyan-500/10 px-2.5 py-1 rounded-xl border border-cyan-500/20">
+                {usersList.length} Registrados
+              </span>
+            </div>
           </div>
 
           <div className="overflow-x-auto">
             <table className="w-full text-left text-xs">
               <thead>
-                <tr className="border-b border-white/5 text-gray-400 uppercase font-semibold">
-                  <th className="py-3 px-3">Usuario Institucional</th>
+                <tr className="border-b border-white/5 text-gray-400 uppercase font-semibold text-[10px]">
+                  <th className="py-3 px-3">Empleado / Correo Institucional</th>
+                  <th className="py-3 px-3">No. Empleado</th>
                   <th className="py-3 px-3">Rol Asignado</th>
                   <th className="py-3 px-3">Contraseña de Acceso</th>
                   <th className="py-3 px-3 text-right">Acciones</th>
@@ -386,20 +466,39 @@ export default function RolesManagementPage() {
               </thead>
               <tbody className="divide-y divide-white/5 text-gray-200">
                 {usersList.map(([email, role]) => {
-                  const hasPassword = !!usersPasswordsMap[email] || (email === 'admin@admin.com');
+                  const hasPassword = !!usersPasswordsMap[email] || (email === 'admin@admin.com') || !!usersEmployeeNumbersMap[email];
                   const isProtectedSuperadmin = email === 'admin@admin.com';
+                  const displayName = usersNamesMap[email] || (isProtectedSuperadmin ? 'Super Administrador CECYTE' : email.split('@')[0].replace('.', ' ').toUpperCase());
+                  const empNum = usersEmployeeNumbersMap[email] || '—';
 
                   return (
                     <tr key={email} className="hover:bg-white/[0.02] transition-colors">
-                      {/* User email */}
-                      <td className="py-3.5 px-3 font-semibold text-white">
-                        <div className="flex items-center space-x-2">
-                          <Mail size={14} className="text-cyan-400 shrink-0" />
-                          <span className="truncate max-w-[180px] sm:max-w-none">{email}</span>
-                          {isProtectedSuperadmin && (
-                            <span className="text-[9px] bg-amber-500/20 text-amber-400 px-1.5 py-0.5 rounded font-bold shrink-0">SUPERADMIN</span>
-                          )}
+                      {/* User name & email */}
+                      <td className="py-3.5 px-3">
+                        <div className="space-y-0.5">
+                          <div className="font-bold text-white text-xs flex items-center space-x-1.5">
+                            <span>{displayName}</span>
+                            {isProtectedSuperadmin && (
+                              <span className="text-[9px] bg-amber-500/20 text-amber-400 px-1.5 py-0.2 rounded font-bold shrink-0">SUPERADMIN</span>
+                            )}
+                          </div>
+                          <div className="flex items-center space-x-1.5 text-[11px] text-gray-400 font-mono">
+                            <Mail size={12} className="text-cyan-400 shrink-0" />
+                            <span className="truncate max-w-[170px] sm:max-w-none">{email}</span>
+                          </div>
                         </div>
+                      </td>
+
+                      {/* Employee number */}
+                      <td className="py-3.5 px-3">
+                        {empNum !== '—' ? (
+                          <span className="inline-flex items-center space-x-1 px-2 py-0.5 rounded-lg bg-cyan-500/10 text-cyan-300 border border-cyan-500/20 font-mono text-[11px] font-bold">
+                            <Hash size={11} className="text-cyan-400" />
+                            <span>{empNum}</span>
+                          </span>
+                        ) : (
+                          <span className="text-gray-500 text-xs font-mono">—</span>
+                        )}
                       </td>
 
                       {/* Role */}
@@ -564,6 +663,28 @@ export default function RolesManagementPage() {
 
             <form onSubmit={handleSaveEditUser} className="space-y-4">
               <div className="space-y-1.5">
+                <label className="text-xs font-semibold text-gray-300">Nombre Completo</label>
+                <input
+                  type="text"
+                  value={editName}
+                  onChange={(e) => setEditName(e.target.value)}
+                  placeholder="Nombre del empleado"
+                  className="w-full glass-input py-2.5 px-3.5 rounded-xl text-xs text-white bg-[#080d1a] border border-cyan-500/30"
+                />
+              </div>
+
+              <div className="space-y-1.5">
+                <label className="text-xs font-semibold text-gray-300">Número de Empleado (Clave / ID)</label>
+                <input
+                  type="text"
+                  value={editEmpNum}
+                  onChange={(e) => setEditEmpNum(e.target.value)}
+                  placeholder="Ej: EMP-3001"
+                  className="w-full glass-input py-2.5 px-3.5 rounded-xl text-xs text-white font-mono bg-[#080d1a] border border-cyan-500/30"
+                />
+              </div>
+
+              <div className="space-y-1.5">
                 <label className="text-xs font-semibold text-gray-300">Correo Institucional</label>
                 <input
                   type="email"
@@ -637,6 +758,19 @@ export default function RolesManagementPage() {
           </div>
         </div>
       )}
+
+      {/* MODAL 3: Importar Personal Masivo (Word / Excel) */}
+      <ImportPersonalModal
+        isOpen={isImportModalOpen}
+        onClose={() => setIsImportModalOpen(false)}
+        onImportSuccess={(count) => {
+          setFeedback({
+            message: `¡Se importaron ${count} empleados exitosamente desde el documento! Ahora pueden autenticarse con su correo institucional o número de empleado.`,
+            type: 'success'
+          });
+        }}
+        importUsersBulk={importUsersBulk}
+      />
 
     </div>
   );
