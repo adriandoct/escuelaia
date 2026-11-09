@@ -144,6 +144,62 @@ export default function TeacherDashboardPage() {
   const [participacionesPorMateria, setParticipacionesPorMateria] = useState<Record<string, Record<string, number>>>({});
   const [asistenciasPorMateria, setAsistenciasPorMateria] = useState<Record<string, Record<string, 'presente' | 'retardo' | 'ausente' | 'justificado'>>>({});
 
+  // 1. Identify which schedule blocks belong to the CURRENT selected group from horarios
+  const groupScheduleBlocks = useMemo(() => {
+    return horarios.filter(h => {
+      const hGrp = (h.grupo || '').trim();
+      return hGrp === selectedGroup || (selectedGroup === '3ASC' && hGrp === '3ASCM') || (selectedGroup === '3ASCM' && hGrp === '3ASC');
+    });
+  }, [horarios, selectedGroup]);
+
+  // All distinct subjects belonging strictly to the curriculum of the selected group
+  const groupMaterias = useMemo(() => {
+    const list = [...new Set(groupScheduleBlocks.map(b => b.materia?.trim()).filter(Boolean))] as string[];
+    return list.length > 0 ? list : [...MATERIAS_DEFAULT];
+  }, [groupScheduleBlocks]);
+
+  // Subjects assigned to the logged-in docente in THIS selected group specifically
+  const myGroupMaterias = useMemo(() => {
+    if (!user || user.role !== 'docente' || !user.name) return [];
+    const cleanT = user.name.toLowerCase()
+      .replace(/^(docente|profesor|profesora|profe)\s+/i, '')
+      .replace(/@cecytebc\.edu\.mx/i, '')
+      .normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+      .trim();
+    const parts = cleanT.split(' ').filter(p => p.length > 2);
+
+    const docBlocks = groupScheduleBlocks.filter(h => {
+      const norm = (h.maestro || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+      return parts.some(p => norm.includes(p));
+    });
+
+    return [...new Set(docBlocks.map(b => b.materia?.trim()).filter(Boolean))] as string[];
+  }, [user, groupScheduleBlocks]);
+
+  // Other subjects in this group's curriculum
+  const otherGroupMaterias = useMemo(() => {
+    if (myGroupMaterias.length > 0) {
+      return groupMaterias.filter(m => !myGroupMaterias.includes(m));
+    }
+    return groupMaterias;
+  }, [groupMaterias, myGroupMaterias]);
+
+  // Keep selectedMateria strictly synchronized with the currently selected group
+  useEffect(() => {
+    if (selectedMateria !== 'all') {
+      const isValid = groupMaterias.includes(selectedMateria);
+      if (!isValid) {
+        if (myGroupMaterias.length > 0) {
+          setSelectedMateria(myGroupMaterias[0]);
+        } else if (groupMaterias.length > 0) {
+          setSelectedMateria(groupMaterias[0]);
+        } else {
+          setSelectedMateria('all');
+        }
+      }
+    }
+  }, [selectedGroup, groupMaterias, myGroupMaterias, selectedMateria]);
+
   // UI state for saving / feedback
   const [isSaving, setIsSaving] = useState(false);
   const [isUploadingDrive, setIsUploadingDrive] = useState(false);
@@ -311,7 +367,7 @@ export default function TeacherDashboardPage() {
       }));
       setAsistenciasPorMateria(prev => {
         const next = { ...prev };
-        MATERIAS_DEFAULT.forEach(m => {
+        groupMaterias.forEach(m => {
           next[m] = { ...(next[m] || {}), [studentId]: status };
         });
         return next;
@@ -360,7 +416,7 @@ export default function TeacherDashboardPage() {
         setParticipaciones(prev => ({ ...prev, [studentId]: nextPart }));
         setParticipacionesPorMateria(prev => {
           const next = { ...prev };
-          MATERIAS_DEFAULT.forEach(m => {
+          groupMaterias.forEach(m => {
             next[m] = { ...(next[m] || {}), [studentId]: nextPart };
           });
           return next;
@@ -400,7 +456,7 @@ export default function TeacherDashboardPage() {
         record.participaciones[studentId] = nextPart;
         record.asistenciasPorMateria = record.asistenciasPorMateria || {};
         record.participacionesPorMateria = record.participacionesPorMateria || {};
-        MATERIAS_DEFAULT.forEach(m => {
+        groupMaterias.forEach(m => {
           record!.asistenciasPorMateria![m] = { ...(record!.asistenciasPorMateria![m] || {}), [studentId]: nextStatus };
           record!.participacionesPorMateria![m] = { ...(record!.participacionesPorMateria![m] || {}), [studentId]: nextPart };
         });
@@ -433,7 +489,7 @@ export default function TeacherDashboardPage() {
       });
       setParticipacionesPorMateria(prev => {
         const next = { ...prev };
-        MATERIAS_DEFAULT.forEach(m => {
+        groupMaterias.forEach(m => {
           const curM = next[m]?.[studentId] ?? (participaciones[studentId] || 0);
           next[m] = { ...(next[m] || {}), [studentId]: Math.max(0, curM + delta) };
         });
@@ -478,7 +534,7 @@ export default function TeacherDashboardPage() {
     if (selectedMateria === 'all') {
       setAsistenciasPorMateria(prev => {
         const next = { ...prev };
-        MATERIAS_DEFAULT.forEach(m => {
+        groupMaterias.forEach(m => {
           next[m] = { ...(next[m] || {}), ...updatedOverrides };
         });
         return next;
@@ -579,7 +635,7 @@ export default function TeacherDashboardPage() {
       setFeedbackBanner({
         type: 'success',
         message: `¡Día de clase guardado con éxito (${formatDateShort(selectedDate)})!`,
-        details: `Se actualizaron las asistencias y participaciones en la hoja de cálculo Matriz Sábana y en todas las materias (${MATERIAS_DEFAULT.length} materias) para ${selectedGrade} "${selectedGroup}". Total de participaciones registradas hoy: ${totalParts}.`
+        details: `Se actualizaron las asistencias y participaciones en la hoja de cálculo Matriz Sábana y en las materias (${groupMaterias.length} materias: ${groupMaterias.join(', ')}) para ${selectedGrade} "${selectedGroup}". Total de participaciones registradas hoy: ${totalParts}.`
       });
 
       setTimeout(() => {
@@ -716,14 +772,14 @@ export default function TeacherDashboardPage() {
     }
   };
 
-  // SUBIR RESPALDO DE TODAS LAS MATERIAS (6 HOJAS) A GOOGLE DRIVE
+  // SUBIR RESPALDO DE TODAS LAS MATERIAS A GOOGLE DRIVE
   const handleUploadAllMateriasToGoogleDrive = async () => {
     setIsUploadingDrive(true);
     try {
       const currentMateriaWebhooks = getMateriaWebhooksMap();
       let syncedCount = 0;
 
-      for (const mat of MATERIAS_DEFAULT) {
+      for (const mat of groupMaterias) {
         const rowsForMateria = buildMatrizSabanaRows(
           classStudents,
           classDates,
@@ -785,7 +841,7 @@ export default function TeacherDashboardPage() {
       setFeedbackBanner({
         type: 'success',
         message: `☁️ ¡Respaldo completado para las ${syncedCount} materias en Google Drive!`,
-        details: `Se generaron y actualizaron las hojas de cálculo individuales para cada materia (${MATERIAS_DEFAULT.join(', ')}) con la fecha ${formatDateShort(selectedDate)}.`
+        details: `Se generaron y actualizaron las hojas de cálculo individuales para cada materia (${groupMaterias.join(', ')}) con la fecha ${formatDateShort(selectedDate)}.`
       });
 
       setTimeout(() => {
@@ -808,10 +864,11 @@ export default function TeacherDashboardPage() {
       selectedGroup,
       participaciones,
       asistenciasOverride,
-      [...MATERIAS_DEFAULT],
+      groupMaterias,
       user?.name || 'Profesor Titular',
       participacionesPorMateria,
-      asistenciasPorMateria
+      asistenciasPorMateria,
+      selectedMateria
     );
   };
 
@@ -1323,7 +1380,7 @@ export default function TeacherDashboardPage() {
         <div className="pt-2 border-t border-white/5 flex flex-col md:flex-row items-start md:items-center justify-between gap-3">
           <div className="flex items-center space-x-2 text-xs font-bold text-gray-400 uppercase tracking-wider">
             <BookOpen size={14} className="text-cyan-400" />
-            <span>Materia en Edición:</span>
+            <span>Materia en Edición ({selectedGroup}):</span>
           </div>
 
           <div className="flex items-center flex-wrap gap-1.5 w-full md:w-auto">
@@ -1331,40 +1388,42 @@ export default function TeacherDashboardPage() {
               onClick={() => setSelectedMateria('all')}
               className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
                 selectedMateria === 'all'
-                  ? 'bg-gradient-to-r from-cyan-500 to-blue-600 text-white shadow-md shadow-cyan-500/20'
+                  ? 'bg-gradient-to-r from-cyan-500 to-blue-600 text-white shadow-md shadow-cyan-500/20 ring-1 ring-cyan-300'
                   : 'glass-panel text-gray-400 hover:text-white'
               }`}
             >
               ⭐ Todas las Materias (Global)
             </button>
 
-            {/* Materias asignadas al docente titular */}
-            {teacherScheduleInfo.materias.map(mat => (
+            {/* Materias asignadas al docente titular en este grupo específico */}
+            {myGroupMaterias.map(mat => (
               <button
                 key={mat}
                 onClick={() => setSelectedMateria(mat)}
-                className={`px-2.5 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center space-x-1 ${
+                className={`px-2.5 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center space-x-1.5 ${
                   selectedMateria === mat
                     ? 'bg-gradient-to-r from-emerald-500 to-teal-600 text-white shadow-md shadow-emerald-500/20 ring-1 ring-emerald-300'
                     : 'bg-emerald-500/10 border border-emerald-500/30 text-emerald-300 hover:bg-emerald-500/20'
                 }`}
-                title={`Materia asignada a ${user?.name}`}
+                title={`Materia asignada a ${user?.name} en el grupo ${selectedGroup}`}
               >
                 <span>📘</span>
                 <span>{mat}</span>
+                <span className="text-[10px] bg-emerald-400/20 px-1 py-0.5 rounded text-emerald-200">Mi Materia</span>
               </button>
             ))}
 
-            {/* Materias generales del plantel */}
-            {MATERIAS_DEFAULT.filter(m => !teacherScheduleInfo.materias.includes(m)).map(mat => (
+            {/* Otras materias de la retícula de este grupo específico */}
+            {otherGroupMaterias.map(mat => (
               <button
                 key={mat}
                 onClick={() => setSelectedMateria(mat)}
                 className={`px-2.5 py-1.5 rounded-xl text-xs font-semibold transition-all cursor-pointer ${
                   selectedMateria === mat
-                    ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 shadow-sm'
+                    ? 'bg-gradient-to-r from-cyan-600 to-blue-600 text-white shadow-md shadow-cyan-500/20 ring-1 ring-cyan-300'
                     : 'glass-panel text-gray-400 hover:text-white'
                 }`}
+                title={`Materia oficial de la retícula de ${selectedGroup}`}
               >
                 {mat}
               </button>
@@ -1478,11 +1537,21 @@ export default function TeacherDashboardPage() {
           
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
             <div>
-              <h3 className="text-lg font-extrabold text-white flex items-center space-x-2">
+              <h3 className="text-lg font-extrabold text-white flex items-center flex-wrap gap-2">
                 <span>Matriz Sábana de Asistencias y Participaciones</span>
                 <span className="px-2 py-0.5 rounded-md bg-emerald-500/10 text-emerald-400 text-xs font-mono border border-emerald-500/30">
                   {selectedGrade} &quot;{selectedGroup}&quot;
                 </span>
+                {selectedMateria !== 'all' ? (
+                  <span className="px-2.5 py-0.5 rounded-md bg-cyan-500/10 text-cyan-300 text-xs font-semibold border border-cyan-500/30 flex items-center space-x-1">
+                    <span>📖</span>
+                    <span>{selectedMateria}</span>
+                  </span>
+                ) : (
+                  <span className="px-2.5 py-0.5 rounded-md bg-cyan-500/10 text-cyan-300 text-xs font-semibold border border-cyan-500/30">
+                    ⭐ Todas las Materias
+                  </span>
+                )}
               </h3>
               <p className="text-xs text-gray-400 mt-0.5">
                 Columnas dinámicas por fecha de clase. Haz clic en cualquier celda para alternar el estatus (A/R/F/J).
@@ -1934,7 +2003,7 @@ export default function TeacherDashboardPage() {
                 >
                   ⭐ General
                 </button>
-                {MATERIAS_DEFAULT.map(mat => (
+                {groupMaterias.map(mat => (
                   <button
                     key={mat}
                     type="button"
