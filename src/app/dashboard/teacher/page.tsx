@@ -10,7 +10,7 @@ import {
   BookOpen, CheckCircle, Clock, XCircle, Users, Search, Filter, Download, 
   UserCheck, AlertTriangle, RefreshCw, Save, FileSpreadsheet, Eye, Award, 
   Plus, Minus, Check, Calendar, Sparkles, Settings, ExternalLink, HelpCircle, 
-  ShieldCheck, Layers, ArrowRight, X, CloudUpload, HardDrive, Copy, CheckCheck
+  ShieldCheck, Layers, ArrowRight, X, CloudUpload, HardDrive, Copy, CheckCheck, QrCode
 } from 'lucide-react';
 import { 
   MATERIAS_DEFAULT, 
@@ -46,6 +46,7 @@ export default function TeacherDashboardPage() {
   const [scheduleGroup, setScheduleGroup] = useState<string>('1A');
   const [scheduleGrade, setScheduleGrade] = useState<string>('');
   const [isUploadScheduleModalOpen, setIsUploadScheduleModalOpen] = useState(false);
+  const [filterMyGroupsOnly, setFilterMyGroupsOnly] = useState<boolean>(true);
 
   // Authentication check & redirects
   useEffect(() => {
@@ -62,6 +63,68 @@ export default function TeacherDashboardPage() {
   const [selectedGroup, setSelectedGroup] = useState<string>('1A');
   const [searchQuery, setSearchQuery] = useState('');
   const [loading, setLoading] = useState(true);
+
+  // Detect assigned groups and subjects for the authenticated teacher from Horarios
+  const teacherScheduleInfo = useMemo(() => {
+    if (!user || user.role !== 'docente' || !user.name) {
+      return { isDocente: false, hasSchedule: false, groups: [] as string[], grades: ['1°', '3°', '5°'], materias: [] as string[] };
+    }
+
+    const cleanT = user.name.toLowerCase()
+      .replace(/^(docente|profesor|profesora|profe)\s+/i, '')
+      .replace(/@cecytebc\.edu\.mx/i, '')
+      .normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+      .trim();
+    const parts = cleanT.split(' ').filter(p => p.length > 2);
+
+    const matchedBlocks = horarios.filter(h => {
+      const norm = (h.maestro || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+      return parts.some(p => norm.includes(p));
+    });
+
+    const groupsSet = new Set<string>();
+    const gradesSet = new Set<string>();
+    const materiasSet = new Set<string>();
+
+    matchedBlocks.forEach(b => {
+      if (b.grupo) {
+        const grp = b.grupo.trim();
+        groupsSet.add(grp);
+        if (grp.startsWith('1')) gradesSet.add('1°');
+        else if (grp.startsWith('3')) gradesSet.add('3°');
+        else if (grp.startsWith('5')) gradesSet.add('5°');
+      }
+      if (b.materia) {
+        materiasSet.add(b.materia.trim());
+      }
+    });
+
+    const sortedGrades = Array.from(gradesSet).sort();
+    const sortedGroups = Array.from(groupsSet).sort();
+    const sortedMaterias = Array.from(materiasSet).sort();
+
+    return {
+      isDocente: true,
+      hasSchedule: sortedGroups.length > 0,
+      groups: sortedGroups,
+      grades: sortedGrades.length > 0 ? sortedGrades : ['1°', '3°', '5°'],
+      materias: sortedMaterias
+    };
+  }, [user, horarios]);
+
+  // Automatically select the teacher's first assigned group if current selection is not theirs
+  useEffect(() => {
+    if (user?.role === 'docente' && teacherScheduleInfo.hasSchedule && filterMyGroupsOnly) {
+      if (!teacherScheduleInfo.groups.includes(selectedGroup)) {
+        const firstGroup = teacherScheduleInfo.groups[0];
+        if (firstGroup) {
+          const firstGrade = firstGroup.startsWith('1') ? '1°' : firstGroup.startsWith('3') ? '3°' : '5°';
+          setSelectedGrade(firstGrade);
+          setSelectedGroup(firstGroup);
+        }
+      }
+    }
+  }, [user, teacherScheduleInfo, filterMyGroupsOnly, selectedGroup]);
 
   // VIEW MODE TOGGLE (Matching user screenshot: Matriz Sábana vs Detallada)
   const [viewMode, setViewMode] = useState<'sabana' | 'detallada'>('sabana');
@@ -121,9 +184,28 @@ export default function TeacherDashboardPage() {
         setHorarios(getStoredHorarios());
       }
     };
+
+    // Live update when an entrance QR is scanned anywhere in the school
+    const handleNewScan = async () => {
+      try {
+        const allLogs = await db.getAsistencias();
+        setTodayLogs(allLogs);
+      } catch (e) {
+        console.error('Error actualizando logs de escáner en vivo:', e);
+      }
+    };
+
     if (typeof window !== 'undefined') {
       window.addEventListener('dojoia_horarios_updated', handleHorariosUpdate);
-      return () => window.removeEventListener('dojoia_horarios_updated', handleHorariosUpdate);
+      window.addEventListener('dojoia_asistencia_registrada', handleNewScan);
+      window.addEventListener('dojoia_whatsapp_alert', handleNewScan);
+      window.addEventListener('storage', handleNewScan);
+      return () => {
+        window.removeEventListener('dojoia_horarios_updated', handleHorariosUpdate);
+        window.removeEventListener('dojoia_asistencia_registrada', handleNewScan);
+        window.removeEventListener('dojoia_whatsapp_alert', handleNewScan);
+        window.removeEventListener('storage', handleNewScan);
+      };
     }
   }, []);
 
@@ -182,7 +264,7 @@ export default function TeacherDashboardPage() {
     });
   }, [students, selectedGrade, selectedGroup, searchQuery]);
 
-  // Compute student status for the current session/materia
+  // Compute student status for the current session/materia based on entrance QR scan or override
   const getStudentCurrentStatus = useCallback((studentId: string) => {
     if (selectedMateria !== 'all' && asistenciasPorMateria[selectedMateria]?.[studentId]) {
       const status = asistenciasPorMateria[selectedMateria][studentId];
@@ -193,10 +275,10 @@ export default function TeacherDashboardPage() {
         ausente: 'text-red-400 bg-red-500/10 border-red-500/30',
         justificado: 'text-cyan-400 bg-cyan-500/10 border-cyan-500/30'
       };
-      return { status, label: labels[status], color: colors[status], time: 'Manual' };
+      return { status, label: labels[status], color: colors[status], time: 'Manual', isQrScan: false };
     }
 
-    const resolved = resolveStudentStatus(studentId, todayLogs, asistenciasOverride);
+    const resolved = resolveStudentStatus(studentId, todayLogs, asistenciasOverride, selectedDate);
     const colors = {
       presente: 'text-emerald-400 bg-emerald-500/10 border-emerald-500/30',
       retardo: 'text-amber-400 bg-amber-500/10 border-amber-500/30',
@@ -207,9 +289,10 @@ export default function TeacherDashboardPage() {
       status: resolved.status,
       label: resolved.label,
       color: colors[resolved.status],
-      time: resolved.time
+      time: resolved.time,
+      isQrScan: resolved.isQrScan
     };
-  }, [selectedMateria, asistenciasPorMateria, todayLogs, asistenciasOverride]);
+  }, [selectedMateria, asistenciasPorMateria, todayLogs, asistenciasOverride, selectedDate]);
 
   // Compute participations for current student in selected materia
   const getStudentParticipations = useCallback((studentId: string): number => {
@@ -1067,6 +1150,51 @@ export default function TeacherDashboardPage() {
           ========================================================================= */}
       <div className="glass-panel p-5 rounded-3xl space-y-4">
         
+        {/* If user is Docente and has schedule: Toggle between My Groups and All Groups */}
+        {user?.role === 'docente' && teacherScheduleInfo.hasSchedule && (
+          <div className="flex items-center justify-between flex-wrap gap-2 pb-2 border-b border-white/5">
+            <div className="flex items-center space-x-2">
+              <span className="text-[11px] font-bold text-gray-400 uppercase tracking-wider">Modo de Vista:</span>
+              <button
+                type="button"
+                onClick={() => {
+                  setFilterMyGroupsOnly(true);
+                  const first = teacherScheduleInfo.groups[0];
+                  if (first) {
+                    const g = first.startsWith('1') ? '1°' : first.startsWith('3') ? '3°' : '5°';
+                    setSelectedGrade(g);
+                    setSelectedGroup(first);
+                  }
+                }}
+                className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center space-x-1.5 ${
+                  filterMyGroupsOnly
+                    ? 'bg-gradient-to-r from-emerald-500 to-teal-600 text-white shadow-md shadow-emerald-500/20'
+                    : 'glass-panel text-gray-400 hover:text-white'
+                }`}
+              >
+                <span>👨‍🏫 Mis Grupos Asignados ({teacherScheduleInfo.groups.length})</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => setFilterMyGroupsOnly(false)}
+                className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center space-x-1.5 ${
+                  !filterMyGroupsOnly
+                    ? 'bg-gradient-to-r from-cyan-500 to-blue-600 text-white shadow-md shadow-cyan-500/20'
+                    : 'glass-panel text-gray-400 hover:text-white'
+                }`}
+              >
+                <span>🏫 Todos los Grupos del Plantel</span>
+              </button>
+            </div>
+
+            <div className="text-[11px] text-emerald-400 font-mono flex items-center space-x-1.5 bg-emerald-500/10 px-2.5 py-1 rounded-xl border border-emerald-500/20">
+              <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
+              <QrCode size={13} className="text-emerald-400" />
+              <span>Asistencia QR de Entrada en Vivo</span>
+            </div>
+          </div>
+        )}
+
         <div className="flex flex-col lg:flex-row items-stretch lg:items-center justify-between gap-4">
           
           {/* Grade & Group Pickers */}
@@ -1074,14 +1202,23 @@ export default function TeacherDashboardPage() {
             
             <div className="flex items-center space-x-1.5">
               <span className="text-xs font-bold text-gray-400 uppercase tracking-wider">Grado:</span>
-              {['1°', '3°', '5°'].map((g) => (
+              {((user?.role === 'docente' && teacherScheduleInfo.hasSchedule && filterMyGroupsOnly)
+                ? teacherScheduleInfo.grades
+                : ['1°', '3°', '5°']
+              ).map((g) => (
                 <button
                   key={g}
                   onClick={() => {
                     setSelectedGrade(g);
-                    if (g === '1°') setSelectedGroup('1A');
-                    else if (g === '3°') setSelectedGroup('3APGA');
-                    else if (g === '5°') setSelectedGroup('5APGA');
+                    const allGrGroups = g === '1°'
+                      ? ['1A', '1B', '1C', '1D', '1E']
+                      : g === '3°'
+                      ? ['3APGM', '3APGA', '3ASC', '3BPGA']
+                      : ['5APGM', '5BPGM', '5APGA'];
+                    const grps = (user?.role === 'docente' && teacherScheduleInfo.hasSchedule && filterMyGroupsOnly)
+                      ? allGrGroups.filter(grp => teacherScheduleInfo.groups.includes(grp))
+                      : allGrGroups;
+                    if (grps.length > 0) setSelectedGroup(grps[0]);
                   }}
                   className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
                     selectedGrade === g
@@ -1096,12 +1233,17 @@ export default function TeacherDashboardPage() {
 
             <div className="flex items-center flex-wrap gap-1.5">
               <span className="text-xs font-bold text-gray-400 uppercase tracking-wider">Grupo:</span>
-              {(selectedGrade === '1°'
-                ? ['1A', '1B', '1C', '1D', '1E']
-                : selectedGrade === '3°'
-                ? ['3APGM', '3APGA', '3ASC', '3BPGA']
-                : ['5APGM', '5BPGM', '5APGA']
-              ).map((grp) => (
+              {(() => {
+                const allGrGroups = selectedGrade === '1°'
+                  ? ['1A', '1B', '1C', '1D', '1E']
+                  : selectedGrade === '3°'
+                  ? ['3APGM', '3APGA', '3ASC', '3BPGA']
+                  : ['5APGM', '5BPGM', '5APGA'];
+                const grps = (user?.role === 'docente' && teacherScheduleInfo.hasSchedule && filterMyGroupsOnly)
+                  ? allGrGroups.filter(grp => teacherScheduleInfo.groups.includes(grp))
+                  : allGrGroups;
+                return grps.length > 0 ? grps : allGrGroups;
+              })().map((grp) => (
                 <button
                   key={grp}
                   onClick={() => setSelectedGroup(grp)}
@@ -1196,7 +1338,25 @@ export default function TeacherDashboardPage() {
               ⭐ Todas las Materias (Global)
             </button>
 
-            {MATERIAS_DEFAULT.map(mat => (
+            {/* Materias asignadas al docente titular */}
+            {teacherScheduleInfo.materias.map(mat => (
+              <button
+                key={mat}
+                onClick={() => setSelectedMateria(mat)}
+                className={`px-2.5 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center space-x-1 ${
+                  selectedMateria === mat
+                    ? 'bg-gradient-to-r from-emerald-500 to-teal-600 text-white shadow-md shadow-emerald-500/20 ring-1 ring-emerald-300'
+                    : 'bg-emerald-500/10 border border-emerald-500/30 text-emerald-300 hover:bg-emerald-500/20'
+                }`}
+                title={`Materia asignada a ${user?.name}`}
+              >
+                <span>📘</span>
+                <span>{mat}</span>
+              </button>
+            ))}
+
+            {/* Materias generales del plantel */}
+            {MATERIAS_DEFAULT.filter(m => !teacherScheduleInfo.materias.includes(m)).map(mat => (
               <button
                 key={mat}
                 onClick={() => setSelectedMateria(mat)}
@@ -1650,9 +1810,22 @@ export default function TeacherDashboardPage() {
                           )}
                         </td>
 
-                        {/* Entrada Time */}
-                        <td className="py-3.5 px-3 font-mono text-gray-300 text-xs">
-                          {time}
+                        {/* Entrada Time & QR Status */}
+                        <td className="py-3.5 px-3 font-mono text-xs">
+                          {time !== '-' && time !== 'Manual' ? (
+                            <div className="inline-flex items-center space-x-1.5 px-2.5 py-1 rounded-xl bg-emerald-500/15 border border-emerald-500/30 text-emerald-400 font-bold text-xs shadow-sm">
+                              <QrCode size={13} className="shrink-0 text-emerald-400" />
+                              <span>{time}</span>
+                            </div>
+                          ) : time === 'Manual' ? (
+                            <span className="text-cyan-300 font-mono text-[11px] bg-cyan-500/10 px-2 py-0.5 rounded-lg border border-cyan-500/20">
+                              Ajuste Manual
+                            </span>
+                          ) : (
+                            <span className="text-gray-500 font-mono text-[11px] italic">
+                              Sin registro QR hoy
+                            </span>
+                          )}
                         </td>
 
                         {/* Tutor & Phone */}

@@ -701,6 +701,9 @@ export const db = {
         detail: { alumno, asistencia: asistenciaData }
       });
       window.dispatchEvent(event);
+      window.dispatchEvent(new CustomEvent('dojoia_asistencia_registrada', {
+        detail: { alumno, asistencia: asistenciaData }
+      }));
     }
 
     return { asistencia: asistenciaData, alumno, duplicateWarning };

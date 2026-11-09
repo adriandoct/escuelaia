@@ -193,13 +193,15 @@ export const setMateriaWebhook = (materia: string, url: string) => {
 
 // Get stored dates for a group
 export const getStoredClassDates = (grado: string, grupo: string): string[] => {
-  if (typeof window === 'undefined') return DEFAULT_CLASS_DATES;
+  const todayStr = new Date().toISOString().split('T')[0];
+  if (typeof window === 'undefined') {
+    return DEFAULT_CLASS_DATES.includes(todayStr) ? DEFAULT_CLASS_DATES : [...DEFAULT_CLASS_DATES, todayStr].sort();
+  }
   try {
     const raw = localStorage.getItem(`${DATES_LIST_KEY}_${grado}_${grupo}`);
     if (raw) {
       const parsed: string[] = JSON.parse(raw);
       if (Array.isArray(parsed) && parsed.length > 0) {
-        const todayStr = new Date().toISOString().split('T')[0];
         if (!parsed.includes(todayStr)) {
           parsed.push(todayStr);
           parsed.sort();
@@ -210,7 +212,7 @@ export const getStoredClassDates = (grado: string, grupo: string): string[] => {
   } catch (e) {
     console.error(e);
   }
-  return DEFAULT_CLASS_DATES;
+  return DEFAULT_CLASS_DATES.includes(todayStr) ? DEFAULT_CLASS_DATES : [...DEFAULT_CLASS_DATES, todayStr].sort();
 };
 
 // Save custom dates
@@ -305,8 +307,9 @@ export const saveDailyRecord = async (record: TeacherDayStore): Promise<boolean>
 export const resolveStudentStatus = (
   studentId: string,
   todayLogs: Asistencia[],
-  overrides?: Record<string, 'presente' | 'retardo' | 'ausente' | 'justificado'>
-): { status: 'presente' | 'retardo' | 'ausente' | 'justificado'; label: string; time: string } => {
+  overrides?: Record<string, 'presente' | 'retardo' | 'ausente' | 'justificado'>,
+  targetDate?: string
+): { status: 'presente' | 'retardo' | 'ausente' | 'justificado'; label: string; time: string; isQrScan?: boolean } => {
   if (overrides && overrides[studentId]) {
     const ov = overrides[studentId];
     const labels: Record<string, string> = {
@@ -315,18 +318,19 @@ export const resolveStudentStatus = (
       ausente: 'Ausente',
       justificado: 'Justificado'
     };
-    return { status: ov, label: labels[ov] || ov, time: ov === 'ausente' ? '-' : 'Manual' };
+    return { status: ov, label: labels[ov] || ov, time: ov === 'ausente' ? '-' : 'Manual', isQrScan: false };
   }
 
-  const studentLogs = todayLogs.filter(l => l.alumno_id === studentId);
+  const targetDateStr = targetDate || new Date().toISOString().split('T')[0];
+  const studentLogs = todayLogs.filter(l => l.alumno_id === studentId && (l.fecha === targetDateStr || !l.fecha));
   if (studentLogs.length === 0) {
-    return { status: 'ausente', label: 'Ausente', time: '-' };
+    return { status: 'ausente', label: 'Ausente', time: '-', isQrScan: false };
   }
 
   const sorted = [...studentLogs].sort((a, b) => a.hora.localeCompare(b.hora));
   const firstEntry = sorted.find(l => l.tipo === 'entrada');
   if (!firstEntry) {
-    return { status: 'ausente', label: 'Ausente', time: '-' };
+    return { status: 'ausente', label: 'Ausente', time: '-', isQrScan: false };
   }
 
   const [h, m] = firstEntry.hora.split(':').map(Number);
@@ -334,10 +338,10 @@ export const resolveStudentStatus = (
   const isLate = minutes > (7 * 60 + 30);
 
   if (isLate) {
-    return { status: 'retardo', label: 'Retardo', time: firstEntry.hora };
+    return { status: 'retardo', label: 'Retardo', time: firstEntry.hora, isQrScan: true };
   }
 
-  return { status: 'presente', label: 'Presente', time: firstEntry.hora };
+  return { status: 'presente', label: 'Presente', time: firstEntry.hora, isQrScan: true };
 };
 
 // Build Matriz Sábana Rows for all dates x students (matching user's notation A, Ap, App, Rp, J.)
@@ -378,7 +382,7 @@ export const buildMatrizSabanaRows = (
           ...(studentStatusOv ? { [s.id]: studentStatusOv } : {})
         };
 
-        const current = resolveStudentStatus(s.id, todayLogs, effectiveOverrides);
+        const current = resolveStudentStatus(s.id, todayLogs, effectiveOverrides, date);
 
         const matPart = selectedMateria !== 'all'
           ? participacionesPorMateria?.[selectedMateria]?.[s.id]
