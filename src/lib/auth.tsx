@@ -14,6 +14,7 @@ export interface User {
   role: Role;
   matricula?: string;
   numero_empleado?: string;
+  phone?: string;
   avatarUrl?: string;
   isSuperAdmin?: boolean;
 }
@@ -32,12 +33,13 @@ interface AuthContextType {
   usersPasswordsMap: Record<string, string>;
   usersNamesMap: Record<string, string>;
   usersEmployeeNumbersMap: Record<string, string>;
+  usersPhonesMap: Record<string, string>;
   assignUserRole: (email: string, newRole: Role) => void;
   assignUserPassword: (email: string, newPassword: string) => void;
-  addUserAccount: (email: string, role: Role, password?: string, name?: string, numero_empleado?: string) => void;
-  updateUserAccount: (oldEmail: string, newEmail: string, newRole: Role, newPassword?: string, name?: string, numero_empleado?: string) => void;
+  addUserAccount: (email: string, role: Role, password?: string, name?: string, numero_empleado?: string, phone?: string) => void;
+  updateUserAccount: (oldEmail: string, newEmail: string, newRole: Role, newPassword?: string, name?: string, numero_empleado?: string, phone?: string) => void;
   deleteUserAccount: (email: string) => void;
-  importUsersBulk: (users: Array<{ name: string; numero_empleado: string; email: string; role?: Role; password?: string }>) => Promise<{ success: boolean; count: number; error?: string }>;
+  importUsersBulk: (users: Array<{ name: string; numero_empleado: string; email: string; phone?: string; celular?: string; role?: Role; password?: string }>) => Promise<{ success: boolean; count: number; error?: string }>;
   validateInstitutionalDomain: (email: string) => boolean;
 }
 
@@ -48,6 +50,19 @@ const DEFAULT_USERS_ROLES: Record<string, Role> = {
   'prefecto.juan@cecytebc.edu.mx': 'encargado_orden',
   'docente.marcos@cecytebc.edu.mx': 'docente',
   'profesora.mariana@cecytebc.edu.mx': 'docente',
+  'normanroy.cardenas@cecytebc.edu.mx': 'docente',
+  'natanael.duran@cecytebc.edu.mx': 'docente',
+  'maquirre@cecytebc.edu.mx': 'docente',
+  'martin.garibay@cecytebc.edu.mx': 'docente',
+  'luciaedith.loera@cecytebc.edu.mx': 'docente',
+  'jose.ruiz@cecytebc.edu.mx': 'docente',
+  'roxannejudith.moreno@cecytebc.edu.mx': 'docente',
+  'oswaldo.sainz@cecytebc.edu.mx': 'docente',
+  'leonardo.gallegos@cecytebc.edu.mx': 'docente',
+  'beatriz.acosta@cecytebc.edu.mx': 'docente',
+  'lindylisay.leija@cecytebc.edu.mx': 'docente',
+  'filiberto.domingues@cecytebc.edu.mx': 'docente',
+  'filiberto.dominguez@cecytebc.edu.mx': 'docente'
 };
 
 const DEFAULT_USERS_PASSWORDS: Record<string, string> = {
@@ -57,6 +72,19 @@ const DEFAULT_USERS_PASSWORDS: Record<string, string> = {
   'prefecto.juan@cecytebc.edu.mx': 'Cecyte2026!',
   'docente.marcos@cecytebc.edu.mx': 'Cecyte2026!',
   'profesora.mariana@cecytebc.edu.mx': 'Cecyte2026!',
+  'normanroy.cardenas@cecytebc.edu.mx': '5014',
+  'natanael.duran@cecytebc.edu.mx': '3499',
+  'maquirre@cecytebc.edu.mx': '3495',
+  'martin.garibay@cecytebc.edu.mx': '4415',
+  'luciaedith.loera@cecytebc.edu.mx': '3376',
+  'jose.ruiz@cecytebc.edu.mx': '6868',
+  'roxannejudith.moreno@cecytebc.edu.mx': '5016',
+  'oswaldo.sainz@cecytebc.edu.mx': '04731',
+  'leonardo.gallegos@cecytebc.edu.mx': '9612417082',
+  'beatriz.acosta@cecytebc.edu.mx': '6826',
+  'lindylisay.leija@cecytebc.edu.mx': '3835',
+  'filiberto.domingues@cecytebc.edu.mx': '2721008594',
+  'filiberto.dominguez@cecytebc.edu.mx': '2721008594'
 };
 
 const DEFAULT_USERS_NAMES: Record<string, string> = {
@@ -66,6 +94,19 @@ const DEFAULT_USERS_NAMES: Record<string, string> = {
   'prefecto.juan@cecytebc.edu.mx': 'Juan Pérez (Prefecto)',
   'docente.marcos@cecytebc.edu.mx': 'Marcos Mendoza',
   'profesora.mariana@cecytebc.edu.mx': 'Mariana Gómez',
+  'normanroy.cardenas@cecytebc.edu.mx': 'NORMAN ROY CÁRDENAS OSUNA',
+  'natanael.duran@cecytebc.edu.mx': 'NATANAEL DURÁN GARCÍA',
+  'maquirre@cecytebc.edu.mx': 'MARTÍN ERNESTO FLORES AGUIRRE',
+  'martin.garibay@cecytebc.edu.mx': 'MARTÍN GARIBAY BRAVO',
+  'luciaedith.loera@cecytebc.edu.mx': 'LUCÍA EDITH LOERA LARRAÑÁGA',
+  'jose.ruiz@cecytebc.edu.mx': 'JOSÉ ALFREDO RUÍZ CUEVAS',
+  'roxannejudith.moreno@cecytebc.edu.mx': 'ROXANNE JUDITH MORENO MORENO',
+  'oswaldo.sainz@cecytebc.edu.mx': 'OSWALDO CARLOS SAINZ DELGADO',
+  'leonardo.gallegos@cecytebc.edu.mx': 'LEONARDO DANIEL GALLEGOS GONZÁLEZ',
+  'beatriz.acosta@cecytebc.edu.mx': 'BEATRIZ DEL ROSARIO ACOSTA VALENZUELA',
+  'lindylisay.leija@cecytebc.edu.mx': 'LINDY LISAY LEIJA GONZÁLEZ',
+  'filiberto.domingues@cecytebc.edu.mx': 'FILIBERTO DOMÍNGUEZ CRUZ',
+  'filiberto.dominguez@cecytebc.edu.mx': 'FILIBERTO DOMÍNGUEZ CRUZ'
 };
 
 const DEFAULT_USERS_EMPLOYEE_NUMBERS: Record<string, string> = {
@@ -75,6 +116,37 @@ const DEFAULT_USERS_EMPLOYEE_NUMBERS: Record<string, string> = {
   'prefecto.juan@cecytebc.edu.mx': 'EMP-2002',
   'docente.marcos@cecytebc.edu.mx': 'EMP-3001',
   'profesora.mariana@cecytebc.edu.mx': 'EMP-3002',
+  'normanroy.cardenas@cecytebc.edu.mx': '5014',
+  'natanael.duran@cecytebc.edu.mx': '3499',
+  'maquirre@cecytebc.edu.mx': '3495',
+  'martin.garibay@cecytebc.edu.mx': '4415',
+  'luciaedith.loera@cecytebc.edu.mx': '3376',
+  'jose.ruiz@cecytebc.edu.mx': '6868',
+  'roxannejudith.moreno@cecytebc.edu.mx': '5016',
+  'oswaldo.sainz@cecytebc.edu.mx': '04731',
+  'leonardo.gallegos@cecytebc.edu.mx': '9612',
+  'beatriz.acosta@cecytebc.edu.mx': '6826',
+  'lindylisay.leija@cecytebc.edu.mx': '3835',
+  'filiberto.domingues@cecytebc.edu.mx': '2721',
+  'filiberto.dominguez@cecytebc.edu.mx': '2721'
+};
+
+const DEFAULT_USERS_PHONES: Record<string, string> = {
+  'docente.marcos@cecytebc.edu.mx': '6640000001',
+  'profesora.mariana@cecytebc.edu.mx': '6640000002',
+  'normanroy.cardenas@cecytebc.edu.mx': '6642634074',
+  'natanael.duran@cecytebc.edu.mx': '6641606092',
+  'maquirre@cecytebc.edu.mx': '6643315701',
+  'martin.garibay@cecytebc.edu.mx': '6861886614',
+  'luciaedith.loera@cecytebc.edu.mx': '6644193701',
+  'jose.ruiz@cecytebc.edu.mx': '6647500309',
+  'roxannejudith.moreno@cecytebc.edu.mx': '6645965964',
+  'oswaldo.sainz@cecytebc.edu.mx': '6642030564',
+  'leonardo.gallegos@cecytebc.edu.mx': '9612417082',
+  'beatriz.acosta@cecytebc.edu.mx': '6642567592',
+  'lindylisay.leija@cecytebc.edu.mx': '6631275881',
+  'filiberto.domingues@cecytebc.edu.mx': '2721008594',
+  'filiberto.dominguez@cecytebc.edu.mx': '2721008594'
 };
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -86,12 +158,14 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [usersPasswordsMap, setUsersPasswordsMap] = useState<Record<string, string>>(DEFAULT_USERS_PASSWORDS);
   const [usersNamesMap, setUsersNamesMap] = useState<Record<string, string>>(DEFAULT_USERS_NAMES);
   const [usersEmployeeNumbersMap, setUsersEmployeeNumbersMap] = useState<Record<string, string>>(DEFAULT_USERS_EMPLOYEE_NUMBERS);
+  const [usersPhonesMap, setUsersPhonesMap] = useState<Record<string, string>>(DEFAULT_USERS_PHONES);
 
   const persistRolesLocally = (
     roles?: Record<string, Role>,
     passwords?: Record<string, string>,
     names?: Record<string, string>,
-    employeeNumbers?: Record<string, string>
+    employeeNumbers?: Record<string, string>,
+    phones?: Record<string, string>
   ) => {
     if (typeof window === 'undefined') return;
     try {
@@ -114,6 +188,11 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         const serializedEmp = JSON.stringify(employeeNumbers);
         localStorage.setItem('dojoia_users_emp_nums', serializedEmp);
         localStorage.setItem('dojoia_users_emp_nums_vault', serializedEmp);
+      }
+      if (phones) {
+        const serializedPhones = JSON.stringify(phones);
+        localStorage.setItem('dojoia_users_phones', serializedPhones);
+        localStorage.setItem('dojoia_users_phones_vault', serializedPhones);
       }
     } catch (e) {
       console.error('Error saving roles/passwords to local storage:', e);
@@ -183,9 +262,24 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
     setUsersEmployeeNumbersMap(initialEmpNums);
 
-    persistRolesLocally(initialRoles, initialPasswords, initialNames, initialEmpNums);
+    // 5. Cargar números de celular locales
+    let initialPhones: Record<string, string> = { ...DEFAULT_USERS_PHONES };
+    const savedPhones = localStorage.getItem('dojoia_users_phones') || localStorage.getItem('dojoia_users_phones_vault');
+    if (savedPhones) {
+      try {
+        const parsedPhones = JSON.parse(savedPhones);
+        if (parsedPhones && typeof parsedPhones === 'object') {
+          initialPhones = { ...initialPhones, ...parsedPhones };
+        }
+      } catch (e) {
+        console.error('Error loading stored phones:', e);
+      }
+    }
+    setUsersPhonesMap(initialPhones);
 
-    // 5. Sincronizar con el servidor (/api/roles) para persistencia permanente en la nube
+    persistRolesLocally(initialRoles, initialPasswords, initialNames, initialEmpNums, initialPhones);
+
+    // 6. Sincronizar con el servidor (/api/roles) para persistencia permanente en la nube
     fetch('/api/roles')
       .then(res => res.json())
       .then(data => {
@@ -216,6 +310,13 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
               const mergedEmp = { ...DEFAULT_USERS_EMPLOYEE_NUMBERS, ...prev, ...data.employeeNumbers };
               persistRolesLocally(undefined, undefined, undefined, mergedEmp);
               return mergedEmp;
+            });
+          }
+          if (data.phones && typeof data.phones === 'object') {
+            setUsersPhonesMap(prev => {
+              const mergedPhones = { ...DEFAULT_USERS_PHONES, ...prev, ...data.phones };
+              persistRolesLocally(undefined, undefined, undefined, undefined, mergedPhones);
+              return mergedPhones;
             });
           }
         }
@@ -266,18 +367,28 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     return cleanEmail.endsWith('@cecytebc.edu.mx');
   };
 
-  // Direct login with email or employee number and password for ANY registered user
+  // Direct login with email, employee number, or phone and password for ANY registered user
   const loginWithCredentials = (emailOrEmployeeNum: string, pass: string): { success: boolean; error?: string } => {
     const rawInput = String(emailOrEmployeeNum || '').trim();
     const cleanInput = rawInput.toLowerCase();
+    const cleanDigits = rawInput.replace(/\D/g, '');
 
-    // Check if user entered an employee number instead of email
+    // Check if user entered an employee number or phone instead of email
     let cleanEmail = cleanInput;
     const matchByEmpNum = Object.entries(usersEmployeeNumbersMap).find(
       ([_, empNum]) => String(empNum || '').trim().toLowerCase() === cleanInput
     );
+    const matchByPhone = cleanDigits.length >= 7 ? Object.entries(usersPhonesMap).find(
+      ([_, phone]) => {
+        const pDigits = String(phone || '').replace(/\D/g, '');
+        return pDigits.length >= 7 && (pDigits.endsWith(cleanDigits) || cleanDigits.endsWith(pDigits));
+      }
+    ) : undefined;
+
     if (matchByEmpNum) {
       cleanEmail = matchByEmpNum[0].toLowerCase();
+    } else if (matchByPhone) {
+      cleanEmail = matchByPhone[0].toLowerCase();
     }
 
     // Check if user exists in the system
@@ -285,26 +396,32 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     if (!userRole) {
       return { 
         success: false, 
-        error: `El usuario o No. de empleado '${rawInput}' no está registrado en el directorio institucional.` 
+        error: `El usuario, No. de empleado o celular '${rawInput}' no está registrado en el directorio institucional.` 
       };
     }
 
-    // Check password: user custom password, their employee number, or default
+    // Check password: user custom password, their employee number, their phone, or default
     const expectedPassword = usersPasswordsMap[cleanEmail] || 
       usersEmployeeNumbersMap[cleanEmail] || 
       (cleanEmail === 'admin@admin.com' ? '12345678Cecyte' : 'Cecyte2026!');
 
     const empNum = usersEmployeeNumbersMap[cleanEmail];
+    const userPhone = usersPhonesMap[cleanEmail];
+    const passDigits = pass.replace(/\D/g, '');
+    const phoneDigits = userPhone ? userPhone.replace(/\D/g, '') : '';
+
     const isCorrectPassword = 
       pass === expectedPassword || 
       (empNum && pass === empNum) || 
+      (userPhone && pass === userPhone) ||
+      (phoneDigits.length >= 7 && passDigits.length >= 7 && (phoneDigits.endsWith(passDigits) || passDigits.endsWith(phoneDigits))) ||
       (pass === 'Cecyte2026!') || 
       (cleanEmail === 'admin@admin.com' && pass === '12345678Cecyte');
 
     if (!isCorrectPassword) {
       return { 
         success: false, 
-        error: `Contraseña incorrecta para ${cleanEmail}. Puedes usar tu contraseña asignada o tu número de empleado.` 
+        error: `Contraseña incorrecta para ${cleanEmail}. Puedes usar tu clave asignada, número de empleado o celular.` 
       };
     }
 
@@ -318,6 +435,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       email: cleanEmail,
       role: userRole,
       numero_empleado: usersEmployeeNumbersMap[cleanEmail],
+      phone: usersPhonesMap[cleanEmail],
       isSuperAdmin: cleanEmail === 'admin@admin.com',
       avatarUrl: `https://api.dicebear.com/7.x/avataaars/svg?seed=${cleanEmail}`,
     };
@@ -444,7 +562,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     role: Role, 
     password?: string,
     name?: string,
-    numero_empleado?: string
+    numero_empleado?: string,
+    phone?: string
   ) => {
     const cleanEmail = email.trim().toLowerCase();
     const updatedRoles = { ...usersRolesMap, [cleanEmail]: role };
@@ -472,7 +591,13 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       setUsersEmployeeNumbersMap(updatedEmpNums);
     }
 
-    persistRolesLocally(updatedRoles, updatedPasswords, updatedNames, updatedEmpNums);
+    let updatedPhones = usersPhonesMap;
+    if (phone) {
+      updatedPhones = { ...usersPhonesMap, [cleanEmail]: phone.trim() };
+      setUsersPhonesMap(updatedPhones);
+    }
+
+    persistRolesLocally(updatedRoles, updatedPasswords, updatedNames, updatedEmpNums, updatedPhones);
 
     // Persistir en servidor permanentemente
     fetch('/api/roles', {
@@ -484,7 +609,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         role, 
         password: updatedPasswords[cleanEmail], 
         name: updatedNames[cleanEmail], 
-        numero_empleado: updatedEmpNums[cleanEmail] 
+        numero_empleado: updatedEmpNums[cleanEmail],
+        phone: updatedPhones[cleanEmail]
       })
     }).catch(err => console.error('Error sincronizando nuevo usuario en servidor:', err));
   };
@@ -495,7 +621,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     newRole: Role, 
     newPassword?: string,
     name?: string,
-    numero_empleado?: string
+    numero_empleado?: string,
+    phone?: string
   ) => {
     const cleanOld = oldEmail.trim().toLowerCase();
     const cleanNew = newEmail.trim().toLowerCase();
@@ -543,7 +670,19 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
     setUsersEmployeeNumbersMap(updatedEmpNums);
 
-    persistRolesLocally(updatedRoles, updatedPasswords, updatedNames, updatedEmpNums);
+    const updatedPhones = { ...usersPhonesMap };
+    const prevPhone = updatedPhones[cleanOld];
+    if (cleanOld !== cleanNew) {
+      delete updatedPhones[cleanOld];
+    }
+    if (phone) {
+      updatedPhones[cleanNew] = phone.trim();
+    } else if (prevPhone) {
+      updatedPhones[cleanNew] = prevPhone;
+    }
+    setUsersPhonesMap(updatedPhones);
+
+    persistRolesLocally(updatedRoles, updatedPasswords, updatedNames, updatedEmpNums, updatedPhones);
 
     // Persistir en servidor permanentemente
     fetch('/api/roles', {
@@ -556,7 +695,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         role: newRole, 
         password: updatedPasswords[cleanNew],
         name: updatedNames[cleanNew],
-        numero_empleado: updatedEmpNums[cleanNew]
+        numero_empleado: updatedEmpNums[cleanNew],
+        phone: updatedPhones[cleanNew]
       })
     }).catch(err => console.error('Error sincronizando edición de usuario en servidor:', err));
 
@@ -567,7 +707,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         email: cleanNew,
         name: updatedNames[cleanNew] || cleanNew.split('@')[0].replace('.', ' ').toUpperCase(),
         role: newRole,
-        numero_empleado: updatedEmpNums[cleanNew]
+        numero_empleado: updatedEmpNums[cleanNew],
+        phone: updatedPhones[cleanNew]
       });
     }
   };
@@ -595,7 +736,11 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     delete updatedEmpNums[cleanEmail];
     setUsersEmployeeNumbersMap(updatedEmpNums);
 
-    persistRolesLocally(updatedRoles, updatedPasswords, updatedNames, updatedEmpNums);
+    const updatedPhones = { ...usersPhonesMap };
+    delete updatedPhones[cleanEmail];
+    setUsersPhonesMap(updatedPhones);
+
+    persistRolesLocally(updatedRoles, updatedPasswords, updatedNames, updatedEmpNums, updatedPhones);
 
     // Persistir en servidor permanentemente
     fetch('/api/roles', {
@@ -606,7 +751,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   const importUsersBulk = async (
-    users: Array<{ name: string; numero_empleado: string; email: string; role?: Role; password?: string }>
+    users: Array<{ name: string; numero_empleado: string; email: string; phone?: string; celular?: string; role?: Role; password?: string }>
   ): Promise<{ success: boolean; count: number; error?: string }> => {
     try {
       if (!Array.isArray(users) || users.length === 0) {
@@ -617,6 +762,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       const updatedPasswords = { ...usersPasswordsMap };
       const updatedNames = { ...usersNamesMap };
       const updatedEmpNums = { ...usersEmployeeNumbersMap };
+      const updatedPhones = { ...usersPhonesMap };
 
       let count = 0;
       users.forEach(u => {
@@ -627,12 +773,15 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         updatedRoles[cleanEmail] = u.role || 'docente';
         if (u.name) updatedNames[cleanEmail] = u.name.trim();
         if (u.numero_empleado) updatedEmpNums[cleanEmail] = u.numero_empleado.trim();
+        if (u.phone || u.celular) updatedPhones[cleanEmail] = String(u.phone || u.celular).trim();
 
         // Contraseña
         if (u.password) {
           updatedPasswords[cleanEmail] = u.password.trim();
         } else if (u.numero_empleado) {
           updatedPasswords[cleanEmail] = u.numero_empleado.trim();
+        } else if (u.phone || u.celular) {
+          updatedPasswords[cleanEmail] = String(u.phone || u.celular).trim();
         } else if (!updatedPasswords[cleanEmail]) {
           updatedPasswords[cleanEmail] = 'Cecyte2026!';
         }
@@ -643,8 +792,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       setUsersPasswordsMap(updatedPasswords);
       setUsersNamesMap(updatedNames);
       setUsersEmployeeNumbersMap(updatedEmpNums);
+      setUsersPhonesMap(updatedPhones);
 
-      persistRolesLocally(updatedRoles, updatedPasswords, updatedNames, updatedEmpNums);
+      persistRolesLocally(updatedRoles, updatedPasswords, updatedNames, updatedEmpNums, updatedPhones);
 
       // Sincronizar en servidor permanentemente
       await fetch('/api/roles', {
@@ -676,6 +826,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         usersPasswordsMap,
         usersNamesMap,
         usersEmployeeNumbersMap,
+        usersPhonesMap,
         assignUserRole,
         assignUserPassword,
         addUserAccount,

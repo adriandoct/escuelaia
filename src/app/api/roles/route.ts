@@ -10,6 +10,7 @@ interface RolesData {
   passwords: Record<string, string>;
   names: Record<string, string>;
   employeeNumbers: Record<string, string>;
+  phones: Record<string, string>;
 }
 
 const DEFAULT_DATA: RolesData = {
@@ -19,7 +20,20 @@ const DEFAULT_DATA: RolesData = {
     'orden.general@cecytebc.edu.mx': 'encargado_orden',
     'prefecto.juan@cecytebc.edu.mx': 'encargado_orden',
     'docente.marcos@cecytebc.edu.mx': 'docente',
-    'profesora.mariana@cecytebc.edu.mx': 'docente'
+    'profesora.mariana@cecytebc.edu.mx': 'docente',
+    'normanroy.cardenas@cecytebc.edu.mx': 'docente',
+    'natanael.duran@cecytebc.edu.mx': 'docente',
+    'maquirre@cecytebc.edu.mx': 'docente',
+    'martin.garibay@cecytebc.edu.mx': 'docente',
+    'luciaedith.loera@cecytebc.edu.mx': 'docente',
+    'jose.ruiz@cecytebc.edu.mx': 'docente',
+    'roxannejudith.moreno@cecytebc.edu.mx': 'docente',
+    'oswaldo.sainz@cecytebc.edu.mx': 'docente',
+    'leonardo.gallegos@cecytebc.edu.mx': 'docente',
+    'beatriz.acosta@cecytebc.edu.mx': 'docente',
+    'lindylisay.leija@cecytebc.edu.mx': 'docente',
+    'filiberto.domingues@cecytebc.edu.mx': 'docente',
+    'filiberto.dominguez@cecytebc.edu.mx': 'docente'
   },
   passwords: {
     'admin@admin.com': '12345678Cecyte',
@@ -27,7 +41,20 @@ const DEFAULT_DATA: RolesData = {
     'orden.general@cecytebc.edu.mx': 'Cecyte2026!',
     'prefecto.juan@cecytebc.edu.mx': 'Cecyte2026!',
     'docente.marcos@cecytebc.edu.mx': 'Cecyte2026!',
-    'profesora.mariana@cecytebc.edu.mx': 'Cecyte2026!'
+    'profesora.mariana@cecytebc.edu.mx': 'Cecyte2026!',
+    'normanroy.cardenas@cecytebc.edu.mx': '5014',
+    'natanael.duran@cecytebc.edu.mx': '3499',
+    'maquirre@cecytebc.edu.mx': '3495',
+    'martin.garibay@cecytebc.edu.mx': '4415',
+    'luciaedith.loera@cecytebc.edu.mx': '3376',
+    'jose.ruiz@cecytebc.edu.mx': '6868',
+    'roxannejudith.moreno@cecytebc.edu.mx': '5016',
+    'oswaldo.sainz@cecytebc.edu.mx': '04731',
+    'leonardo.gallegos@cecytebc.edu.mx': '9612417082',
+    'beatriz.acosta@cecytebc.edu.mx': '6826',
+    'lindylisay.leija@cecytebc.edu.mx': '3835',
+    'filiberto.domingues@cecytebc.edu.mx': '2721008594',
+    'filiberto.dominguez@cecytebc.edu.mx': '2721008594'
   },
   names: {
     'admin@admin.com': 'Super Administrador CECYTE',
@@ -35,7 +62,20 @@ const DEFAULT_DATA: RolesData = {
     'orden.general@cecytebc.edu.mx': 'Prefectura General',
     'prefecto.juan@cecytebc.edu.mx': 'Juan Pérez (Prefecto)',
     'docente.marcos@cecytebc.edu.mx': 'Marcos Mendoza',
-    'profesora.mariana@cecytebc.edu.mx': 'Mariana Gómez'
+    'profesora.mariana@cecytebc.edu.mx': 'Mariana Gómez',
+    'normanroy.cardenas@cecytebc.edu.mx': 'NORMAN ROY CÁRDENAS OSUNA',
+    'natanael.duran@cecytebc.edu.mx': 'NATANAEL DURÁN GARCÍA',
+    'maquirre@cecytebc.edu.mx': 'MARTÍN ERNESTO FLORES AGUIRRE',
+    'martin.garibay@cecytebc.edu.mx': 'MARTÍN GARIBAY BRAVO',
+    'luciaedith.loera@cecytebc.edu.mx': 'LUCÍA EDITH LOERA LARRAÑÁGA',
+    'jose.ruiz@cecytebc.edu.mx': 'JOSÉ ALFREDO RUÍZ CUEVAS',
+    'roxannejudith.moreno@cecytebc.edu.mx': 'ROXANNE JUDITH MORENO MORENO',
+    'oswaldo.sainz@cecytebc.edu.mx': 'OSWALDO CARLOS SAINZ DELGADO',
+    'leonardo.gallegos@cecytebc.edu.mx': 'LEONARDO DANIEL GALLEGOS GONZÁLEZ',
+    'beatriz.acosta@cecytebc.edu.mx': 'BEATRIZ DEL ROSARIO ACOSTA VALENZUELA',
+    'lindylisay.leija@cecytebc.edu.mx': 'LINDY LISAY LEIJA GONZÁLEZ',
+    'filiberto.domingues@cecytebc.edu.mx': 'FILIBERTO DOMÍNGUEZ CRUZ',
+    'filiberto.dominguez@cecytebc.edu.mx': 'FILIBERTO DOMÍNGUEZ CRUZ'
   },
   employeeNumbers: {
     'admin@admin.com': 'EMP-0001',
@@ -43,7 +83,37 @@ const DEFAULT_DATA: RolesData = {
     'orden.general@cecytebc.edu.mx': 'EMP-2001',
     'prefecto.juan@cecytebc.edu.mx': 'EMP-2002',
     'docente.marcos@cecytebc.edu.mx': 'EMP-3001',
-    'profesora.mariana@cecytebc.edu.mx': 'EMP-3002'
+    'profesora.mariana@cecytebc.edu.mx': 'EMP-3002',
+    'normanroy.cardenas@cecytebc.edu.mx': '5014',
+    'natanael.duran@cecytebc.edu.mx': '3499',
+    'maquirre@cecytebc.edu.mx': '3495',
+    'martin.garibay@cecytebc.edu.mx': '4415',
+    'luciaedith.loera@cecytebc.edu.mx': '3376',
+    'jose.ruiz@cecytebc.edu.mx': '6868',
+    'roxannejudith.moreno@cecytebc.edu.mx': '5016',
+    'oswaldo.sainz@cecytebc.edu.mx': '04731',
+    'leonardo.gallegos@cecytebc.edu.mx': '9612',
+    'beatriz.acosta@cecytebc.edu.mx': '6826',
+    'lindylisay.leija@cecytebc.edu.mx': '3835',
+    'filiberto.domingues@cecytebc.edu.mx': '2721',
+    'filiberto.dominguez@cecytebc.edu.mx': '2721'
+  },
+  phones: {
+    'docente.marcos@cecytebc.edu.mx': '6640000001',
+    'profesora.mariana@cecytebc.edu.mx': '6640000002',
+    'normanroy.cardenas@cecytebc.edu.mx': '6642634074',
+    'natanael.duran@cecytebc.edu.mx': '6641606092',
+    'maquirre@cecytebc.edu.mx': '6643315701',
+    'martin.garibay@cecytebc.edu.mx': '6861886614',
+    'luciaedith.loera@cecytebc.edu.mx': '6644193701',
+    'jose.ruiz@cecytebc.edu.mx': '6647500309',
+    'roxannejudith.moreno@cecytebc.edu.mx': '6645965964',
+    'oswaldo.sainz@cecytebc.edu.mx': '6642030564',
+    'leonardo.gallegos@cecytebc.edu.mx': '9612417082',
+    'beatriz.acosta@cecytebc.edu.mx': '6642567592',
+    'lindylisay.leija@cecytebc.edu.mx': '6631275881',
+    'filiberto.domingues@cecytebc.edu.mx': '2721008594',
+    'filiberto.dominguez@cecytebc.edu.mx': '2721008594'
   }
 };
 
@@ -63,7 +133,8 @@ const readRolesData = (): RolesData => {
     roles: { ...DEFAULT_DATA.roles },
     passwords: { ...DEFAULT_DATA.passwords },
     names: { ...DEFAULT_DATA.names },
-    employeeNumbers: { ...DEFAULT_DATA.employeeNumbers }
+    employeeNumbers: { ...DEFAULT_DATA.employeeNumbers },
+    phones: { ...DEFAULT_DATA.phones }
   };
 
   const tryRead = (filePath: string) => {
@@ -76,7 +147,8 @@ const readRolesData = (): RolesData => {
             roles: { ...data.roles, ...(parsed.roles || {}) },
             passwords: { ...data.passwords, ...(parsed.passwords || {}) },
             names: { ...data.names, ...(parsed.names || {}) },
-            employeeNumbers: { ...data.employeeNumbers, ...(parsed.employeeNumbers || {}) }
+            employeeNumbers: { ...data.employeeNumbers, ...(parsed.employeeNumbers || {}) },
+            phones: { ...data.phones, ...(parsed.phones || {}) }
           };
         }
       }
@@ -119,13 +191,14 @@ export async function GET() {
 export async function POST(req: Request) {
   try {
     const body = await req.json();
-    const { action, email, role, password, name, numero_empleado, oldEmail, newEmail } = body || {};
+    const { action, email, role, password, name, numero_empleado, phone, oldEmail, newEmail } = body || {};
 
     const current = readRolesData();
     const roles: Record<string, string> = { ...current.roles };
     const passwords: Record<string, string> = { ...current.passwords };
     const names: Record<string, string> = { ...current.names };
     const employeeNumbers: Record<string, string> = { ...current.employeeNumbers };
+    const phones: Record<string, string> = { ...current.phones };
 
     if (action === 'assignRole' && email && role) {
       const cleanEmail = String(email).trim().toLowerCase();
@@ -145,6 +218,7 @@ export async function POST(req: Request) {
       }
       if (name) names[cleanEmail] = String(name).trim();
       if (numero_empleado) employeeNumbers[cleanEmail] = String(numero_empleado).trim();
+      if (phone) phones[cleanEmail] = String(phone).trim();
     } else if (action === 'updateUser') {
       const cleanOld = String(oldEmail || '').trim().toLowerCase();
       const cleanNew = String(newEmail || cleanOld).trim().toLowerCase();
@@ -157,6 +231,8 @@ export async function POST(req: Request) {
           delete names[cleanOld];
           const prevEmpNum = employeeNumbers[cleanOld];
           delete employeeNumbers[cleanOld];
+          const prevPhone = phones[cleanOld];
+          delete phones[cleanOld];
 
           if (password) {
             passwords[cleanNew] = String(password).trim();
@@ -173,10 +249,16 @@ export async function POST(req: Request) {
           } else if (prevEmpNum) {
             employeeNumbers[cleanNew] = prevEmpNum;
           }
+          if (phone) {
+            phones[cleanNew] = String(phone).trim();
+          } else if (prevPhone) {
+            phones[cleanNew] = prevPhone;
+          }
         } else {
           if (password) passwords[cleanNew] = String(password).trim();
           if (name) names[cleanNew] = String(name).trim();
           if (numero_empleado) employeeNumbers[cleanNew] = String(numero_empleado).trim();
+          if (phone) phones[cleanNew] = String(phone).trim();
         }
         if (role) {
           roles[cleanNew] = role;
@@ -189,6 +271,7 @@ export async function POST(req: Request) {
         delete passwords[cleanEmail];
         delete names[cleanEmail];
         delete employeeNumbers[cleanEmail];
+        delete phones[cleanEmail];
       }
     } else if (action === 'importUsers' && Array.isArray(body.users)) {
       body.users.forEach((u: any) => {
@@ -206,6 +289,11 @@ export async function POST(req: Request) {
         // Número de Empleado
         if (u.numero_empleado) employeeNumbers[cleanEmail] = String(u.numero_empleado).trim();
 
+        // Celular
+        if (u.celular || u.phone || u.telefono) {
+          phones[cleanEmail] = String(u.celular || u.phone || u.telefono).trim();
+        }
+
         // Contraseña inicial: usar la proporcionada, el número de empleado o Cecyte2026!
         if (u.password) {
           passwords[cleanEmail] = String(u.password).trim();
@@ -220,6 +308,7 @@ export async function POST(req: Request) {
       if (body.passwords) Object.assign(passwords, body.passwords);
       if (body.names) Object.assign(names, body.names);
       if (body.employeeNumbers) Object.assign(employeeNumbers, body.employeeNumbers);
+      if (body.phones) Object.assign(phones, body.phones);
     }
 
     // Always ensure admin@admin.com remains protected
@@ -231,7 +320,7 @@ export async function POST(req: Request) {
       names['admin@admin.com'] = 'Super Administrador CECYTE';
     }
 
-    const updatedData: RolesData = { roles, passwords, names, employeeNumbers };
+    const updatedData: RolesData = { roles, passwords, names, employeeNumbers, phones };
     writeRolesData(updatedData);
 
     return NextResponse.json({ success: true, ...updatedData });

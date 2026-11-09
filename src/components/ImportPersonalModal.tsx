@@ -16,13 +16,14 @@ interface ImportPersonalModalProps {
   isOpen: boolean;
   onClose: () => void;
   onImportSuccess: (count: number) => void;
-  importUsersBulk: (users: Array<{ name: string; numero_empleado: string; email: string; role?: Role; password?: string }>) => Promise<{ success: boolean; count: number; error?: string }>;
+  importUsersBulk: (users: Array<{ name: string; numero_empleado: string; email: string; phone?: string; celular?: string; role?: Role; password?: string }>) => Promise<{ success: boolean; count: number; error?: string }>;
 }
 
 export interface ParsedEmployee {
   name: string;
   numero_empleado: string;
   email: string;
+  phone?: string;
   role: Role;
   password?: string;
   isValid: boolean;
@@ -91,6 +92,7 @@ export default function ImportPersonalModal({
     let headerRowIndex = 0;
     let nameCol = -1;
     let empNumCol = -1;
+    let phoneCol = -1;
     let emailCol = -1;
     let roleCol = -1;
 
@@ -100,11 +102,16 @@ export default function ImportPersonalModal({
 
       row.forEach((cell, idx) => {
         const text = normalize(String(cell || ''));
-        if (nameCol === -1 && (text.includes('nombre') || text.includes('empleado') || text.includes('docente') || text.includes('personal') || text.includes('trabajador'))) {
+        const isSequential = text === 'no' || text === 'no.' || text === '#' || text === 'num' || text === 'num.' || text === 'consecutivo';
+
+        if (nameCol === -1 && (text.includes('nombre') || (text.includes('docente') && !text.includes('rol')) || text.includes('personal') || text.includes('trabajador'))) {
           nameCol = idx;
         }
-        if (empNumCol === -1 && (text.includes('num') || text.includes('no.') || text.includes('clave') || text.includes('id') || text.includes('nomina') || text.includes('control') || text.includes('empleado'))) {
+        if (empNumCol === -1 && !isSequential && (text.includes('empleado') || text.includes('clave') || text.includes('id') || text.includes('nomina') || text.includes('control') || text.includes('no. emp') || text.includes('no emp'))) {
           if (idx !== nameCol) empNumCol = idx;
+        }
+        if (phoneCol === -1 && (text.includes('celular') || text.includes('telefono') || text.includes('tel') || text.includes('movil') || text.includes('phone'))) {
+          phoneCol = idx;
         }
         if (emailCol === -1 && (text.includes('correo') || text.includes('email') || text.includes('mail') || text.includes('institucional'))) {
           emailCol = idx;
@@ -132,12 +139,13 @@ export default function ImportPersonalModal({
       if (!Array.isArray(row) || row.length === 0) continue;
 
       const rawName = String(row[nameCol] || '').trim();
-      const rawEmpNum = String(row[empNumCol] || '').trim();
+      const rawEmpNum = empNumCol !== -1 ? String(row[empNumCol] || '').trim() : '';
+      const rawPhone = phoneCol !== -1 ? String(row[phoneCol] || '').trim() : '';
       const rawEmail = String(row[emailCol] || '').trim().toLowerCase();
       const rawRole = roleCol !== -1 ? String(row[roleCol] || '') : '';
 
       // Skip empty row
-      if (!rawName && !rawEmpNum && !rawEmail) continue;
+      if (!rawName && !rawEmpNum && !rawEmail && !rawPhone) continue;
 
       let email = rawEmail;
       // If email doesn't have @, attempt creating from name or empNum if domain can be added
@@ -159,6 +167,7 @@ export default function ImportPersonalModal({
         name: rawName || `Empleado ${rawEmpNum}`,
         numero_empleado: rawEmpNum || `EMP-${r}`,
         email,
+        phone: rawPhone,
         role: rawRole ? parseRole(rawRole) : defaultRole,
         isValid,
         errorReason
@@ -187,13 +196,16 @@ export default function ImportPersonalModal({
       if (tableRows.length > 1) {
         let nameCol = 0;
         let empNumCol = 1;
+        let phoneCol = -1;
         let emailCol = 2;
 
         const firstRowCells = Array.from(tableRows[0].querySelectorAll('th, td')).map(c => normalize(c.textContent || ''));
         firstRowCells.forEach((text, idx) => {
-          if (text.includes('nombre') || text.includes('empleado') || text.includes('docente')) nameCol = idx;
-          if (text.includes('num') || text.includes('no.') || text.includes('clave') || text.includes('id')) empNumCol = idx;
-          if (text.includes('correo') || text.includes('email') || text.includes('mail')) emailCol = idx;
+          const isSequential = text === 'no' || text === 'no.' || text === '#' || text === 'num' || text === 'num.' || text === 'consecutivo';
+          if (nameCol === -1 && (text.includes('nombre') || text.includes('docente') || text.includes('personal'))) nameCol = idx;
+          if (empNumCol === -1 && !isSequential && (text.includes('empleado') || text.includes('clave') || text.includes('id') || text.includes('no. emp') || text.includes('no emp'))) empNumCol = idx;
+          if (phoneCol === -1 && (text.includes('celular') || text.includes('telefono') || text.includes('tel') || text.includes('movil') || text.includes('phone'))) phoneCol = idx;
+          if (emailCol === -1 && (text.includes('correo') || text.includes('email') || text.includes('mail'))) emailCol = idx;
         });
 
         for (let i = 1; i < tableRows.length; i++) {
@@ -201,10 +213,11 @@ export default function ImportPersonalModal({
           if (cells.length === 0) continue;
 
           const rawName = (cells[nameCol]?.textContent || '').trim();
-          const rawEmpNum = (cells[empNumCol]?.textContent || '').trim();
+          const rawEmpNum = empNumCol !== -1 ? (cells[empNumCol]?.textContent || '').trim() : '';
+          const rawPhone = phoneCol !== -1 ? (cells[phoneCol]?.textContent || '').trim() : '';
           let rawEmail = (cells[emailCol]?.textContent || '').trim().toLowerCase();
 
-          if (!rawName && !rawEmpNum && !rawEmail) continue;
+          if (!rawName && !rawEmpNum && !rawEmail && !rawPhone) continue;
 
           if (rawEmail && !rawEmail.includes('@')) {
             rawEmail = `${rawEmail}@cecytebc.edu.mx`;
@@ -217,6 +230,7 @@ export default function ImportPersonalModal({
             name: rawName || `Empleado ${rawEmpNum}`,
             numero_empleado: rawEmpNum || `EMP-${i}`,
             email: rawEmail,
+            phone: rawPhone,
             role: defaultRole,
             isValid,
             errorReason: isValid ? undefined : 'Correo o datos incompletos en fila de tabla Word.'
@@ -362,6 +376,8 @@ export default function ImportPersonalModal({
           name: emp.name,
           numero_empleado: emp.numero_empleado,
           email: emp.email,
+          phone: emp.phone,
+          celular: emp.phone,
           role: emp.role || defaultRole,
           password: finalPassword
         };
@@ -690,3 +706,4 @@ export default function ImportPersonalModal({
     </div>
   );
 }
+

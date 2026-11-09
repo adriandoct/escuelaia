@@ -7,7 +7,7 @@ import { useAuth, Role } from '@/lib/auth';
 import { 
   Shield, CheckCircle2, Lock, Plus, Trash2, Key, Edit, X, Check, 
   Mail, AlertCircle, Eye, EyeOff, Sparkles, UserCheck, Upload,
-  FileSpreadsheet, FileText, Hash, User
+  FileSpreadsheet, FileText, Hash, User, Phone
 } from 'lucide-react';
 import ImportPersonalModal from '@/components/ImportPersonalModal';
 
@@ -19,6 +19,7 @@ export default function RolesManagementPage() {
     usersPasswordsMap, 
     usersNamesMap,
     usersEmployeeNumbersMap,
+    usersPhonesMap,
     assignUserRole, 
     assignUserPassword, 
     addUserAccount, 
@@ -486,6 +487,12 @@ export default function RolesManagementPage() {
                             <Mail size={12} className="text-cyan-400 shrink-0" />
                             <span className="truncate max-w-[170px] sm:max-w-none">{email}</span>
                           </div>
+                          {usersPhonesMap?.[email] && (
+                            <div className="flex items-center space-x-1.5 text-[10px] text-emerald-400 font-mono">
+                              <Phone size={10} className="text-emerald-400 shrink-0" />
+                              <span>{usersPhonesMap[email]}</span>
+                            </div>
+                          )}
                         </div>
                       </td>
 
