@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import fs from 'fs';
 import path from 'path';
+import masterAlumnosList from '../../../../data/alumnos.json';
 
 const PRIMARY_FILE = path.join(process.cwd(), 'data', 'alumnos.json');
 const TMP_FILE = path.join('/tmp', 'alumnos.json');
@@ -19,7 +20,17 @@ const getWritablePath = () => {
 const readLocalData = (): any[] => {
   const map = new Map<string, any>();
 
-  // Helper to safely parse file
+  // 1. Baseline with official bundled master student database (529 real students)
+  if (Array.isArray(masterAlumnosList)) {
+    masterAlumnosList.forEach(st => {
+      if (st && st.matricula) {
+        const mat = String(st.matricula).trim();
+        if (mat) map.set(mat, st);
+      }
+    });
+  }
+
+  // 2. Merge filesystem overrides if available
   const tryRead = (filePath: string) => {
     try {
       if (fs.existsSync(filePath)) {
@@ -29,7 +40,10 @@ const readLocalData = (): any[] => {
           list.forEach(st => {
             if (st && st.matricula) {
               const mat = String(st.matricula).trim();
-              if (mat && !map.has(mat)) map.set(mat, st);
+              if (mat) {
+                const prev = map.get(mat) || {};
+                map.set(mat, { ...prev, ...st });
+              }
             }
           });
         }
@@ -39,9 +53,8 @@ const readLocalData = (): any[] => {
     }
   };
 
-  // Read TMP_FILE first so runtime updates on serverless/Vercel take precedence over static PRIMARY_FILE
-  tryRead(TMP_FILE);
   tryRead(PRIMARY_FILE);
+  tryRead(TMP_FILE);
 
   return Array.from(map.values());
 };

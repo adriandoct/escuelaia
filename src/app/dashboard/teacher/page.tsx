@@ -36,6 +36,7 @@ import {
 import HorarioSemanalGrid from '@/components/horarios/HorarioSemanalGrid';
 import ReporteHorariosPorGrupo from '@/components/horarios/ReporteHorariosPorGrupo';
 import SubirHorariosModal from '@/components/horarios/SubirHorariosModal';
+import masterAlumnosFallback from '../../../../data/alumnos.json';
 
 function matchTeacher(userName?: string, maestroSchedule?: string): boolean {
   if (!userName || !maestroSchedule) return false;
@@ -74,7 +75,7 @@ export default function TeacherDashboardPage() {
     }
   }, [user, openLoginModal]);
 
-  const [students, setStudents] = useState<Alumno[]>([]);
+  const [students, setStudents] = useState<Alumno[]>(() => (masterAlumnosFallback as unknown as Alumno[]) || []);
   const [todayLogs, setTodayLogs] = useState<Asistencia[]>([]);
   const [selectedGrade, setSelectedGrade] = useState<string>('1°');
   const [selectedGroup, setSelectedGroup] = useState<string>('1A');
@@ -334,10 +335,11 @@ export default function TeacherDashboardPage() {
     try {
       const allStudents = await db.getAlumnos();
       const allLogs = await db.getAsistencias();
-      setStudents(allStudents);
+      setStudents(allStudents && allStudents.length >= 500 ? allStudents : ((masterAlumnosFallback as unknown as Alumno[]) || []));
       setTodayLogs(allLogs);
     } catch (e) {
       console.error('Error al cargar datos base:', e);
+      setStudents((masterAlumnosFallback as unknown as Alumno[]) || []);
     } finally {
       setLoading(false);
     }
@@ -361,16 +363,49 @@ export default function TeacherDashboardPage() {
     }
   };
 
-  // Filter students for the current grade & group
+  // Robust master list of students (prioritizing loaded db students, with official institutional fallback)
+  const effectiveStudents = useMemo(() => {
+    const fallbackList = (masterAlumnosFallback as unknown as Alumno[]) || [];
+    if (!students || students.length === 0) return fallbackList;
+    if (students.length >= fallbackList.length) return students;
+    const map = new Map<string, Alumno>();
+    fallbackList.forEach(s => {
+      if (s.matricula) map.set(s.matricula, s);
+    });
+    students.forEach(s => {
+      if (s.matricula) map.set(s.matricula, { ...(map.get(s.matricula) || {}), ...s });
+    });
+    return Array.from(map.values());
+  }, [students]);
+
+  // Filter students for the current grade & group with resilient normalization
   const classStudents = useMemo(() => {
-    return students.filter(s => {
-      const matchesGrade = s.grado === selectedGrade;
-      const matchesGroup = s.grupo === selectedGroup;
-      const fullName = `${s.nombre} ${s.apellido_paterno} ${s.apellido_materno || ''}`.toLowerCase();
-      const matchesSearch = fullName.includes(searchQuery.toLowerCase()) || s.matricula.toLowerCase().includes(searchQuery.toLowerCase());
+    const normalizeGrade = (g?: string) => String(g || '').replace(/[^0-9]/g, '');
+    const normalizeGroup = (g?: string) => String(g || '').trim().toUpperCase().replace(/\s+/g, '');
+
+    const targetGradeNum = normalizeGrade(selectedGrade);
+    const targetGroupCode = normalizeGroup(selectedGroup);
+
+    return effectiveStudents.filter(s => {
+      const sGradeNum = normalizeGrade(s.grado);
+      const sGroupCode = normalizeGroup(s.grupo);
+
+      // Matches Grade: e.g. "3°" matches "3°" or "3"
+      const matchesGrade = targetGradeNum ? sGradeNum === targetGradeNum : true;
+
+      // Matches Group: e.g. "3APGA" matches "3APGA", and handle aliases like "3ASC" / "3ASCM"
+      const matchesGroup = sGroupCode === targetGroupCode ||
+        (targetGroupCode === '3ASC' && sGroupCode === '3ASCM') ||
+        (targetGroupCode === '3ASCM' && sGroupCode === '3ASC');
+
+      const fullName = `${s.nombre || ''} ${s.apellido_paterno || ''} ${s.apellido_materno || ''}`.toLowerCase();
+      const sMat = String(s.matricula || '').toLowerCase();
+      const q = searchQuery.toLowerCase().trim();
+      const matchesSearch = !q || fullName.includes(q) || sMat.includes(q);
+
       return matchesGrade && matchesGroup && matchesSearch;
     });
-  }, [students, selectedGrade, selectedGroup, searchQuery]);
+  }, [effectiveStudents, selectedGrade, selectedGroup, searchQuery]);
 
   // Compute student status for the current session/materia based on entrance QR scan or override
   const getStudentCurrentStatus = useCallback((studentId: string) => {

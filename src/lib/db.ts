@@ -271,15 +271,26 @@ export const db = {
       }
     }
 
-    // Layer 4: Ensure master institutional student database is always fully merged
-    if (studentMap.size < MOCK_ALUMNOS.length) {
-      MOCK_ALUMNOS.forEach(s => {
-        const normalized = safeNormalizeStudent(s);
-        if (normalized && !studentMap.has(normalized.matricula)) {
+    // Layer 4: Ensure ALL master institutional students (all 529 students from CECYTE BC across 1°, 3°, 5°) are present with correct grado and grupo
+    MOCK_ALUMNOS.forEach(s => {
+      const normalized = safeNormalizeStudent(s);
+      if (normalized) {
+        const existing = studentMap.get(normalized.matricula);
+        if (!existing) {
           studentMap.set(normalized.matricula, normalized);
+        } else {
+          // Heal the record: ensure official grado and grupo are preserved if missing or corrupted
+          studentMap.set(normalized.matricula, {
+            ...existing,
+            grado: normalized.grado || existing.grado,
+            grupo: normalized.grupo || existing.grupo,
+            nombre: existing.nombre || normalized.nombre,
+            apellido_paterno: existing.apellido_paterno || normalized.apellido_paterno,
+            apellido_materno: existing.apellido_materno || normalized.apellido_materno,
+          });
         }
-      });
-    }
+      }
+    });
 
     // Layer 5: Always overlay user custom edits (tutor name, phone number, etc.) so they are never overwritten
     if (typeof window !== 'undefined') {
