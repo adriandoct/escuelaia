@@ -68,11 +68,12 @@ export default function ImportPersonalModal({
   const normalize = (str: string) =>
     str.trim().toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
 
-  const parseRole = (rawRole: string): Role => {
+  const parseRole = (rawRole: string, fallback?: Role): Role => {
     const norm = normalize(rawRole);
-    if (norm.includes('admin') || norm.includes('director') || norm.includes('coordinad')) return 'administrador';
+    if (norm.includes('admin') || norm.includes('director') || norm.includes('coordinad') || norm.includes('administrativ') || norm.includes('secretari') || norm.includes('oficin') || norm.includes('apoyo')) return 'administrador';
     if (norm.includes('orden') || norm.includes('prefect') || norm.includes('seguridad') || norm.includes('disciplina')) return 'encargado_orden';
-    return defaultRole;
+    if (norm.includes('docente') || norm.includes('maestr') || norm.includes('profesor') || norm.includes('tutor') || norm.includes('acad')) return 'docente';
+    return fallback || defaultRole;
   };
 
   // Excel (.xlsx, .xls, .csv) parser
@@ -133,10 +134,30 @@ export default function ImportPersonalModal({
     if (emailCol === -1) emailCol = 2;
 
     const list: ParsedEmployee[] = [];
+    let currentSectionRole: Role = defaultRole;
 
     for (let r = headerRowIndex + 1; r < rawRows.length; r++) {
       const row = rawRows[r];
       if (!Array.isArray(row) || row.length === 0) continue;
+
+      const rowJoined = normalize(row.join(' '));
+      // Detect section headers spanning across rows (e.g. ADMINISTRATIVOS, DOCENTES)
+      if (rowJoined.includes('administrativ') && !rowJoined.includes('@')) {
+        currentSectionRole = 'administrador';
+        continue;
+      }
+      if ((rowJoined.includes('docente') || rowJoined.includes('maestr') || rowJoined.includes('profesor')) && !rowJoined.includes('@')) {
+        currentSectionRole = 'docente';
+        continue;
+      }
+      if ((rowJoined.includes('prefect') || rowJoined.includes('orden')) && !rowJoined.includes('@')) {
+        currentSectionRole = 'encargado_orden';
+        continue;
+      }
+      // Skip repeated header rows
+      if (rowJoined.includes('nombre') && (rowJoined.includes('empleado') || rowJoined.includes('correo'))) {
+        continue;
+      }
 
       const rawName = String(row[nameCol] || '').trim();
       const rawEmpNum = empNumCol !== -1 ? String(row[empNumCol] || '').trim() : '';
@@ -168,7 +189,7 @@ export default function ImportPersonalModal({
         numero_empleado: rawEmpNum || `EMP-${r}`,
         email,
         phone: rawPhone,
-        role: rawRole ? parseRole(rawRole) : defaultRole,
+        role: rawRole ? parseRole(rawRole, currentSectionRole) : currentSectionRole,
         isValid,
         errorReason
       });
@@ -208,9 +229,25 @@ export default function ImportPersonalModal({
           if (emailCol === -1 && (text.includes('correo') || text.includes('email') || text.includes('mail'))) emailCol = idx;
         });
 
+        let currentWordSectionRole: Role = defaultRole;
+
         for (let i = 1; i < tableRows.length; i++) {
           const cells = Array.from(tableRows[i].querySelectorAll('td'));
           if (cells.length === 0) continue;
+
+          const rowText = normalize(cells.map(c => c.textContent || '').join(' '));
+          if (rowText.includes('administrativ') && !rowText.includes('@')) {
+            currentWordSectionRole = 'administrador';
+            continue;
+          }
+          if ((rowText.includes('docente') || rowText.includes('maestr') || rowText.includes('profesor')) && !rowText.includes('@')) {
+            currentWordSectionRole = 'docente';
+            continue;
+          }
+          if ((rowText.includes('prefect') || rowText.includes('orden')) && !rowText.includes('@')) {
+            currentWordSectionRole = 'encargado_orden';
+            continue;
+          }
 
           const rawName = (cells[nameCol]?.textContent || '').trim();
           const rawEmpNum = empNumCol !== -1 ? (cells[empNumCol]?.textContent || '').trim() : '';
@@ -231,7 +268,7 @@ export default function ImportPersonalModal({
             numero_empleado: rawEmpNum || `EMP-${i}`,
             email: rawEmail,
             phone: rawPhone,
-            role: defaultRole,
+            role: currentWordSectionRole,
             isValid,
             errorReason: isValid ? undefined : 'Correo o datos incompletos en fila de tabla Word.'
           });
@@ -243,9 +280,24 @@ export default function ImportPersonalModal({
     if (list.length === 0) {
       const textResult = await mammoth.extractRawText({ arrayBuffer });
       const lines = textResult.value.split('\n').map(l => l.trim()).filter(Boolean);
+      let textSectionRole: Role = defaultRole;
 
       // Search for email addresses in text lines
       lines.forEach((line, idx) => {
+        const normLine = normalize(line);
+        if (normLine.includes('administrativ') && !normLine.includes('@')) {
+          textSectionRole = 'administrador';
+          return;
+        }
+        if ((normLine.includes('docente') || normLine.includes('maestr')) && !normLine.includes('@')) {
+          textSectionRole = 'docente';
+          return;
+        }
+        if ((normLine.includes('prefect') || normLine.includes('orden')) && !normLine.includes('@')) {
+          textSectionRole = 'encargado_orden';
+          return;
+        }
+
         const emailMatch = line.match(/([a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,})/);
         if (emailMatch) {
           const email = emailMatch[1].toLowerCase();
@@ -273,7 +325,7 @@ export default function ImportPersonalModal({
             name: cleanName || email.split('@')[0].replace('.', ' ').toUpperCase(),
             numero_empleado: empNum,
             email,
-            role: defaultRole,
+            role: textSectionRole,
             isValid: true
           });
         }
@@ -498,7 +550,7 @@ export default function ImportPersonalModal({
                 <li><strong className="text-white">Nombre Completo:</strong> Nombre del docente o empleado.</li>
                 <li><strong className="text-white">Número de Empleado:</strong> Su clave o ID de nómina (ejemplo: EMP-3001 o 52401).</li>
                 <li><strong className="text-white">Correo Institucional:</strong> Cuenta oficial @cecytebc.edu.mx.</li>
-                <li><strong className="text-white">Rol (Opcional):</strong> Docente, Encargado de Orden o Administrador.</li>
+                <li><strong className="text-white">Rol (Opcional):</strong> Docente, Personal Administrativo, Encargado de Orden o Administrador.</li>
               </ul>
             </div>
           </div>
@@ -560,8 +612,8 @@ export default function ImportPersonalModal({
                   className="w-full glass-input px-3 py-1.5 rounded-xl text-xs text-white bg-[#0a0f1d] border-white/10"
                 >
                   <option value="docente">👨‍🏫 Docente (Pase de lista)</option>
+                  <option value="administrador">👑 Personal Administrativo / Administrador</option>
                   <option value="encargado_orden">🛡️ Encargado de Orden (Escáner)</option>
-                  <option value="administrador">👑 Administrador</option>
                 </select>
               </div>
 

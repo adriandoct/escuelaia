@@ -62,7 +62,24 @@ const DEFAULT_USERS_ROLES: Record<string, Role> = {
   'beatriz.acosta@cecytebc.edu.mx': 'docente',
   'lindylisay.leija@cecytebc.edu.mx': 'docente',
   'filiberto.domingues@cecytebc.edu.mx': 'docente',
-  'filiberto.dominguez@cecytebc.edu.mx': 'docente'
+  'filiberto.dominguez@cecytebc.edu.mx': 'docente',
+  'jfigueroa@cecytebc.edu.mx': 'administrador',
+  'alcarranza@cecytebc.edu.mx': 'administrador',
+  'oacontreras@cecytebc.edu.mx': 'administrador',
+  'anunez@cecytebc.edu.mx': 'administrador',
+  'emora@cecytebc.edu.mx': 'administrador',
+  'apulido@cecytebc.edu.mx': 'administrador',
+  'sjsanchez@cecytebc.edu.mx': 'administrador',
+  'kshernandez@cecytebc.edu.mx': 'administrador',
+  'adrian.silva@cecytebc.edu.mx': 'administrador',
+  'sanjuana.aguas@cecytebc.edu.mx': 'administrador',
+  'finzunza@cecytebc.edu.mx': 'administrador',
+  'gmoreno@cecytebc.edu.mx': 'administrador',
+  'ifdelaguila@cecytebc.edu.mx': 'administrador',
+  'freddy.martinez@cecytebc.edu.mx': 'administrador',
+  'ciarenas@cecytebc.edu.mx': 'administrador',
+  'mmoroyoqui@cecytebc.edu.mx': 'administrador',
+  'aeramirez@cecytebc.edu.mx': 'administrador'
 };
 
 const DEFAULT_USERS_PASSWORDS: Record<string, string> = {
@@ -84,7 +101,24 @@ const DEFAULT_USERS_PASSWORDS: Record<string, string> = {
   'beatriz.acosta@cecytebc.edu.mx': '6826',
   'lindylisay.leija@cecytebc.edu.mx': '3835',
   'filiberto.domingues@cecytebc.edu.mx': '2721008594',
-  'filiberto.dominguez@cecytebc.edu.mx': '2721008594'
+  'filiberto.dominguez@cecytebc.edu.mx': '2721008594',
+  'jfigueroa@cecytebc.edu.mx': '5223',
+  'alcarranza@cecytebc.edu.mx': '3600',
+  'oacontreras@cecytebc.edu.mx': '4557',
+  'anunez@cecytebc.edu.mx': '4179',
+  'emora@cecytebc.edu.mx': '5400',
+  'apulido@cecytebc.edu.mx': '5462',
+  'sjsanchez@cecytebc.edu.mx': '4184',
+  'kshernandez@cecytebc.edu.mx': '5244',
+  'adrian.silva@cecytebc.edu.mx': '3497',
+  'sanjuana.aguas@cecytebc.edu.mx': '3195',
+  'finzunza@cecytebc.edu.mx': '3115',
+  'gmoreno@cecytebc.edu.mx': '4338',
+  'ifdelaguila@cecytebc.edu.mx': '4098',
+  'freddy.martinez@cecytebc.edu.mx': '4328',
+  'ciarenas@cecytebc.edu.mx': '3702',
+  'mmoroyoqui@cecytebc.edu.mx': '6808',
+  'aeramirez@cecytebc.edu.mx': '4190'
 };
 
 const DEFAULT_USERS_NAMES: Record<string, string> = {
@@ -106,7 +140,24 @@ const DEFAULT_USERS_NAMES: Record<string, string> = {
   'beatriz.acosta@cecytebc.edu.mx': 'BEATRIZ DEL ROSARIO ACOSTA VALENZUELA',
   'lindylisay.leija@cecytebc.edu.mx': 'LINDY LISAY LEIJA GONZÁLEZ',
   'filiberto.domingues@cecytebc.edu.mx': 'FILIBERTO DOMÍNGUEZ CRUZ',
-  'filiberto.dominguez@cecytebc.edu.mx': 'FILIBERTO DOMÍNGUEZ CRUZ'
+  'filiberto.dominguez@cecytebc.edu.mx': 'FILIBERTO DOMÍNGUEZ CRUZ',
+  'jfigueroa@cecytebc.edu.mx': 'JONATHAN ARELLANO FIGUEROA',
+  'alcarranza@cecytebc.edu.mx': 'ANA LAURA CARRANZA LEYVA',
+  'oacontreras@cecytebc.edu.mx': 'OSCAR ALEJANDRO CONTRERAS SÁNCHEZ',
+  'anunez@cecytebc.edu.mx': 'ALFREDO FLORES NÚÑEZ',
+  'emora@cecytebc.edu.mx': 'ENRIQUE MORA MARTÍNEZ',
+  'apulido@cecytebc.edu.mx': 'ARITZY PULIDO CASTILLO',
+  'sjsanchez@cecytebc.edu.mx': 'SERGIO JAVIER SÁNCHEZ SÁNCHEZ',
+  'kshernandez@cecytebc.edu.mx': 'KENIA SARAHI HERNÁNDEZ MUÑOZ',
+  'adrian.silva@cecytebc.edu.mx': 'ADRIÁN SILVA RAMÍREZ',
+  'sanjuana.aguas@cecytebc.edu.mx': 'SAN JUANA AGUAS MARMOLEJO',
+  'finzunza@cecytebc.edu.mx': 'FRANCISCA INZUNZA SAAVEDRA',
+  'gmoreno@cecytebc.edu.mx': 'GERARDO GONZÁLEZ MORENO',
+  'ifdelaguila@cecytebc.edu.mx': 'ISMAEL FERNANDO DEL ÁGUILA VARGAS',
+  'freddy.martinez@cecytebc.edu.mx': 'FREDDY MARTÍNEZ LÓPEZ',
+  'ciarenas@cecytebc.edu.mx': 'CÉSAR ISMAEL ARENAS PRECIADO',
+  'mmoroyoqui@cecytebc.edu.mx': 'MÓNICA JULISSA MOROYOQUI',
+  'aeramirez@cecytebc.edu.mx': 'ABRIL ESTEFANIA RAMÍREZ JAUNA'
 };
 
 const DEFAULT_USERS_EMPLOYEE_NUMBERS: Record<string, string> = {
@@ -128,7 +179,24 @@ const DEFAULT_USERS_EMPLOYEE_NUMBERS: Record<string, string> = {
   'beatriz.acosta@cecytebc.edu.mx': '6826',
   'lindylisay.leija@cecytebc.edu.mx': '3835',
   'filiberto.domingues@cecytebc.edu.mx': '2721',
-  'filiberto.dominguez@cecytebc.edu.mx': '2721'
+  'filiberto.dominguez@cecytebc.edu.mx': '2721',
+  'jfigueroa@cecytebc.edu.mx': '5223',
+  'alcarranza@cecytebc.edu.mx': '3600',
+  'oacontreras@cecytebc.edu.mx': '4557',
+  'anunez@cecytebc.edu.mx': '4179',
+  'emora@cecytebc.edu.mx': '5400',
+  'apulido@cecytebc.edu.mx': '5462',
+  'sjsanchez@cecytebc.edu.mx': '4184',
+  'kshernandez@cecytebc.edu.mx': '5244',
+  'adrian.silva@cecytebc.edu.mx': '3497',
+  'sanjuana.aguas@cecytebc.edu.mx': '3195',
+  'finzunza@cecytebc.edu.mx': '3115',
+  'gmoreno@cecytebc.edu.mx': '4338',
+  'ifdelaguila@cecytebc.edu.mx': '4098',
+  'freddy.martinez@cecytebc.edu.mx': '4328',
+  'ciarenas@cecytebc.edu.mx': '3702',
+  'mmoroyoqui@cecytebc.edu.mx': '6808',
+  'aeramirez@cecytebc.edu.mx': '4190'
 };
 
 const DEFAULT_USERS_PHONES: Record<string, string> = {
@@ -146,7 +214,24 @@ const DEFAULT_USERS_PHONES: Record<string, string> = {
   'beatriz.acosta@cecytebc.edu.mx': '6642567592',
   'lindylisay.leija@cecytebc.edu.mx': '6631275881',
   'filiberto.domingues@cecytebc.edu.mx': '2721008594',
-  'filiberto.dominguez@cecytebc.edu.mx': '2721008594'
+  'filiberto.dominguez@cecytebc.edu.mx': '2721008594',
+  'jfigueroa@cecytebc.edu.mx': '6641083148',
+  'alcarranza@cecytebc.edu.mx': '6642177154',
+  'oacontreras@cecytebc.edu.mx': '6642297750',
+  'anunez@cecytebc.edu.mx': '6641131696',
+  'emora@cecytebc.edu.mx': '6633141085',
+  'apulido@cecytebc.edu.mx': '6647533360',
+  'sjsanchez@cecytebc.edu.mx': '6641303421',
+  'kshernandez@cecytebc.edu.mx': '6645664851',
+  'adrian.silva@cecytebc.edu.mx': '6643492687',
+  'sanjuana.aguas@cecytebc.edu.mx': '6642250094',
+  'finzunza@cecytebc.edu.mx': '6643034510',
+  'gmoreno@cecytebc.edu.mx': '6641702970',
+  'ifdelaguila@cecytebc.edu.mx': '6643545725',
+  'freddy.martinez@cecytebc.edu.mx': '6642950343',
+  'ciarenas@cecytebc.edu.mx': '6642420401',
+  'mmoroyoqui@cecytebc.edu.mx': '6645714985',
+  'aeramirez@cecytebc.edu.mx': '6645293173'
 };
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
