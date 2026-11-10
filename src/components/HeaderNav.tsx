@@ -157,21 +157,27 @@ export default function HeaderNav() {
                   <span>Alumnos</span>
                 </Link>
 
-                <Link 
-                  href="/dashboard/parents" 
-                  className="hover:text-purple-400 transition-colors py-1.5 px-3 rounded-lg hover:bg-white/5 flex items-center space-x-1.5 text-purple-300 font-bold"
-                >
-                  <HeartHandshake size={14} className="text-purple-400" />
-                  <span>Padres / Tutores</span>
-                </Link>
+                {/* Padres / Tutores: Oculto para administrativo */}
+                {user?.role !== 'administrativo' && (
+                  <Link 
+                    href="/dashboard/parents" 
+                    className="hover:text-purple-400 transition-colors py-1.5 px-3 rounded-lg hover:bg-white/5 flex items-center space-x-1.5 text-purple-300 font-bold"
+                  >
+                    <HeartHandshake size={14} className="text-purple-400" />
+                    <span>Padres / Tutores</span>
+                  </Link>
+                )}
 
-                <Link 
-                  href="/dashboard/qr-report" 
-                  className="hover:text-cyan-400 transition-colors py-1.5 px-3 rounded-lg hover:bg-white/5 flex items-center space-x-1.5 text-cyan-300 font-bold"
-                >
-                  <QrCode size={14} className="text-cyan-400" />
-                  <span>Reporte QRs (1.5cm)</span>
-                </Link>
+                {/* Reporte QRs (1.5cm): Solo Administrador y Superadmin (Oculto para administrativo) */}
+                {(user?.role === 'administrador' || user?.isSuperAdmin || user?.email === 'admin@admin.com') && (
+                  <Link 
+                    href="/dashboard/qr-report" 
+                    className="hover:text-cyan-400 transition-colors py-1.5 px-3 rounded-lg hover:bg-white/5 flex items-center space-x-1.5 text-cyan-300 font-bold"
+                  >
+                    <QrCode size={14} className="text-cyan-400" />
+                    <span>Reporte QRs (1.5cm)</span>
+                  </Link>
+                )}
 
                 {(user?.isSuperAdmin || user?.email === 'admin@admin.com') && (
                   <Link 
@@ -289,8 +295,10 @@ export default function HeaderNav() {
             <Link href="/dashboard" className="hover:text-cyan-400 py-1 px-2">🛡️ Orden</Link>
             <Link href="/dashboard/teacher" className="hover:text-emerald-400 py-1 px-2">👨‍🏫 Docente</Link>
             <Link href="/dashboard/students" className="hover:text-cyan-400 py-1 px-2">👦 Alumnos</Link>
-            <Link href="/dashboard/parents" className="hover:text-purple-400 py-1 px-2 text-purple-300">👨‍👩‍👧 Padres</Link>
-            {(user?.role === 'administrador' || user?.role === 'administrativo' || user?.isSuperAdmin || user?.email === 'admin@admin.com') && (
+            {user?.role !== 'administrativo' && (
+              <Link href="/dashboard/parents" className="hover:text-purple-400 py-1 px-2 text-purple-300">👨‍👩‍👧 Padres</Link>
+            )}
+            {(user?.role === 'administrador' || user?.isSuperAdmin || user?.email === 'admin@admin.com') && (
               <Link href="/dashboard/qr-report" className="hover:text-cyan-400 py-1 px-2 text-cyan-300 font-bold">🖨️ QRs 1.5cm</Link>
             )}
             {(user?.isSuperAdmin || user?.email === 'admin@admin.com') && (

@@ -277,15 +277,15 @@ export default function RolesManagementPage() {
           <div className="space-y-2 text-xs text-gray-300">
             <div className="flex items-center space-x-2">
               <CheckCircle2 size={14} className="text-blue-400 shrink-0" />
-              <span>Acceso a listas de alumnos, tutores y asistencias.</span>
+              <span>Acceso a listas de alumnos y monitoreo escolar.</span>
             </div>
             <div className="flex items-center space-x-2">
               <CheckCircle2 size={14} className="text-blue-400 shrink-0" />
-              <span>Consulta de reportes e impresión de credenciales QR.</span>
+              <span>Visualización de dashboard y asistencias generales.</span>
             </div>
             <div className="flex items-center space-x-2">
               <CheckCircle2 size={14} className="text-blue-400 shrink-0" />
-              <span>Visualización de dashboard escolar y monitoreo.</span>
+              <span>Operación del Escáner QR de entradas/salidas.</span>
             </div>
           </div>
         </div>

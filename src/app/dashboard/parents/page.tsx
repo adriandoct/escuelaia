@@ -49,6 +49,8 @@ export default function ParentsDashboardPage() {
       openLoginModal();
     } else if (user.role === 'docente') {
       window.location.href = '/dashboard/teacher';
+    } else if (user.role === 'administrativo') {
+      window.location.href = '/dashboard';
     }
   }, [user, openLoginModal]);
 
@@ -457,6 +459,25 @@ export default function ParentsDashboardPage() {
         >
           Acceso Padres / Tutores
         </button>
+      </div>
+    );
+  }
+
+  if (user?.role === 'administrativo') {
+    return (
+      <div className="min-h-[60vh] flex flex-col items-center justify-center p-6 text-center">
+        <div className="glass-panel p-8 rounded-3xl border border-blue-500/30 max-w-md space-y-4">
+          <div className="w-16 h-16 rounded-2xl bg-blue-500/10 text-blue-400 flex items-center justify-center mx-auto text-2xl font-bold">
+            🔒
+          </div>
+          <h2 className="text-xl font-bold text-white">Acceso Restringido</h2>
+          <p className="text-xs text-gray-400">
+            El módulo de Padres de Familia y Tutores está reservado para Administradores y Tutores escolares.
+          </p>
+          <Link href="/dashboard" className="inline-block bg-cyan-500/20 hover:bg-cyan-500/30 border border-cyan-500/40 text-cyan-300 font-bold text-xs py-2 px-4 rounded-xl transition-all">
+            Ir al Dashboard
+          </Link>
+        </div>
       </div>
     );
   }
