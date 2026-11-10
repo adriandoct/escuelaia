@@ -232,7 +232,7 @@ export default function RolesManagementPage() {
       </div>
 
       {/* Privileges Matrix Grid */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
         
         {/* Admin Card */}
         <div className="glass-panel p-6 rounded-3xl border-amber-500/30 relative overflow-hidden space-y-4">
@@ -258,6 +258,34 @@ export default function RolesManagementPage() {
             <div className="flex items-center space-x-2">
               <CheckCircle2 size={14} className="text-amber-400 shrink-0" />
               <span>CRUD completo de Alumnos y QR.</span>
+            </div>
+          </div>
+        </div>
+
+        {/* Administrativo Card */}
+        <div className="glass-panel p-6 rounded-3xl border-blue-500/30 relative overflow-hidden space-y-4">
+          <div className="flex items-center space-x-3">
+            <div className="w-10 h-10 rounded-xl bg-blue-500/20 flex items-center justify-center text-blue-400 font-bold text-xl">
+              📋
+            </div>
+            <div>
+              <h3 className="text-base font-bold text-white">Administrativo</h3>
+              <span className="text-[10px] text-blue-400 font-mono">Personal de Apoyo / Oficina</span>
+            </div>
+          </div>
+
+          <div className="space-y-2 text-xs text-gray-300">
+            <div className="flex items-center space-x-2">
+              <CheckCircle2 size={14} className="text-blue-400 shrink-0" />
+              <span>Acceso a listas de alumnos, tutores y asistencias.</span>
+            </div>
+            <div className="flex items-center space-x-2">
+              <CheckCircle2 size={14} className="text-blue-400 shrink-0" />
+              <span>Consulta de reportes e impresión de credenciales QR.</span>
+            </div>
+            <div className="flex items-center space-x-2">
+              <CheckCircle2 size={14} className="text-blue-400 shrink-0" />
+              <span>Visualización de dashboard escolar y monitoreo.</span>
             </div>
           </div>
         </div>
@@ -390,6 +418,7 @@ export default function RolesManagementPage() {
                 className="w-full glass-input py-2.5 px-3 rounded-xl text-xs text-white bg-[#0a0f1c]"
               >
                 <option value="docente">👨‍🏫 Docente</option>
+                <option value="administrativo">📋 Administrativo</option>
                 <option value="encargado_orden">🛡️ Encargado de Orden</option>
                 <option value="administrador">👑 Administrador</option>
               </select>
@@ -521,6 +550,7 @@ export default function RolesManagementPage() {
                             className="glass-input px-2 py-1 rounded-lg text-xs bg-[#0b101d] text-gray-200 border border-white/10"
                           >
                             <option value="docente">Docente</option>
+                            <option value="administrativo">Administrativo</option>
                             <option value="encargado_orden">Encargado Orden</option>
                             <option value="administrador">Administrador</option>
                           </select>
@@ -719,6 +749,7 @@ export default function RolesManagementPage() {
                     className="w-full glass-input py-2.5 px-3.5 rounded-xl text-xs text-white bg-[#080d1a] border border-cyan-500/30"
                   >
                     <option value="docente">👨‍🏫 Docente</option>
+                    <option value="administrativo">📋 Administrativo</option>
                     <option value="encargado_orden">🛡️ Encargado de Orden</option>
                     <option value="administrador">👑 Administrador</option>
                   </select>

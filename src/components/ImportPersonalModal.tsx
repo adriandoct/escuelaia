@@ -70,7 +70,8 @@ export default function ImportPersonalModal({
 
   const parseRole = (rawRole: string, fallback?: Role): Role => {
     const norm = normalize(rawRole);
-    if (norm.includes('admin') || norm.includes('director') || norm.includes('coordinad') || norm.includes('administrativ') || norm.includes('secretari') || norm.includes('oficin') || norm.includes('apoyo')) return 'administrador';
+    if (norm.includes('administrativ') || norm.includes('secretari') || norm.includes('oficin') || norm.includes('apoyo')) return 'administrativo';
+    if (norm.includes('admin') || norm.includes('director') || norm.includes('coordinad')) return 'administrador';
     if (norm.includes('orden') || norm.includes('prefect') || norm.includes('seguridad') || norm.includes('disciplina')) return 'encargado_orden';
     if (norm.includes('docente') || norm.includes('maestr') || norm.includes('profesor') || norm.includes('tutor') || norm.includes('acad')) return 'docente';
     return fallback || defaultRole;
@@ -143,7 +144,7 @@ export default function ImportPersonalModal({
       const rowJoined = normalize(row.join(' '));
       // Detect section headers spanning across rows (e.g. ADMINISTRATIVOS, DOCENTES)
       if (rowJoined.includes('administrativ') && !rowJoined.includes('@')) {
-        currentSectionRole = 'administrador';
+        currentSectionRole = 'administrativo';
         continue;
       }
       if ((rowJoined.includes('docente') || rowJoined.includes('maestr') || rowJoined.includes('profesor')) && !rowJoined.includes('@')) {
@@ -237,7 +238,7 @@ export default function ImportPersonalModal({
 
           const rowText = normalize(cells.map(c => c.textContent || '').join(' '));
           if (rowText.includes('administrativ') && !rowText.includes('@')) {
-            currentWordSectionRole = 'administrador';
+            currentWordSectionRole = 'administrativo';
             continue;
           }
           if ((rowText.includes('docente') || rowText.includes('maestr') || rowText.includes('profesor')) && !rowText.includes('@')) {
@@ -286,7 +287,7 @@ export default function ImportPersonalModal({
       lines.forEach((line, idx) => {
         const normLine = normalize(line);
         if (normLine.includes('administrativ') && !normLine.includes('@')) {
-          textSectionRole = 'administrador';
+          textSectionRole = 'administrativo';
           return;
         }
         if ((normLine.includes('docente') || normLine.includes('maestr')) && !normLine.includes('@')) {
@@ -612,8 +613,9 @@ export default function ImportPersonalModal({
                   className="w-full glass-input px-3 py-1.5 rounded-xl text-xs text-white bg-[#0a0f1d] border-white/10"
                 >
                   <option value="docente">👨‍🏫 Docente (Pase de lista)</option>
-                  <option value="administrador">👑 Personal Administrativo / Administrador</option>
+                  <option value="administrativo">📋 Personal Administrativo</option>
                   <option value="encargado_orden">🛡️ Encargado de Orden (Escáner)</option>
+                  <option value="administrador">👑 Administrador</option>
                 </select>
               </div>
 
@@ -703,6 +705,7 @@ export default function ImportPersonalModal({
                           className="glass-input px-2 py-0.5 rounded text-[11px] bg-[#0b101d] text-gray-200 border border-white/10"
                         >
                           <option value="docente">Docente</option>
+                          <option value="administrativo">Administrativo</option>
                           <option value="encargado_orden">Encargado Orden</option>
                           <option value="administrador">Administrador</option>
                         </select>

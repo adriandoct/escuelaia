@@ -5,7 +5,7 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import { db } from './db';
 
-export type Role = 'administrador' | 'encargado_orden' | 'docente' | 'tutor';
+export type Role = 'administrador' | 'administrativo' | 'encargado_orden' | 'docente' | 'tutor';
 
 export interface User {
   id: string;
@@ -63,23 +63,23 @@ const DEFAULT_USERS_ROLES: Record<string, Role> = {
   'lindylisay.leija@cecytebc.edu.mx': 'docente',
   'filiberto.domingues@cecytebc.edu.mx': 'docente',
   'filiberto.dominguez@cecytebc.edu.mx': 'docente',
-  'jfigueroa@cecytebc.edu.mx': 'administrador',
-  'alcarranza@cecytebc.edu.mx': 'administrador',
-  'oacontreras@cecytebc.edu.mx': 'administrador',
-  'anunez@cecytebc.edu.mx': 'administrador',
-  'emora@cecytebc.edu.mx': 'administrador',
-  'apulido@cecytebc.edu.mx': 'administrador',
-  'sjsanchez@cecytebc.edu.mx': 'administrador',
-  'kshernandez@cecytebc.edu.mx': 'administrador',
-  'adrian.silva@cecytebc.edu.mx': 'administrador',
-  'sanjuana.aguas@cecytebc.edu.mx': 'administrador',
-  'finzunza@cecytebc.edu.mx': 'administrador',
-  'gmoreno@cecytebc.edu.mx': 'administrador',
-  'ifdelaguila@cecytebc.edu.mx': 'administrador',
-  'freddy.martinez@cecytebc.edu.mx': 'administrador',
-  'ciarenas@cecytebc.edu.mx': 'administrador',
-  'mmoroyoqui@cecytebc.edu.mx': 'administrador',
-  'aeramirez@cecytebc.edu.mx': 'administrador'
+  'jfigueroa@cecytebc.edu.mx': 'administrativo',
+  'alcarranza@cecytebc.edu.mx': 'administrativo',
+  'oacontreras@cecytebc.edu.mx': 'administrativo',
+  'anunez@cecytebc.edu.mx': 'administrativo',
+  'emora@cecytebc.edu.mx': 'administrativo',
+  'apulido@cecytebc.edu.mx': 'administrativo',
+  'sjsanchez@cecytebc.edu.mx': 'administrativo',
+  'kshernandez@cecytebc.edu.mx': 'administrativo',
+  'adrian.silva@cecytebc.edu.mx': 'administrativo',
+  'sanjuana.aguas@cecytebc.edu.mx': 'administrativo',
+  'finzunza@cecytebc.edu.mx': 'administrativo',
+  'gmoreno@cecytebc.edu.mx': 'administrativo',
+  'ifdelaguila@cecytebc.edu.mx': 'administrativo',
+  'freddy.martinez@cecytebc.edu.mx': 'administrativo',
+  'ciarenas@cecytebc.edu.mx': 'administrativo',
+  'mmoroyoqui@cecytebc.edu.mx': 'administrativo',
+  'aeramirez@cecytebc.edu.mx': 'administrativo'
 };
 
 const DEFAULT_USERS_PASSWORDS: Record<string, string> = {
@@ -300,6 +300,33 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         console.error('Error loading stored user roles:', e);
       }
     }
+
+    // Asegurar que el personal administrativo institucional tenga el rol asignado 'administrativo'
+    const ADMIN_STAFF_EMAILS = [
+      'jfigueroa@cecytebc.edu.mx',
+      'alcarranza@cecytebc.edu.mx',
+      'oacontreras@cecytebc.edu.mx',
+      'anunez@cecytebc.edu.mx',
+      'emora@cecytebc.edu.mx',
+      'apulido@cecytebc.edu.mx',
+      'sjsanchez@cecytebc.edu.mx',
+      'kshernandez@cecytebc.edu.mx',
+      'adrian.silva@cecytebc.edu.mx',
+      'sanjuana.aguas@cecytebc.edu.mx',
+      'finzunza@cecytebc.edu.mx',
+      'gmoreno@cecytebc.edu.mx',
+      'ifdelaguila@cecytebc.edu.mx',
+      'freddy.martinez@cecytebc.edu.mx',
+      'ciarenas@cecytebc.edu.mx',
+      'mmoroyoqui@cecytebc.edu.mx',
+      'aeramirez@cecytebc.edu.mx'
+    ];
+    ADMIN_STAFF_EMAILS.forEach(email => {
+      if (!initialRoles[email] || initialRoles[email] === 'administrador') {
+        initialRoles[email] = 'administrativo';
+      }
+    });
+
     setUsersRolesMap(initialRoles);
 
     // 2. Cargar contraseñas locales

@@ -123,7 +123,7 @@ export default function BarcodeScannerHub({ onScanCompleted, className = '' }: B
   const [adminAuthPinError, setAdminAuthPinError] = useState<string | null>(null);
   const [isAdminUnlocked, setIsAdminUnlocked] = useState(false);
 
-  const isAdmin = user?.role === 'administrador' || isAdminUnlocked;
+  const isAdmin = user?.role === 'administrador' || user?.role === 'administrativo' || isAdminUnlocked;
 
   const handleStartEditingPhone = () => {
     // Stop auto-dismiss immediately so the admin can write comfortably

@@ -116,7 +116,7 @@ export default function InstitutionalScanner() {
   const [adminAuthPinError, setAdminAuthPinError] = useState<string | null>(null);
   const [isAdminUnlocked, setIsAdminUnlocked] = useState(false);
 
-  const isAdmin = user?.role === 'administrador' || isAdminUnlocked;
+  const isAdmin = user?.role === 'administrador' || user?.role === 'administrativo' || isAdminUnlocked;
 
   const handleStartEditingPhone = () => {
     // Cancel auto-dismiss immediately so admin can edit without rush

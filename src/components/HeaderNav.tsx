@@ -24,6 +24,13 @@ export default function HeaderNav() {
             <span>Administrador</span>
           </span>
         );
+      case 'administrativo':
+        return (
+          <span className="inline-flex items-center space-x-1 px-2.5 py-0.5 rounded-full bg-blue-500/10 border border-blue-500/30 text-blue-400 text-[10px] font-black tracking-wider uppercase">
+            <span>📋</span>
+            <span>Administrativo</span>
+          </span>
+        );
       case 'encargado_orden':
         return (
           <span className="inline-flex items-center space-x-1 px-2.5 py-0.5 rounded-full bg-cyan-500/10 border border-cyan-500/30 text-cyan-400 text-[10px] font-black tracking-wider uppercase">
@@ -115,8 +122,8 @@ export default function HeaderNav() {
               </>
             )}
 
-            {/* 4. ADMINISTRADOR Y SUPERADMIN: Acceso Completo */}
-            {(user?.role === 'administrador' || user?.isSuperAdmin || user?.email === 'admin@admin.com') && (
+            {/* 4. ADMINISTRADOR, ADMINISTRATIVO Y SUPERADMIN: Acceso Completo */}
+            {(user?.role === 'administrador' || user?.role === 'administrativo' || user?.isSuperAdmin || user?.email === 'admin@admin.com') && (
               <>
                 <Link 
                   href="/scanner" 
@@ -283,7 +290,7 @@ export default function HeaderNav() {
             <Link href="/dashboard/teacher" className="hover:text-emerald-400 py-1 px-2">👨‍🏫 Docente</Link>
             <Link href="/dashboard/students" className="hover:text-cyan-400 py-1 px-2">👦 Alumnos</Link>
             <Link href="/dashboard/parents" className="hover:text-purple-400 py-1 px-2 text-purple-300">👨‍👩‍👧 Padres</Link>
-            {(user?.role === 'administrador' || user?.isSuperAdmin || user?.email === 'admin@admin.com') && (
+            {(user?.role === 'administrador' || user?.role === 'administrativo' || user?.isSuperAdmin || user?.email === 'admin@admin.com') && (
               <Link href="/dashboard/qr-report" className="hover:text-cyan-400 py-1 px-2 text-cyan-300 font-bold">🖨️ QRs 1.5cm</Link>
             )}
             {(user?.isSuperAdmin || user?.email === 'admin@admin.com') && (
