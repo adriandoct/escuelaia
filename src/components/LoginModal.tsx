@@ -10,8 +10,9 @@ export default function LoginModal() {
   const { isLoginModalOpen, closeLoginModal, loginWithCredentials, loginWithMatricula, user, usersPasswordsMap } = useAuth();
   
   const [tab, setTab] = useState<'password' | 'tutor'>('password');
+  const [studentRoleMode, setStudentRoleMode] = useState<'alumno' | 'tutor'>('alumno');
   
-  // Tutor form state
+  // Tutor/Alumno form state
   const [tutorMatricula, setTutorMatricula] = useState('');
   const [isTutorLoading, setIsTutorLoading] = useState(false);
   
@@ -38,12 +39,19 @@ export default function LoginModal() {
 
     setIsTutorLoading(true);
     try {
-      const res = await loginWithMatricula(tutorMatricula.trim());
+      const res = await loginWithMatricula(tutorMatricula.trim(), studentRoleMode);
       if (res.success) {
-        setSuccessMessage('¡Acceso concedido! Redirigiendo a tu módulo de tutor...');
-        setTimeout(() => {
-          window.location.href = '/dashboard/parents';
-        }, 1000);
+        if (studentRoleMode === 'alumno') {
+          setSuccessMessage('¡Bienvenido! Entrando al repositorio de recursos de tu semestre y grupo...');
+          setTimeout(() => {
+            window.location.href = '/dashboard/recursos';
+          }, 800);
+        } else {
+          setSuccessMessage('¡Acceso concedido! Redirigiendo a tu módulo de tutor...');
+          setTimeout(() => {
+            window.location.href = '/dashboard/parents';
+          }, 800);
+        }
       } else {
         setErrorMessage(res.error || 'Matrícula no encontrada en la base de datos.');
       }
@@ -125,7 +133,7 @@ export default function LoginModal() {
                 : 'text-emerald-400 hover:text-emerald-300'
             }`}
           >
-            <span>👨‍👩‍👧 Tutor</span>
+            <span>🎒 Alumnos / Tutores</span>
           </button>
         </div>
 
@@ -194,22 +202,50 @@ export default function LoginModal() {
           </form>
         )}
 
-        {/* Tab: Tutor Access by Matricula */}
+        {/* Tab: Alumno / Tutor Access by Matricula */}
         {tab === 'tutor' && (
           <form onSubmit={handleTutorSubmit} className="space-y-4">
+            {/* Role selector toggle */}
+            <div className="grid grid-cols-2 gap-2 p-1 rounded-xl bg-black/40 border border-emerald-500/20 text-xs">
+              <button
+                type="button"
+                onClick={() => setStudentRoleMode('alumno')}
+                className={`py-2 px-3 rounded-lg font-bold transition-all flex items-center justify-center space-x-1.5 cursor-pointer ${
+                  studentRoleMode === 'alumno'
+                    ? 'bg-cyan-500/20 border border-cyan-500/40 text-cyan-300 shadow'
+                    : 'text-gray-400 hover:text-white'
+                }`}
+              >
+                <span>🎓 Soy Alumno</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => setStudentRoleMode('tutor')}
+                className={`py-2 px-3 rounded-lg font-bold transition-all flex items-center justify-center space-x-1.5 cursor-pointer ${
+                  studentRoleMode === 'tutor'
+                    ? 'bg-emerald-500/20 border border-emerald-500/40 text-emerald-300 shadow'
+                    : 'text-gray-400 hover:text-white'
+                }`}
+              >
+                <span>👨‍👩‍👧 Soy Padre / Tutor</span>
+              </button>
+            </div>
+
             <div className="p-3.5 rounded-xl bg-emerald-500/10 border border-emerald-500/25 text-emerald-300 text-xs leading-relaxed space-y-1">
               <div className="font-bold flex items-center space-x-1.5 text-emerald-400">
-                <span>👨‍👩‍👧</span>
-                <span>Acceso Exclusivo para Padres y Tutores</span>
+                <span>{studentRoleMode === 'alumno' ? '🎓 Aula Virtual y Recursos' : '👨‍👩‍👧 Asistencias y Reportes'}</span>
+                <span>{studentRoleMode === 'alumno' ? 'Acceso para Alumnos' : 'Acceso para Padres y Tutores'}</span>
               </div>
               <p className="text-[11px] text-gray-300">
-                Ingresa la <strong>matrícula escolar (14 dígitos)</strong> de tu hijo o hija para consultar sus asistencias y recibir reportes directamente en tu teléfono.
+                {studentRoleMode === 'alumno' 
+                  ? 'Ingresa tu matrícula para acceder al repositorio de recursos, guías en PDF y videos de tu semestre y grupo.'
+                  : 'Ingresa la matrícula escolar de tu hijo o hija para consultar sus asistencias y recibir reportes en tu teléfono.'}
               </p>
             </div>
 
             <div className="space-y-1.5">
               <label className="text-xs font-semibold text-gray-300">
-                Matrícula del Alumno (14 dígitos)
+                Matrícula Escolar (14 dígitos)
               </label>
               <div className="relative">
                 <input
@@ -227,7 +263,7 @@ export default function LoginModal() {
                 </span>
               </div>
               <p className="text-[10px] text-gray-400">
-                💡 Encuentra la matrícula en la credencial escolar o reporte de calificaciones del alumno.
+                💡 Encuentra la matrícula en la credencial escolar o reporte de calificaciones.
               </p>
             </div>
 
@@ -236,8 +272,13 @@ export default function LoginModal() {
               disabled={isTutorLoading || !tutorMatricula.trim()}
               className="w-full py-3.5 rounded-xl bg-gradient-to-r from-emerald-500 to-teal-600 hover:from-emerald-400 hover:to-teal-500 text-white font-bold text-xs shadow-lg shadow-emerald-500/20 disabled:opacity-50 transition-all flex items-center justify-center space-x-2 cursor-pointer"
             >
-              <span>{isTutorLoading ? 'Verificando matrícula...' : 'Consultar Mi Alumno'}</span>
-              <span>→</span>
+              <span>
+                {isTutorLoading 
+                  ? 'Verificando matrícula...' 
+                  : studentRoleMode === 'alumno' 
+                  ? 'Entrar a Mis Recursos de Clase (Alumno) →' 
+                  : 'Consultar Reportes de Mi Alumno (Tutor) →'}
+              </span>
             </button>
           </form>
         )}

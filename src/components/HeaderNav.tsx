@@ -5,7 +5,7 @@
 import React from 'react';
 import Link from 'next/link';
 import { useAuth, Role } from '@/lib/auth';
-import { LogIn, LogOut, Shield, User, Sparkles, BookOpen, QrCode, Users, HeartHandshake } from 'lucide-react';
+import { LogIn, LogOut, Shield, User, Sparkles, BookOpen, QrCode, Users, HeartHandshake, FolderArchive } from 'lucide-react';
 
 export default function HeaderNav() {
   const { user, openLoginModal, logout } = useAuth();
@@ -45,6 +45,13 @@ export default function HeaderNav() {
             <span>Docente</span>
           </span>
         );
+      case 'alumno':
+        return (
+          <span className="inline-flex items-center space-x-1 px-2.5 py-0.5 rounded-full bg-cyan-500/10 border border-cyan-500/30 text-cyan-400 text-[10px] font-black tracking-wider uppercase">
+            <span>🎓</span>
+            <span>Alumno</span>
+          </span>
+        );
       case 'tutor':
         return (
           <span className="inline-flex items-center space-x-1 px-2.5 py-0.5 rounded-full bg-teal-500/10 border border-teal-500/30 text-teal-400 text-[10px] font-black tracking-wider uppercase">
@@ -79,27 +86,59 @@ export default function HeaderNav() {
           {/* Nav Links strictly filtered by Role */}
           <nav className="hidden md:flex items-center space-x-2 text-xs font-semibold text-gray-300">
             
-            {/* 1. TUTOR: ONLY "Padres / Tutores" */}
-            {user?.role === 'tutor' && (
+            {/* 1. ALUMNO: "Recursos Educativos" */}
+            {user?.role === 'alumno' && (
               <Link 
-                href="/dashboard/parents" 
-                className="bg-emerald-500/15 border border-emerald-500/30 text-emerald-300 font-bold py-1.5 px-3.5 rounded-lg flex items-center space-x-2"
-                title="Módulo de Padres de Familia y Tutores"
+                href="/dashboard/recursos" 
+                className="bg-cyan-500/15 border border-cyan-500/30 text-cyan-300 font-bold py-1.5 px-3.5 rounded-lg flex items-center space-x-2"
+                title="Recursos Educativos: PDFs y Clases en Video de mi Semestre y Grupo"
               >
-                <HeartHandshake size={15} className="text-emerald-400" />
-                <span>Padres / Tutores</span>
+                <FolderArchive size={15} className="text-cyan-400" />
+                <span>Recursos Educativos</span>
               </Link>
             )}
 
-            {/* 2. DOCENTE: ONLY "Panel Docente" */}
+            {/* 2. TUTOR: "Padres / Tutores" y "Recursos" */}
+            {user?.role === 'tutor' && (
+              <>
+                <Link 
+                  href="/dashboard/parents" 
+                  className="bg-emerald-500/15 border border-emerald-500/30 text-emerald-300 font-bold py-1.5 px-3.5 rounded-lg flex items-center space-x-2"
+                  title="Módulo de Padres de Familia y Tutores"
+                >
+                  <HeartHandshake size={15} className="text-emerald-400" />
+                  <span>Padres / Tutores</span>
+                </Link>
+                <Link 
+                  href="/dashboard/recursos" 
+                  className="hover:text-cyan-400 transition-colors py-1.5 px-3 rounded-lg hover:bg-white/5 flex items-center space-x-1.5 text-cyan-300 font-bold"
+                  title="Recursos Educativos"
+                >
+                  <FolderArchive size={14} className="text-cyan-400" />
+                  <span>Recursos</span>
+                </Link>
+              </>
+            )}
+
+            {/* 3. DOCENTE: "Panel Docente" y "Recursos" */}
             {user?.role === 'docente' && (
-              <Link 
-                href="/dashboard/teacher" 
-                className="bg-emerald-500/15 border border-emerald-500/30 text-emerald-300 font-bold py-1.5 px-3.5 rounded-lg flex items-center space-x-2"
-              >
-                <BookOpen size={15} className="text-emerald-400" />
-                <span>Panel Docente</span>
-              </Link>
+              <>
+                <Link 
+                  href="/dashboard/teacher" 
+                  className="bg-emerald-500/15 border border-emerald-500/30 text-emerald-300 font-bold py-1.5 px-3.5 rounded-lg flex items-center space-x-2"
+                >
+                  <BookOpen size={15} className="text-emerald-400" />
+                  <span>Panel Docente</span>
+                </Link>
+                <Link 
+                  href="/dashboard/recursos" 
+                  className="hover:text-cyan-400 transition-colors py-1.5 px-3 rounded-lg hover:bg-white/5 flex items-center space-x-1.5 text-cyan-300 font-bold"
+                  title="Repositorio y Subida de Recursos Educativos"
+                >
+                  <FolderArchive size={14} className="text-cyan-400" />
+                  <span>Recursos</span>
+                </Link>
+              </>
             )}
 
             {/* 3. ENCARGADO DE ORDEN: Escáner QR y Asistencia por Grupo */}
@@ -155,6 +194,15 @@ export default function HeaderNav() {
                 >
                   <Users size={14} className="text-gray-400" />
                   <span>Alumnos</span>
+                </Link>
+
+                <Link 
+                  href="/dashboard/recursos" 
+                  className="hover:text-cyan-400 transition-colors py-1.5 px-3 rounded-lg hover:bg-white/5 flex items-center space-x-1.5 text-cyan-300 font-bold"
+                  title="Recursos Educativos y Aprobación de Materiales"
+                >
+                  <FolderArchive size={14} className="text-cyan-400" />
+                  <span>Recursos</span>
                 </Link>
 
                 {/* Padres / Tutores: Oculto para administrativo */}
@@ -266,17 +314,34 @@ export default function HeaderNav() {
       </div>
 
       {/* Mobile nav links */}
-      <div className="md:hidden flex items-center justify-around py-2 border-t border-white/5 bg-black/40 text-[11px] font-semibold text-gray-300">
-        {user?.role === 'tutor' ? (
-          <Link href="/dashboard/parents" className="text-teal-400 font-bold py-1 px-3 flex items-center space-x-1.5">
-            <span>👨‍👩‍👧</span>
-            <span>Módulo Padres / Tutores</span>
+      <div className="md:hidden flex items-center justify-around py-2 border-t border-white/5 bg-black/40 text-[11px] font-semibold text-gray-300 overflow-x-auto">
+        {user?.role === 'alumno' ? (
+          <Link href="/dashboard/recursos" className="text-cyan-400 font-bold py-1 px-3 flex items-center space-x-1.5">
+            <span>📚</span>
+            <span>Recursos Educativos</span>
           </Link>
+        ) : user?.role === 'tutor' ? (
+          <>
+            <Link href="/dashboard/parents" className="text-teal-400 font-bold py-1 px-3 flex items-center space-x-1.5">
+              <span>👨‍👩‍👧</span>
+              <span>Padres</span>
+            </Link>
+            <Link href="/dashboard/recursos" className="text-cyan-400 font-bold py-1 px-3 flex items-center space-x-1.5">
+              <span>📚</span>
+              <span>Recursos</span>
+            </Link>
+          </>
         ) : user?.role === 'docente' ? (
-          <Link href="/dashboard/teacher" className="text-emerald-400 font-bold py-1 px-3 flex items-center space-x-1.5">
-            <span>👨‍🏫</span>
-            <span>Panel Docente (Mi Horario)</span>
-          </Link>
+          <>
+            <Link href="/dashboard/teacher" className="text-emerald-400 font-bold py-1 px-2 flex items-center space-x-1">
+              <span>👨‍🏫</span>
+              <span>Mi Horario</span>
+            </Link>
+            <Link href="/dashboard/recursos" className="text-cyan-400 font-bold py-1 px-2 flex items-center space-x-1">
+              <span>📚</span>
+              <span>Recursos</span>
+            </Link>
+          </>
         ) : user?.role === 'encargado_orden' ? (
           <>
             <Link href="/scanner" className="hover:text-cyan-400 py-1 px-2">🎥 Escáner QR</Link>
@@ -295,11 +360,12 @@ export default function HeaderNav() {
             <Link href="/dashboard" className="hover:text-cyan-400 py-1 px-2">🛡️ Orden</Link>
             <Link href="/dashboard/teacher" className="hover:text-emerald-400 py-1 px-2">👨‍🏫 Docente</Link>
             <Link href="/dashboard/students" className="hover:text-cyan-400 py-1 px-2">👦 Alumnos</Link>
+            <Link href="/dashboard/recursos" className="text-cyan-300 font-bold hover:text-cyan-400 py-1 px-2">📚 Recursos</Link>
             {user?.role !== 'administrativo' && (
               <Link href="/dashboard/parents" className="hover:text-purple-400 py-1 px-2 text-purple-300">👨‍👩‍👧 Padres</Link>
             )}
             {(user?.role === 'administrador' || user?.isSuperAdmin || user?.email === 'admin@admin.com') && (
-              <Link href="/dashboard/qr-report" className="hover:text-cyan-400 py-1 px-2 text-cyan-300 font-bold">🖨️ QRs 1.5cm</Link>
+              <Link href="/dashboard/qr-report" className="hover:text-cyan-400 py-1 px-2 text-cyan-300 font-bold">🖨️ QRs</Link>
             )}
             {(user?.isSuperAdmin || user?.email === 'admin@admin.com') && (
               <Link href="/dashboard/roles" className="hover:text-amber-400 py-1 px-2">⚙️ Roles</Link>

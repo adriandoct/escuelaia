@@ -5,7 +5,7 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import { db } from './db';
 
-export type Role = 'administrador' | 'administrativo' | 'encargado_orden' | 'docente' | 'tutor';
+export type Role = 'administrador' | 'administrativo' | 'encargado_orden' | 'docente' | 'tutor' | 'alumno';
 
 export interface User {
   id: string;
@@ -13,6 +13,8 @@ export interface User {
   email: string;
   role: Role;
   matricula?: string;
+  grado?: string;
+  grupo?: string;
   numero_empleado?: string;
   phone?: string;
   avatarUrl?: string;
@@ -27,7 +29,7 @@ interface AuthContextType {
   closeLoginModal: () => void;
   loginWithCredentials: (emailOrEmployeeNum: string, pass: string) => { success: boolean; error?: string };
   loginWithGoogle: (email: string, name?: string, roleOverride?: Role) => { success: boolean; error?: string };
-  loginWithMatricula: (matricula: string) => Promise<{ success: boolean; error?: string }>;
+  loginWithMatricula: (matricula: string, asRole?: 'alumno' | 'tutor') => Promise<{ success: boolean; error?: string }>;
   logout: () => void;
   usersRolesMap: Record<string, Role>;
   usersPasswordsMap: Record<string, string>;
@@ -593,7 +595,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     return { success: true };
   };
 
-  const loginWithMatricula = async (matricula: string): Promise<{ success: boolean; error?: string }> => {
+  const loginWithMatricula = async (matricula: string, asRole: 'alumno' | 'tutor' = 'alumno'): Promise<{ success: boolean; error?: string }> => {
     const cleanMat = String(matricula || '').trim().replace(/[^a-zA-Z0-9]/g, '').toUpperCase();
     if (!cleanMat) {
       return { success: false, error: 'Por favor ingresa la matrícula del alumno (14 dígitos).' };
@@ -608,16 +610,20 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         };
       }
 
+      const isStudentRole = asRole === 'alumno';
+      const studentFullName = `${student.nombre} ${student.apellido_paterno} ${student.apellido_materno || ''}`.trim();
       const tutorName = student.tutor && student.tutor !== 'No asignado' && !student.tutor.toLowerCase().startsWith('tutor de')
         ? student.tutor
         : `Tutor de ${student.nombre}`;
 
       const loggedUser: User = {
-        id: `tutor-${student.matricula}`,
-        name: tutorName,
-        email: `tutor.${student.matricula}@cecytebc.edu.mx`,
-        role: 'tutor',
+        id: isStudentRole ? `alumno-${student.matricula}` : `tutor-${student.matricula}`,
+        name: isStudentRole ? studentFullName : tutorName,
+        email: isStudentRole ? `alumno.${student.matricula}@cecytebc.edu.mx` : `tutor.${student.matricula}@cecytebc.edu.mx`,
+        role: isStudentRole ? 'alumno' : 'tutor',
         matricula: student.matricula,
+        grado: student.grado,
+        grupo: student.grupo,
         avatarUrl: student.foto_url || `https://api.dicebear.com/7.x/bottts/svg?seed=${student.matricula}`,
       };
 
