@@ -1,4 +1,4 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import Link from "next/link";
 import "./globals.css";
 import { AuthProvider } from "@/lib/auth";
@@ -7,6 +7,12 @@ import LoginModal from "@/components/LoginModal";
 
 const geistSans = { variable: "--font-geist-sans" };
 const geistMono = { variable: "--font-geist-mono" };
+
+export const viewport: Viewport = {
+  width: "device-width",
+  initialScale: 1,
+  maximumScale: 5,
+};
 
 export const metadata: Metadata = {
   title: "CECYTE BC - Control Escolar e Institucional con QR",
@@ -37,13 +43,13 @@ export default function RootLayout({
           <div className="fixed top-[-10%] left-[-10%] w-[50%] h-[50%] bg-cyan-500/5 rounded-full blur-[120px] pointer-events-none z-[-1]"></div>
           <div className="fixed bottom-[-10%] right-[-10%] w-[50%] h-[50%] bg-blue-600/5 rounded-full blur-[120px] pointer-events-none z-[-1]"></div>
 
-          {/* Main Content Area */}
-          <main className="flex-1 flex flex-col max-w-7xl mx-auto w-full px-4 sm:px-6 lg:px-8 py-8 relative">
+          {/* Main Content Area - Optimized for Mobile, Tablet & Desktop */}
+          <main className="flex-1 flex flex-col max-w-7xl mx-auto w-full px-3 sm:px-6 lg:px-8 py-4 sm:py-6 lg:py-8 relative">
             {children}
           </main>
 
           {/* Global Footer */}
-          <footer className="border-t border-white/5 py-6 bg-black/20 backdrop-blur-sm text-center text-xs text-gray-500">
+          <footer className="border-t border-white/5 py-5 sm:py-6 bg-black/20 backdrop-blur-sm text-center text-xs text-gray-500 px-4">
             <p>© {new Date().getFullYear()} CECYTE BC. Sistema de Control Institucional y Accesos por Código QR.</p>
           </footer>
         </AuthProvider>

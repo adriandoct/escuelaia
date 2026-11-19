@@ -41,7 +41,7 @@ export interface RecursoEducativo {
   vistas?: number;
 }
 
-export const CANAL_YOUTUBE_OFICIAL = 'cecytecopias@gmail.com';
+export const CANAL_YOUTUBE_OFICIAL = 'URBIVILLASCECYTE';
 export const YOUTUBE_STUDIO_URL = 'https://studio.youtube.com/channel/';
 export const YOUTUBE_UPLOAD_DIRECT_URL = 'https://www.youtube.com/upload';
 
@@ -120,3 +120,4 @@ export function saveCachedRecursos(recursos: RecursoEducativo[]) {
     console.error('Error guardando recursos en almacenamiento local:', e);
   }
 }
+

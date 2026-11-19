@@ -21,3 +21,4 @@ export default function YouTubeIcon({ size = 20, className = "" }: YouTubeIconPr
     </svg>
   );
 }
+

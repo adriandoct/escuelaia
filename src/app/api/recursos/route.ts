@@ -174,6 +174,14 @@ export async function POST(req: Request) {
     const recursos = readRecursos();
 
     if (action === 'create' && recurso) {
+      // Regla de seguridad: Alumnos y Tutores NO pueden subir recursos
+      if (recurso.autorRol === 'alumno' || recurso.autorRol === 'tutor') {
+        return NextResponse.json({ 
+          success: false, 
+          error: 'Acción no autorizada: Los alumnos y tutores no tienen permisos para subir recursos.' 
+        }, { status: 403 });
+      }
+
       const isAutoApproved = recurso.autorRol === 'administrador' || recurso.autorRol === 'superadmin';
       
       let youtubeId = recurso.youtubeId;
@@ -268,3 +276,4 @@ export async function POST(req: Request) {
     return NextResponse.json({ success: false, error: err.message }, { status: 500 });
   }
 }
+

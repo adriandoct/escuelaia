@@ -26,6 +26,15 @@ body {
   overflow-x: hidden;
 }
 
+/* Hide scrollbar for clean mobile / tablet horizontal carousels and tabs */
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+.no-scrollbar {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+
 ::-webkit-scrollbar {
   width: 6px;
   height: 6px;

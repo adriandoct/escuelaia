@@ -25,7 +25,7 @@ import {
 } from 'lucide-react';
 
 // Helper to determine if student has a valid named tutor
-export const hasAssignedTutor = (tutor?: string): boolean => {
+const hasAssignedTutor = (tutor?: string): boolean => {
   if (!tutor) return false;
   const clean = tutor.trim();
   if (

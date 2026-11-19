@@ -264,9 +264,14 @@ export default function HeaderNav() {
         </div>
 
         {/* User Account Controls */}
-        <div className="flex items-center space-x-3">
+        <div className="flex items-center space-x-2 sm:space-x-3">
           {user ? (
-            <div className="flex items-center space-x-3">
+            <div className="flex items-center space-x-2 sm:space-x-3">
+              {/* Role badge visible on mobile */}
+              <div className="flex sm:hidden items-center">
+                {getRoleBadge(user.role, user.isSuperAdmin || user.email === 'admin@admin.com')}
+              </div>
+
               <div className="hidden sm:flex flex-col items-end">
                 <div className="flex items-center space-x-2">
                   <span className="text-xs font-bold text-white max-w-[140px] truncate">{user.name}</span>
@@ -303,72 +308,105 @@ export default function HeaderNav() {
           ) : (
             <button
               onClick={openLoginModal}
-              className="flex items-center space-x-2 px-4 py-2 rounded-xl bg-gradient-to-r from-cyan-500 to-blue-600 text-white text-xs font-bold shadow-lg shadow-cyan-500/20 hover:opacity-90 transition-all cursor-pointer"
+              className="flex items-center space-x-1.5 sm:space-x-2 px-3 sm:px-4 py-2 rounded-xl bg-gradient-to-r from-cyan-500 to-blue-600 text-white text-xs font-bold shadow-lg shadow-cyan-500/20 hover:opacity-90 transition-all cursor-pointer"
             >
               <LogIn size={14} />
-              <span>Acceso Institucional</span>
+              <span>Acceso</span>
             </button>
           )}
         </div>
 
       </div>
 
-      {/* Mobile nav links */}
-      <div className="md:hidden flex items-center justify-around py-2 border-t border-white/5 bg-black/40 text-[11px] font-semibold text-gray-300 overflow-x-auto">
+      {/* Mobile nav links: Horizontal scrollable pill bar with native touch feel */}
+      <div className="md:hidden flex items-center gap-1.5 px-3 py-2 border-t border-white/5 bg-black/60 backdrop-blur-md text-[11px] font-semibold text-gray-300 overflow-x-auto no-scrollbar scroll-smooth whitespace-nowrap">
         {user?.role === 'alumno' ? (
-          <Link href="/dashboard/recursos" className="text-cyan-400 font-bold py-1 px-3 flex items-center space-x-1.5">
+          <Link href="/dashboard/recursos" className="text-cyan-300 bg-cyan-500/15 border border-cyan-500/30 font-bold py-1.5 px-3 rounded-lg flex items-center space-x-1.5 shrink-0">
             <span>📚</span>
             <span>Recursos Educativos</span>
           </Link>
         ) : user?.role === 'tutor' ? (
           <>
-            <Link href="/dashboard/parents" className="text-teal-400 font-bold py-1 px-3 flex items-center space-x-1.5">
+            <Link href="/dashboard/parents" className="text-teal-300 bg-teal-500/15 border border-teal-500/30 font-bold py-1.5 px-3 rounded-lg flex items-center space-x-1.5 shrink-0">
               <span>👨‍👩‍👧</span>
               <span>Padres</span>
             </Link>
-            <Link href="/dashboard/recursos" className="text-cyan-400 font-bold py-1 px-3 flex items-center space-x-1.5">
+            <Link href="/dashboard/recursos" className="text-cyan-300 bg-cyan-500/10 border border-cyan-500/20 font-bold py-1.5 px-3 rounded-lg flex items-center space-x-1.5 shrink-0">
               <span>📚</span>
               <span>Recursos</span>
             </Link>
           </>
         ) : user?.role === 'docente' ? (
           <>
-            <Link href="/dashboard/teacher" className="text-emerald-400 font-bold py-1 px-2 flex items-center space-x-1">
+            <Link href="/dashboard/teacher" className="text-emerald-300 bg-emerald-500/15 border border-emerald-500/30 font-bold py-1.5 px-3 rounded-lg flex items-center space-x-1.5 shrink-0">
               <span>👨‍🏫</span>
-              <span>Mi Horario</span>
+              <span>Mi Horario y Lista</span>
             </Link>
-            <Link href="/dashboard/recursos" className="text-cyan-400 font-bold py-1 px-2 flex items-center space-x-1">
+            <Link href="/dashboard/recursos" className="text-cyan-300 bg-cyan-500/10 border border-cyan-500/20 font-bold py-1.5 px-3 rounded-lg flex items-center space-x-1.5 shrink-0">
               <span>📚</span>
               <span>Recursos</span>
             </Link>
           </>
         ) : user?.role === 'encargado_orden' ? (
           <>
-            <Link href="/scanner" className="hover:text-cyan-400 py-1 px-2">🎥 Escáner QR</Link>
-            <Link href="/dashboard" className="text-cyan-400 font-bold py-1 px-2">🛡️ Asistencia por Grupo</Link>
+            <Link href="/scanner" className="bg-white/5 border border-white/10 hover:text-cyan-400 py-1.5 px-3 rounded-lg shrink-0 flex items-center space-x-1">
+              <span>🎥</span>
+              <span>Escáner QR</span>
+            </Link>
+            <Link href="/dashboard" className="text-cyan-300 bg-cyan-500/15 border border-cyan-500/30 font-bold py-1.5 px-3 rounded-lg shrink-0 flex items-center space-x-1">
+              <span>🛡️</span>
+              <span>Asistencia</span>
+            </Link>
           </>
         ) : !user ? (
           <>
-            <Link href="/scanner" className="hover:text-cyan-400 py-1 px-3">🎥 Escáner QR</Link>
-            <button onClick={openLoginModal} className="text-cyan-400 font-bold py-1 px-3 flex items-center space-x-1 cursor-pointer">
+            <Link href="/scanner" className="bg-white/5 border border-white/10 hover:text-cyan-400 py-1.5 px-3 rounded-lg shrink-0 flex items-center space-x-1">
+              <span>🎥</span>
+              <span>Escáner QR</span>
+            </Link>
+            <button onClick={openLoginModal} className="text-cyan-300 bg-cyan-500/15 border border-cyan-500/30 font-bold py-1.5 px-3.5 rounded-lg flex items-center space-x-1 cursor-pointer shrink-0">
               <span>🔑 Iniciar Sesión</span>
             </button>
           </>
         ) : (
           <>
-            <Link href="/scanner" className="hover:text-cyan-400 py-1 px-2">🎥 Escáner</Link>
-            <Link href="/dashboard" className="hover:text-cyan-400 py-1 px-2">🛡️ Orden</Link>
-            <Link href="/dashboard/teacher" className="hover:text-emerald-400 py-1 px-2">👨‍🏫 Docente</Link>
-            <Link href="/dashboard/students" className="hover:text-cyan-400 py-1 px-2">👦 Alumnos</Link>
-            <Link href="/dashboard/recursos" className="text-cyan-300 font-bold hover:text-cyan-400 py-1 px-2">📚 Recursos</Link>
+            <Link href="/scanner" className="bg-white/5 border border-white/10 hover:text-cyan-400 py-1.5 px-3 rounded-lg shrink-0 flex items-center space-x-1">
+              <span>🎥</span>
+              <span>Escáner</span>
+            </Link>
+            <Link href="/dashboard" className="bg-white/5 border border-white/10 hover:text-cyan-400 py-1.5 px-3 rounded-lg shrink-0 flex items-center space-x-1">
+              <span>🛡️</span>
+              <span>Orden</span>
+            </Link>
+            <Link href="/dashboard/teacher" className="bg-white/5 border border-white/10 hover:text-emerald-400 py-1.5 px-3 rounded-lg shrink-0 flex items-center space-x-1">
+              <span>👨‍🏫</span>
+              <span>Docente</span>
+            </Link>
+            <Link href="/dashboard/students" className="bg-white/5 border border-white/10 hover:text-cyan-400 py-1.5 px-3 rounded-lg shrink-0 flex items-center space-x-1">
+              <span>👦</span>
+              <span>Alumnos</span>
+            </Link>
+            <Link href="/dashboard/recursos" className="text-cyan-300 bg-cyan-500/15 border border-cyan-500/30 font-bold py-1.5 px-3 rounded-lg shrink-0 flex items-center space-x-1">
+              <span>📚</span>
+              <span>Recursos</span>
+            </Link>
             {user?.role !== 'administrativo' && (
-              <Link href="/dashboard/parents" className="hover:text-purple-400 py-1 px-2 text-purple-300">👨‍👩‍👧 Padres</Link>
+              <Link href="/dashboard/parents" className="text-purple-300 bg-purple-500/10 border border-purple-500/20 hover:text-purple-400 py-1.5 px-3 rounded-lg shrink-0 flex items-center space-x-1">
+                <span>👨‍👩‍👧</span>
+                <span>Padres</span>
+              </Link>
             )}
             {(user?.role === 'administrador' || user?.isSuperAdmin || user?.email === 'admin@admin.com') && (
-              <Link href="/dashboard/qr-report" className="hover:text-cyan-400 py-1 px-2 text-cyan-300 font-bold">🖨️ QRs</Link>
+              <Link href="/dashboard/qr-report" className="text-cyan-300 bg-cyan-500/10 border border-cyan-500/20 hover:text-cyan-400 py-1.5 px-3 rounded-lg shrink-0 flex items-center space-x-1">
+                <span>🖨️</span>
+                <span>QRs</span>
+              </Link>
             )}
             {(user?.isSuperAdmin || user?.email === 'admin@admin.com') && (
-              <Link href="/dashboard/roles" className="hover:text-amber-400 py-1 px-2">⚙️ Roles</Link>
+              <Link href="/dashboard/roles" className="text-amber-300 bg-amber-500/10 border border-amber-500/20 hover:text-amber-400 py-1.5 px-3 rounded-lg shrink-0 flex items-center space-x-1">
+                <span>⚙️</span>
+                <span>Roles</span>
+              </Link>
             )}
           </>
         )}

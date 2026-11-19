@@ -48,6 +48,9 @@ export default function RecursosPage() {
   const isAlumno = user?.role === 'alumno';
   const isTutor = user?.role === 'tutor';
 
+  // Regla estricta: Los alumnos y tutores NO pueden subir recursos (solo docentes, directivos y administrativos autorizados)
+  const canUpload = !!user && (isDocente || isAdminOrSuper || user?.role === 'administrativo');
+
   // Data states
   const [recursos, setRecursos] = useState<RecursoEducativo[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -294,14 +297,14 @@ export default function RecursosPage() {
       )}
 
       {/* Main Page Header */}
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-white/10 pb-6">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-white/10 pb-4 sm:pb-6">
         <div>
           <div className="flex items-center space-x-3 mb-1">
-            <div className="p-2.5 rounded-2xl bg-gradient-to-br from-cyan-500/20 to-blue-600/10 border border-cyan-500/30 text-cyan-400 shadow-lg shadow-cyan-500/10">
-              <FileText className="w-7 h-7" />
+            <div className="p-2 sm:p-2.5 rounded-2xl bg-gradient-to-br from-cyan-500/20 to-blue-600/10 border border-cyan-500/30 text-cyan-400 shadow-lg shadow-cyan-500/10 shrink-0">
+              <FileText className="w-6 h-6 sm:w-7 sm:h-7" />
             </div>
             <div>
-              <h1 className="text-2xl sm:text-3xl font-extrabold text-white tracking-tight flex items-center gap-2">
+              <h1 className="text-xl sm:text-2xl lg:text-3xl font-extrabold text-white tracking-tight flex items-center flex-wrap gap-2">
                 <span>Repositorio de Recursos Educativos</span>
                 <span className="text-[10px] bg-cyan-500/20 text-cyan-300 px-2.5 py-0.5 rounded-full border border-cyan-500/30 font-bold uppercase tracking-wider">
                   CECYTE BC
@@ -315,38 +318,40 @@ export default function RecursosPage() {
         </div>
 
         {/* Action Header Buttons */}
-        <div className="flex flex-wrap items-center gap-2.5">
+        <div className="flex items-center gap-2 self-start sm:self-auto w-full sm:w-auto">
           <button
             onClick={() => { setIsRefreshing(true); loadRecursos(); }}
             disabled={isRefreshing}
-            className="p-2.5 rounded-xl bg-white/5 hover:bg-white/10 text-gray-300 hover:text-white border border-white/10 transition-all cursor-pointer"
+            className="p-2.5 rounded-xl bg-white/5 hover:bg-white/10 text-gray-300 hover:text-white border border-white/10 transition-all cursor-pointer shrink-0"
             title="Actualizar lista de recursos"
           >
             <RefreshCw size={15} className={isRefreshing ? 'animate-spin text-cyan-400' : ''} />
           </button>
 
-          {/* Botón Subir Recurso */}
-          <button
-            onClick={() => {
-              if (!user) {
-                openLoginModal();
-                return;
-              }
-              setIsUploadModalOpen(true);
-            }}
-            className="inline-flex items-center space-x-2 px-4 py-2.5 rounded-xl bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-400 hover:to-blue-500 text-white font-bold text-xs shadow-lg shadow-cyan-500/20 hover:shadow-cyan-500/40 transition-all cursor-pointer"
-          >
-            <Upload size={15} />
-            <span>+ Subir Recurso (PDF o Video)</span>
-          </button>
+          {/* Botón Subir Recurso: Exclusivo para docentes y directivos (Oculto para Alumnos y Tutores) */}
+          {canUpload && (
+            <button
+              onClick={() => {
+                if (!user) {
+                  openLoginModal();
+                  return;
+                }
+                setIsUploadModalOpen(true);
+              }}
+              className="flex-1 sm:flex-initial inline-flex items-center justify-center space-x-2 px-4 py-2.5 rounded-xl bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-400 hover:to-blue-500 text-white font-bold text-xs shadow-lg shadow-cyan-500/20 hover:shadow-cyan-500/40 transition-all cursor-pointer"
+            >
+              <Upload size={15} />
+              <span>+ Subir Recurso (PDF o Video)</span>
+            </button>
+          )}
         </div>
       </div>
 
       {/* Tabs Navigation (Explorar, Validación de Admin, Mis Recursos, Canal YouTube) */}
-      <div className="flex flex-wrap items-center gap-2 border-b border-white/10 pb-3">
+      <div className="flex items-center gap-2 border-b border-white/10 pb-3 overflow-x-auto no-scrollbar whitespace-nowrap">
         <button
           onClick={() => setActiveTab('explorar')}
-          className={`px-4 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center space-x-2 ${
+          className={`px-4 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center space-x-2 shrink-0 ${
             activeTab === 'explorar'
               ? 'bg-cyan-500/20 border border-cyan-500/50 text-cyan-300 shadow-md shadow-cyan-500/10'
               : 'text-gray-400 hover:text-white hover:bg-white/5'
@@ -363,7 +368,7 @@ export default function RecursosPage() {
         {isAdminOrSuper && (
           <button
             onClick={() => setActiveTab('validacion')}
-            className={`px-4 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center space-x-2 ${
+            className={`px-4 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center space-x-2 shrink-0 ${
               activeTab === 'validacion'
                 ? 'bg-amber-500/20 border border-amber-500/50 text-amber-300 shadow-md shadow-amber-500/10'
                 : 'text-amber-400 hover:bg-amber-500/10'
@@ -379,11 +384,11 @@ export default function RecursosPage() {
           </button>
         )}
 
-        {/* Pestaña Mis Recursos (Docentes y Alumnos) */}
-        {user && (
+        {/* Pestaña Mis Recursos (Solo para usuarios con permiso de subida) */}
+        {user && canUpload && (
           <button
             onClick={() => setActiveTab('mis_recursos')}
-            className={`px-4 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center space-x-2 ${
+            className={`px-4 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center space-x-2 shrink-0 ${
               activeTab === 'mis_recursos'
                 ? 'bg-purple-500/20 border border-purple-500/50 text-purple-300 shadow-md shadow-purple-500/10'
                 : 'text-gray-400 hover:text-white hover:bg-white/5'
@@ -402,7 +407,7 @@ export default function RecursosPage() {
         {/* Pestaña Oficial de YouTube */}
         <button
           onClick={() => setActiveTab('youtube')}
-          className={`px-4 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center space-x-2 ${
+          className={`px-4 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center space-x-2 shrink-0 ${
             activeTab === 'youtube'
               ? 'bg-red-500/20 border border-red-500/50 text-red-300 shadow-md shadow-red-500/10'
               : 'text-red-400 hover:bg-red-500/10'
@@ -575,7 +580,7 @@ export default function RecursosPage() {
         </div>
       )}
 
-      {/* Resources Cards Grid */}
+      {/* Resources Cards Grid - Mobile, Tablet & Desktop Responsive */}
       {isLoading ? (
         <div className="py-20 text-center space-y-3">
           <RefreshCw size={32} className="animate-spin text-cyan-400 mx-auto" />
@@ -591,12 +596,12 @@ export default function RecursosPage() {
             {activeTab === 'validacion'
               ? '¡Excelente! No hay recursos pendientes de validación por el Administrador.'
               : activeTab === 'mis_recursos'
-              ? 'Aún no has subido recursos educativos. ¡Haz clic en "+ Subir Recurso" para compartir guías o videos!'
-              : 'Prueba cambiando los filtros de semestre, grupo o búsqueda.'}
+              ? 'Aún no has subido recursos educativos. Usa "+ Subir Recurso" para compartir guías o videos.'
+              : 'Prueba cambiando los filtros de semestre, grupo o materia.'}
           </p>
         </div>
       ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-5">
           {displayedResources.map((rec) => {
             const isPending = rec.estado === 'pendiente';
             const isApproved = rec.estado === 'aprobado';
@@ -809,18 +814,20 @@ export default function RecursosPage() {
         </div>
       )}
 
-      {/* Upload Resource Modal */}
-      <UploadResourceModal
-        isOpen={isUploadModalOpen}
-        onClose={() => setIsUploadModalOpen(false)}
-        onSuccess={(nuevo, msg) => {
-          showToast(msg, 'success');
-          loadRecursos();
-        }}
-        defaultSemestre={semestreFilter !== 'all' ? semestreFilter : '3°'}
-        defaultGrupo={grupoFilter !== 'all' ? grupoFilter : 'TODOS'}
-        defaultMateria={materiaFilter !== 'TODAS' ? materiaFilter : ''}
-      />
+      {/* Upload Resource Modal (Solo para roles con permisos de subida) */}
+      {canUpload && (
+        <UploadResourceModal
+          isOpen={isUploadModalOpen}
+          onClose={() => setIsUploadModalOpen(false)}
+          onSuccess={(nuevo, msg) => {
+            showToast(msg, 'success');
+            loadRecursos();
+          }}
+          defaultSemestre={semestreFilter !== 'all' ? semestreFilter : '3°'}
+          defaultGrupo={grupoFilter !== 'all' ? grupoFilter : 'TODOS'}
+          defaultMateria={materiaFilter !== 'TODAS' ? materiaFilter : ''}
+        />
+      )}
 
       {/* PDF Viewer Modal */}
       <PDFViewerModal

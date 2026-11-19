@@ -1013,7 +1013,7 @@ export default function TeacherDashboardPage() {
       {/* =========================================================================
           BARRA DE NAVEGACIÓN SUPERIOR: ASISTENCIAS vs HORARIOS DE GRUPO vs REPORTES
           ========================================================================= */}
-      <div className="flex items-center space-x-2 p-1.5 rounded-2xl bg-[#030712]/95 border border-white/10 shadow-2xl overflow-x-auto">
+      <div className="flex items-center space-x-2 p-1.5 rounded-2xl bg-[#030712]/95 border border-white/10 shadow-2xl overflow-x-auto no-scrollbar scroll-smooth">
         <button
           type="button"
           onClick={() => setActiveMainTab('asistencias')}
@@ -1247,7 +1247,7 @@ export default function TeacherDashboardPage() {
           <div className="flex flex-col md:flex-row items-stretch md:items-center justify-between gap-4">
             
             {/* Toggle Buttons */}
-            <div className="flex items-center space-x-2 p-1.5 rounded-2xl bg-[#030712]/90 border border-white/10 shadow-lg">
+            <div className="flex items-center space-x-2 p-1.5 rounded-2xl bg-[#030712]/90 border border-white/10 shadow-lg overflow-x-auto no-scrollbar whitespace-nowrap">
           <button
             type="button"
             onClick={() => setViewMode('sabana')}
