@@ -84,6 +84,8 @@ export default function UploadResourceModal({
   const [errorMessage, setErrorMessage] = useState('');
 
   if (!isOpen) return null;
+  // Regla estricta: Alumnos y Tutores NO pueden abrir ni usar este modal
+  if (!user || user.role === 'alumno' || user.role === 'tutor') return null;
 
   const isAdminOrSuper = user?.role === 'administrador' || user?.isSuperAdmin || user?.email === 'admin@admin.com';
   const effectiveMateria = materia === 'OTRA' ? (customMateria.trim() || 'General') : materia;

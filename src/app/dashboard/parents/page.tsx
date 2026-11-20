@@ -21,7 +21,7 @@ import {
   Users, Search, UserCheck, UserX, Phone, MessageSquare, CheckCircle2, 
   AlertTriangle, Shield, Clock, Send, Edit3, ArrowRight, X, ExternalLink,
   Sparkles, RefreshCw, Filter, FileSpreadsheet, Download, Check, ShieldCheck,
-  Building2, LogIn, LogOut, Info, Bell, Smartphone, QrCode, Copy, BellRing
+  Building2, LogIn, LogOut, Info, Bell, Smartphone, QrCode, Copy, BellRing, BookOpen
 } from 'lucide-react';
 
 // Helper to determine if student has a valid named tutor
@@ -1045,6 +1045,16 @@ export default function ParentsDashboardPage() {
                         <BellRing size={13} className="text-emerald-400 animate-pulse" />
                         <span>🔔 Configurar Notificaciones en Celular</span>
                       </button>
+
+                      {/* Direct Link to Student Resources */}
+                      <Link
+                        href={`/dashboard/recursos?semestre=${encodeURIComponent(student.grado || 'all')}&grupo=${encodeURIComponent(student.grupo || 'all')}`}
+                        className="w-full py-2 px-3 rounded-xl bg-purple-500/15 hover:bg-purple-500/25 border border-purple-500/30 text-purple-300 hover:text-purple-200 text-[11px] font-bold transition-all flex items-center justify-center space-x-1.5 cursor-pointer shadow-sm"
+                        title="Ver guías de estudio, apuntes y películas del semestre del alumno"
+                      >
+                        <BookOpen size={13} className="text-purple-400" />
+                        <span>📚 Recursos Didácticos ({student.grado} &quot;{student.grupo}&quot;)</span>
+                      </Link>
 
                       {/* Direct WhatsApp Web Chat Trigger */}
                       {student.telefono && (

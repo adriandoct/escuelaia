@@ -1,9 +1,11 @@
 'use client';
 
-import React, { useState, useEffect, useRef, Suspense } from 'react';
+import React, { useState, useEffect, useMemo, useRef, Suspense } from 'react';
+import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
-import { db, Alumno } from '@/lib/db';
+import { db, Alumno, Asistencia } from '@/lib/db';
 import { getClean10DigitPhone, getStudentNtfyTopic, getTutorNtfyTopic } from '@/lib/whatsapp';
+import { CINECLUB_DRIVE_URL } from '@/lib/recursos';
 import {
   Bell,
   BellRing,
@@ -22,7 +24,11 @@ import {
   Check,
   Sparkles,
   UserCheck,
-  Radio
+  Radio,
+  BookOpen,
+  Film,
+  Clapperboard,
+  FileText
 } from 'lucide-react';
 
 interface PushAlertItem {
@@ -42,6 +48,7 @@ function TutorMobilePortalContent() {
   const [queryInput, setQueryInput] = useState(initialMatricula || initialTel);
   const [selectedStudent, setSelectedStudent] = useState<Alumno | null>(null);
   const [allStudents, setAllStudents] = useState<Alumno[]>([]);
+  const [allAsistencias, setAllAsistencias] = useState<Asistencia[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchError, setSearchError] = useState<string | null>(null);
 
@@ -54,6 +61,26 @@ function TutorMobilePortalContent() {
   const [sendingTest, setSendingTest] = useState(false);
 
   const seenIdsRef = useRef<Set<string>>(new Set());
+
+  // Calcula si el alumno está actualmente en la escuela o ya salió
+  const todayStatus = useMemo(() => {
+    if (!selectedStudent) return null;
+    const todayStr = new Date().toISOString().split('T')[0];
+    const studentLogs = allAsistencias
+      .filter((a) => a.alumno_id === selectedStudent.id && a.fecha === todayStr)
+      .sort((a, b) => new Date(`${a.fecha}T${a.hora}`).getTime() - new Date(`${b.fecha}T${b.hora}`).getTime());
+
+    const lastLog = studentLogs.length > 0 ? studentLogs[studentLogs.length - 1] : null;
+    const isInside = lastLog?.tipo === 'entrada';
+    const hasExited = lastLog?.tipo === 'salida';
+
+    return {
+      isInside,
+      hasExited,
+      lastLog,
+      totalToday: studentLogs.length
+    };
+  }, [selectedStudent, allAsistencias]);
 
   // Play notification chime on tutor's cell phone using Web Audio API
   const playNotificationSound = (tipo: 'entrada' | 'salida') => {
@@ -121,13 +148,17 @@ function TutorMobilePortalContent() {
     } catch {}
   };
 
-  // Load students database
+  // Load students and attendance database
   useEffect(() => {
     async function load() {
       setLoading(true);
       try {
-        const list = await db.getAlumnos();
+        const [list, asistList] = await Promise.all([
+          db.getAlumnos(),
+          db.getAsistencias()
+        ]);
         setAllStudents(list);
+        setAllAsistencias(asistList);
 
         // Remember last student from localStorage if no URL param
         const savedMat = typeof window !== 'undefined' ? localStorage.getItem('cecyte_tutor_saved_matricula') : '';
@@ -447,6 +478,73 @@ function TutorMobilePortalContent() {
                 </div>
               </div>
 
+              {/* Estado de Presencia Escolar: ¿Está en la escuela o ya salió? */}
+              <div className="pt-3 border-t border-white/10 space-y-2">
+                <div className="flex items-center justify-between">
+                  <span className="text-[10px] font-bold uppercase tracking-wider text-gray-400">
+                    Estado en el Plantel Escolar Hoy:
+                  </span>
+                  <button
+                    type="button"
+                    onClick={async () => {
+                      try {
+                        const asistList = await db.getAsistencias();
+                        setAllAsistencias(asistList);
+                      } catch {}
+                    }}
+                    className="text-[10px] text-cyan-400 hover:text-cyan-300 flex items-center space-x-1 cursor-pointer"
+                    title="Actualizar estado de asistencia"
+                  >
+                    <RefreshCw size={10} />
+                    <span>Actualizar</span>
+                  </button>
+                </div>
+
+                {todayStatus?.isInside ? (
+                  <div className="p-3.5 rounded-2xl bg-gradient-to-r from-emerald-950/90 via-[#062418] to-[#041a11] border-2 border-emerald-400 shadow-lg shadow-emerald-500/20 space-y-1">
+                    <div className="flex items-center justify-between">
+                      <span className="inline-flex items-center space-x-2 text-xs font-black text-emerald-300 uppercase tracking-wide">
+                        <span className="w-2.5 h-2.5 rounded-full bg-emerald-400 animate-pulse" />
+                        <span>🟢 EL ALUMNO ESTÁ EN LA ESCUELA</span>
+                      </span>
+                      {todayStatus.lastLog?.hora && (
+                        <span className="text-[11px] font-mono font-black text-emerald-300 bg-emerald-500/20 px-2 py-0.5 rounded-lg border border-emerald-500/40">
+                          Entrada: {todayStatus.lastLog.hora.slice(0, 5)} hrs
+                        </span>
+                      )}
+                    </div>
+                    <p className="text-[11px] text-gray-200 leading-relaxed">
+                      Entrada registrada con éxito en los torniquetes escolares. El alumno se encuentra realizando sus actividades dentro del plantel CECYTE BC.
+                    </p>
+                  </div>
+                ) : todayStatus?.hasExited ? (
+                  <div className="p-3.5 rounded-2xl bg-gradient-to-r from-rose-950/90 via-[#2a0915] to-[#1c050e] border-2 border-rose-400 shadow-lg shadow-rose-500/20 space-y-1">
+                    <div className="flex items-center justify-between">
+                      <span className="inline-flex items-center space-x-2 text-xs font-black text-rose-300 uppercase tracking-wide">
+                        <span className="w-2.5 h-2.5 rounded-full bg-rose-400" />
+                        <span>🔴 EL ALUMNO YA SALIÓ DE LA ESCUELA</span>
+                      </span>
+                      {todayStatus.lastLog?.hora && (
+                        <span className="text-[11px] font-mono font-black text-rose-300 bg-rose-500/20 px-2 py-0.5 rounded-lg border border-rose-500/40">
+                          Salida: {todayStatus.lastLog.hora.slice(0, 5)} hrs
+                        </span>
+                      )}
+                    </div>
+                    <p className="text-[11px] text-gray-200 leading-relaxed">
+                      Salida registrada del plantel. El alumno concluyó su jornada escolar y ya no se encuentra dentro del centro educativo.
+                    </p>
+                  </div>
+                ) : (
+                  <div className="p-3 rounded-2xl bg-white/[0.03] border border-white/10 flex items-center justify-between">
+                    <div className="flex items-center space-x-2 text-xs font-bold text-gray-300">
+                      <Clock size={14} className="text-gray-400" />
+                      <span>⚪ SIN REGISTRO EN EL PLANTEL HOY</span>
+                    </div>
+                    <span className="text-[10px] text-gray-500">Esperando escaneo QR</span>
+                  </div>
+                )}
+              </div>
+
               {/* Action Buttons: Enable Browser Push + Test Notification */}
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 pt-2 border-t border-white/10">
                 {notifPermission !== 'granted' ? (
@@ -483,6 +581,76 @@ function TutorMobilePortalContent() {
                     </>
                   )}
                 </button>
+              </div>
+            </div>
+
+            {/* Recursos Didácticos para Estudiar del Alumno (100% Modo Consulta / Sin Subida) */}
+            <div className="rounded-3xl bg-gradient-to-br from-[#0e1628] via-[#09101f] to-black border border-purple-500/35 p-5 shadow-xl space-y-4">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center space-x-3">
+                  <div className="w-10 h-10 rounded-2xl bg-gradient-to-br from-purple-600/30 to-pink-600/20 border border-purple-500/40 text-purple-300 flex items-center justify-center shadow-md">
+                    <BookOpen size={20} />
+                  </div>
+                  <div>
+                    <h3 className="text-sm font-black text-white flex items-center gap-1.5">
+                      <span>Recursos Didácticos para Estudiar</span>
+                    </h3>
+                    <p className="text-[11px] text-purple-300 font-mono">
+                      Semestre {selectedStudent.grado} • Grupo &quot;{selectedStudent.grupo}&quot;
+                    </p>
+                  </div>
+                </div>
+                <span className="text-[10px] bg-purple-500/20 text-purple-200 font-extrabold px-2.5 py-0.5 rounded-full border border-purple-500/40">
+                  Solo Lectura
+                </span>
+              </div>
+
+              <p className="text-xs text-gray-300 leading-relaxed">
+                Revisa tus guías de estudio en PDF, clases en video y películas de CINECLUB. Los alumnos tienen acceso de consulta directa y no necesitan subir ningún archivo.
+              </p>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                <Link
+                  href={`/dashboard/recursos?semestre=${encodeURIComponent(selectedStudent.grado)}&grupo=${encodeURIComponent(selectedStudent.grupo)}`}
+                  className="p-3.5 rounded-2xl bg-purple-600/20 hover:bg-purple-600/30 border border-purple-500/40 text-white font-bold text-xs flex items-center justify-between transition-all group shadow-sm"
+                >
+                  <div className="flex items-center space-x-2.5">
+                    <FileText size={20} className="text-purple-400 group-hover:scale-110 transition-transform" />
+                    <div>
+                      <div className="font-extrabold text-white">Guías y Apuntes en PDF</div>
+                      <div className="text-[10px] text-gray-400 font-normal">Para {selectedStudent.grado} &quot;{selectedStudent.grupo}&quot;</div>
+                    </div>
+                  </div>
+                  <ExternalLink size={14} className="text-purple-400 opacity-70 group-hover:opacity-100" />
+                </Link>
+
+                <a
+                  href={CINECLUB_DRIVE_URL}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="p-3.5 rounded-2xl bg-gradient-to-r from-purple-600/25 to-pink-600/25 hover:from-purple-600/40 hover:to-pink-600/40 border border-purple-500/40 text-white font-bold text-xs flex items-center justify-between transition-all group shadow-sm"
+                >
+                  <div className="flex items-center space-x-2.5">
+                    <Clapperboard size={20} className="text-pink-400 group-hover:scale-110 transition-transform" />
+                    <div>
+                      <div className="font-extrabold text-white">🎬 Películas CINECLUB</div>
+                      <div className="text-[10px] text-pink-300/80 font-normal">Abrir carpeta en Google Drive</div>
+                    </div>
+                  </div>
+                  <ExternalLink size={14} className="text-pink-400 opacity-70 group-hover:opacity-100" />
+                </a>
+              </div>
+
+              <div className="pt-2.5 border-t border-white/5 flex flex-wrap items-center justify-between gap-2 text-[11px] text-gray-400">
+                <span className="flex items-center gap-1 text-emerald-400">
+                  <CheckCircle2 size={12} /> Recursos activos para {selectedStudent.nombre}
+                </span>
+                <Link
+                  href="/dashboard/recursos"
+                  className="text-cyan-400 hover:text-cyan-300 hover:underline font-bold"
+                >
+                  Ir al Repositorio de Recursos →
+                </Link>
               </div>
             </div>
 

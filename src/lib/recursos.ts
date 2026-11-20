@@ -14,8 +14,9 @@ export interface RecursoEducativo {
   archivoNombre?: string;
   archivoTamano?: string;
   
-  // Video YouTube
+  // Video YouTube / Enlace Drive
   videoUrl?: string; // Enlace https://www.youtube.com/watch?v=... o https://youtu.be/...
+  externalUrl?: string; // Enlace directo a Google Drive (ej: CINECLUB) u otro repositorio
   youtubeId?: string; // ID de 11 caracteres de YouTube
   canalYoutube?: string; // Por defecto: 'cecytecopias@gmail.com'
   duracion?: string;
@@ -44,6 +45,7 @@ export interface RecursoEducativo {
 export const CANAL_YOUTUBE_OFICIAL = 'URBIVILLASCECYTE';
 export const YOUTUBE_STUDIO_URL = 'https://studio.youtube.com/channel/';
 export const YOUTUBE_UPLOAD_DIRECT_URL = 'https://www.youtube.com/upload';
+export const CINECLUB_DRIVE_URL = 'https://drive.google.com/drive/u/5/folders/1FDlDzP2AvbeA8cnJGtlSfFCrK7oIuyS-';
 
 /**
  * Extrae de forma segura el ID de 11 caracteres de cualquier URL de YouTube

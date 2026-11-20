@@ -8,7 +8,7 @@ import {
   FileText, Video, Upload, Search, Filter, CheckCircle2, 
   Clock, AlertTriangle, Shield, Check, X, ExternalLink, Download,
   Layers, Eye, RefreshCw, Trash2, ShieldCheck, Sparkles, AlertCircle,
-  Users, BookOpen
+  Users, BookOpen, Film, Clapperboard
 } from 'lucide-react';
 import YouTubeIcon from '@/components/YouTubeIcon';
 import { 
@@ -17,6 +17,7 @@ import {
   RecursoEstado,
   CANAL_YOUTUBE_OFICIAL, 
   YOUTUBE_UPLOAD_DIRECT_URL,
+  CINECLUB_DRIVE_URL,
   getYouTubeThumbnail,
   getCachedRecursos,
   saveCachedRecursos
@@ -28,6 +29,7 @@ import VideoPlayerModal from '@/components/VideoPlayerModal';
 
 const MATERIAS_LIST = [
   'TODAS',
+  'CINECLUB',
   'PENSAMIENTO MATEMÁTICO',
   'CIENCIAS NATURALES',
   'LENGUA Y COMUNICACIÓN',
@@ -48,9 +50,10 @@ export default function RecursosPage() {
   const isDocente = user?.role === 'docente';
   const isAlumno = user?.role === 'alumno';
   const isTutor = user?.role === 'tutor';
+  const isAlumnoOrTutor = isAlumno || isTutor;
 
   // Regla estricta: Los alumnos y tutores NO pueden subir recursos (solo docentes, directivos y administrativos autorizados)
-  const canUpload = !!user && (isDocente || isAdminOrSuper || user?.role === 'administrativo');
+  const canUpload = !!user && !isAlumnoOrTutor && (isDocente || isAdminOrSuper || user?.role === 'administrativo');
 
   // Data states
   const [recursos, setRecursos] = useState<RecursoEducativo[]>([]);
@@ -59,7 +62,7 @@ export default function RecursosPage() {
   const [toastMessage, setToastMessage] = useState<{ text: string; type: 'success' | 'error' | 'info' } | null>(null);
 
   // Filter states
-  const [activeTab, setActiveTab] = useState<'explorar' | 'validacion' | 'mis_recursos' | 'youtube'>('explorar');
+  const [activeTab, setActiveTab] = useState<'explorar' | 'cineclub' | 'validacion' | 'mis_recursos' | 'youtube'>('explorar');
   const [searchQuery, setSearchQuery] = useState('');
   const [tipoFilter, setTipoFilter] = useState<'all' | 'pdf' | 'video'>('all');
   const [semestreFilter, setSemestreFilter] = useState<string>('all');
@@ -76,8 +79,23 @@ export default function RecursosPage() {
   const [rejectionReason, setRejectionReason] = useState('');
   const [isProcessingAction, setIsProcessingAction] = useState(false);
 
-  // Auto pre-filter if logged user is student
+  // Auto pre-filter if logged user is student or URL params are present
   useEffect(() => {
+    if (typeof window !== 'undefined') {
+      const params = new URLSearchParams(window.location.search);
+      const semParam = params.get('semestre');
+      const grpParam = params.get('grupo');
+      const tabParam = params.get('tab');
+      const matParam = params.get('materia');
+
+      if (semParam) setSemestreFilter(semParam);
+      if (grpParam) setGrupoFilter(grpParam);
+      if (matParam) setMateriaFilter(matParam);
+      if (tabParam === 'cineclub' || tabParam === 'explorar' || tabParam === 'youtube' || tabParam === 'validacion' || tabParam === 'mis_recursos') {
+        setActiveTab(tabParam);
+      }
+    }
+
     if (user?.role === 'alumno') {
       if (user.grado) setSemestreFilter(user.grado);
       if (user.grupo) setGrupoFilter(user.grupo);
@@ -200,6 +218,13 @@ export default function RecursosPage() {
       body: JSON.stringify({ action: 'incrementViews', id: r.id })
     }).catch(() => {});
 
+    // Películas de CINECLUB o enlaces externos a Google Drive: abrir de inmediato
+    if (r.materia === 'CINECLUB' || r.externalUrl || (r.videoUrl && r.videoUrl.includes('drive.google.com'))) {
+      const targetDriveUrl = r.externalUrl || r.videoUrl || CINECLUB_DRIVE_URL;
+      window.open(targetDriveUrl, '_blank', 'noopener,noreferrer');
+      return;
+    }
+
     if (r.tipo === 'pdf') {
       setSelectedPdfResource(r);
     } else {
@@ -246,7 +271,9 @@ export default function RecursosPage() {
   const displayedResources = useMemo(() => {
     return recursos.filter(r => {
       // Tab filtering
-      if (activeTab === 'validacion') {
+      if (activeTab === 'cineclub') {
+        if (r.materia !== 'CINECLUB' && !r.externalUrl?.includes('drive.google.com')) return false;
+      } else if (activeTab === 'validacion') {
         if (r.estado !== 'pendiente') return false;
       } else if (activeTab === 'mis_recursos') {
         if (!user?.email) return false;
@@ -264,16 +291,16 @@ export default function RecursosPage() {
       // Tipo filter
       if (tipoFilter !== 'all' && r.tipo !== tipoFilter) return false;
 
-      // Semestre filter
+      // Semestre filter (CINECLUB siempre disponible para todos los semestres)
       if (semestreFilter !== 'all') {
         const normSemFilter = semestreFilter.replace(/[°º]/g, '').trim();
         const normResourceSem = (r.semestre || '').replace(/[°º]/g, '').trim();
-        if (r.semestre !== 'TODOS' && normResourceSem !== normSemFilter) return false;
+        if (r.semestre !== 'TODOS' && r.materia !== 'CINECLUB' && normResourceSem !== normSemFilter) return false;
       }
 
       // Grupo filter
       if (grupoFilter !== 'all') {
-        if (r.grupo !== 'TODOS' && r.grupo !== grupoFilter) return false;
+        if (r.grupo !== 'TODOS' && r.materia !== 'CINECLUB' && r.grupo !== grupoFilter) return false;
       }
 
       // Materia filter
@@ -306,6 +333,231 @@ export default function RecursosPage() {
     });
     return Object.entries(groups).sort((a, b) => a[0].localeCompare(b[0]));
   }, [displayedResources]);
+
+  // Render single resource card with CINECLUB Google Drive automatic opening support
+  const renderResourceCard = (rec: RecursoEducativo) => {
+    const isPending = rec.estado === 'pendiente';
+    const isApproved = rec.estado === 'aprobado';
+    const isRejected = rec.estado === 'rechazado';
+    const isPdf = rec.tipo === 'pdf';
+    const isCineclub = rec.materia === 'CINECLUB' || !!rec.externalUrl?.includes('drive.google.com') || (!!rec.videoUrl && rec.videoUrl.includes('drive.google.com'));
+
+    return (
+      <div
+        key={rec.id}
+        className={`glass-panel rounded-3xl border transition-all flex flex-col justify-between overflow-hidden group ${
+          isCineclub
+            ? 'border-purple-500/35 hover:border-purple-400 hover:shadow-[0_0_35px_rgba(168,85,247,0.2)] bg-gradient-to-br from-purple-950/20 via-[#0a0d18] to-black'
+            : isPending 
+            ? 'border-amber-500/40 bg-amber-500/[0.02]' 
+            : isRejected
+            ? 'border-red-500/30 bg-red-500/[0.02] opacity-80'
+            : 'border-white/10 hover:border-cyan-500/40 hover:shadow-[0_0_30px_rgba(6,182,212,0.1)]'
+        }`}
+      >
+        {/* Thumbnail / Header Preview - Click opens resource directly */}
+        <div 
+          className="relative h-40 bg-black/50 overflow-hidden cursor-pointer" 
+          onClick={() => handleOpenResource(rec)}
+          title={isCineclub ? 'Presiona para ver la película en Google Drive' : 'Presiona para ver el recurso'}
+        >
+          {isCineclub ? (
+            <div className="w-full h-full flex flex-col items-center justify-center p-4 bg-gradient-to-br from-purple-950/60 via-black to-[#090d18] text-purple-300 group-hover:scale-105 transition-transform duration-300">
+              <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-purple-600 to-pink-600 text-white flex items-center justify-center shadow-lg shadow-purple-600/40 mb-2">
+                <Film size={26} />
+              </div>
+              <span className="text-xs font-black text-purple-200 uppercase tracking-wider flex items-center gap-1.5">
+                <Clapperboard size={13} className="text-pink-400" />
+                <span>Película CINECLUB</span>
+              </span>
+              <span className="text-[10px] text-purple-300/80 font-mono mt-0.5">Google Drive • Todos los Semestres</span>
+            </div>
+          ) : isPdf ? (
+            <div className="w-full h-full flex flex-col items-center justify-center p-4 bg-gradient-to-br from-rose-950/40 via-black to-[#090d16] text-rose-400 group-hover:scale-105 transition-transform duration-300">
+              <FileText size={44} className="mb-2" />
+              <span className="text-xs font-bold text-rose-300 uppercase tracking-wider">Documento PDF</span>
+              {rec.archivoTamano && (
+                <span className="text-[10px] text-gray-400 font-mono mt-0.5">{rec.archivoTamano}</span>
+              )}
+            </div>
+          ) : (
+            <div className="w-full h-full relative group-hover:scale-105 transition-transform duration-300">
+              <img 
+                src={getYouTubeThumbnail(rec.youtubeId || rec.videoUrl || '')} 
+                alt={rec.titulo}
+                className="w-full h-full object-cover" 
+              />
+              <div className="absolute inset-0 bg-black/40 flex items-center justify-center">
+                <div className="w-12 h-12 rounded-full bg-red-600/90 text-white flex items-center justify-center shadow-xl group-hover:scale-110 transition-transform">
+                  <YouTubeIcon size={24} />
+                </div>
+              </div>
+              {rec.duracion && (
+                <span className="absolute bottom-2 right-2 bg-black/80 px-2 py-0.5 rounded text-[10px] font-mono text-white">
+                  {rec.duracion}
+                </span>
+              )}
+            </div>
+          )}
+
+          {/* Status Badge in corner */}
+          <div className="absolute top-2.5 left-2.5 flex items-center gap-1.5">
+            {isPending && (
+              <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-amber-500 text-black flex items-center gap-1 shadow">
+                <Clock size={11} /> Pendiente de Validación
+              </span>
+            )}
+            {isApproved && (
+              <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-bold text-white flex items-center gap-1 shadow ${
+                isCineclub ? 'bg-purple-600/90' : 'bg-emerald-500/80'
+              }`}>
+                <Check size={11} /> {isCineclub ? 'Disponible' : 'Aprobado'}
+              </span>
+            )}
+            {isRejected && (
+              <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-red-500 text-white flex items-center gap-1 shadow">
+                <X size={11} /> Rechazado
+              </span>
+            )}
+          </div>
+
+          {/* Semestre & Grupo Badge */}
+          <div className="absolute top-2.5 right-2.5 flex items-center gap-1">
+            <span className={`px-2.5 py-0.5 rounded-md text-[10px] font-black border ${
+              isCineclub
+                ? 'bg-purple-950/90 text-purple-200 border-purple-500/50 shadow-sm'
+                : 'bg-black/80 text-cyan-300 border-cyan-500/30'
+            }`}>
+              {isCineclub ? '🎬 TODOS LOS SEMESTRES' : `${rec.semestre} • ${rec.grupo}`}
+            </span>
+          </div>
+        </div>
+
+        {/* Content Info */}
+        <div className="p-5 space-y-3 flex-1 flex flex-col justify-between">
+          <div className="space-y-2">
+            <div className={`text-[11px] font-extrabold uppercase tracking-wider ${isCineclub ? 'text-purple-400 flex items-center gap-1' : 'text-cyan-400'}`}>
+              {isCineclub && <Film size={12} />}
+              <span>{rec.materia}</span>
+            </div>
+
+            {/* Movie / Resource Title: On click opens Google Drive / Resource directly */}
+            <h4 
+              onClick={() => handleOpenResource(rec)}
+              className={`text-sm font-bold text-white transition-colors cursor-pointer line-clamp-2 leading-snug ${
+                isCineclub ? 'hover:text-purple-300 group-hover:text-purple-200' : 'group-hover:text-cyan-300'
+              }`}
+              title={isCineclub ? 'Presiona para ver la película en Google Drive' : rec.titulo}
+            >
+              {isCineclub && <span className="mr-1.5 inline-block">🎬</span>}
+              <span>{rec.titulo}</span>
+            </h4>
+
+            {rec.descripcion && (
+              <p className="text-xs text-gray-400 line-clamp-2 leading-relaxed">
+                {rec.descripcion}
+              </p>
+            )}
+
+            {/* Rejection Notice if any */}
+            {isRejected && rec.motivoRechazo && (
+              <div className="p-2.5 rounded-xl bg-red-500/10 border border-red-500/30 text-[11px] text-red-300 space-y-0.5">
+                <span className="font-bold">Motivo de revisión:</span>
+                <p>{rec.motivoRechazo}</p>
+              </div>
+            )}
+          </div>
+
+          {/* Metadata & Actions */}
+          <div className="pt-3 border-t border-white/5 space-y-3">
+            <div className="flex items-center justify-between text-[11px] text-gray-400">
+              <span className="truncate max-w-[170px]" title={rec.autorNombre}>
+                Por: <button
+                       type="button"
+                       onClick={(e) => {
+                         e.stopPropagation();
+                         setDocenteFilter(rec.autorNombre);
+                       }}
+                       className="text-emerald-400 hover:text-emerald-300 hover:underline font-bold transition-colors cursor-pointer"
+                       title={`Ver todos los recursos de ${rec.autorNombre}`}
+                     >
+                       {rec.autorNombre}
+                     </button>
+              </span>
+              <span>{new Date(rec.fechaCreacion).toLocaleDateString()}</span>
+            </div>
+
+            {/* Validation Controls (For Administrador & Superadmin) */}
+            {isAdminOrSuper && isPending && (
+              <div className="pt-2 border-t border-amber-500/20 flex items-center justify-between gap-2">
+                <button
+                  onClick={() => handleApprove(rec.id)}
+                  disabled={isProcessingAction}
+                  className="flex-1 py-1.5 px-3 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-black font-bold text-xs transition-all shadow-md shadow-emerald-500/20 flex items-center justify-center space-x-1 cursor-pointer"
+                >
+                  <Check size={14} />
+                  <span>Aprobar</span>
+                </button>
+
+                <button
+                  onClick={() => { setRejectingResource(rec); setRejectionReason(''); }}
+                  disabled={isProcessingAction}
+                  className="py-1.5 px-3 rounded-xl bg-red-500/15 hover:bg-red-500/30 text-red-400 font-bold text-xs border border-red-500/30 transition-all flex items-center space-x-1 cursor-pointer"
+                >
+                  <X size={14} />
+                  <span>Rechazar</span>
+                </button>
+              </div>
+            )}
+
+            {/* User Action Buttons */}
+            <div className="flex items-center justify-between gap-2">
+              <button
+                onClick={() => handleOpenResource(rec)}
+                className={`flex-1 py-2 px-3 rounded-xl font-bold text-xs transition-all cursor-pointer flex items-center justify-center space-x-1.5 ${
+                  isCineclub
+                    ? 'bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-500 hover:to-pink-500 text-white shadow-md shadow-purple-600/30 font-black'
+                    : isPdf
+                    ? 'bg-rose-500/20 hover:bg-rose-500/30 text-rose-300 border border-rose-500/40'
+                    : 'bg-red-500/20 hover:bg-red-500/30 text-red-300 border border-red-500/40'
+                }`}
+              >
+                {isCineclub ? (
+                  <>
+                    <Film size={14} />
+                    <span>🎬 Ver Película en Drive</span>
+                    <ExternalLink size={12} className="opacity-80" />
+                  </>
+                ) : isPdf ? (
+                  <>
+                    <FileText size={14} />
+                    <span>Abrir Guía PDF</span>
+                  </>
+                ) : (
+                  <>
+                    <YouTubeIcon size={14} />
+                    <span>Ver Video</span>
+                  </>
+                )}
+              </button>
+
+              {/* Delete Option for Admins or Author */}
+              {(isAdminOrSuper || (user?.email && rec.autorEmail.toLowerCase() === user.email.toLowerCase())) && (
+                <button
+                  onClick={() => handleDelete(rec.id, rec.titulo)}
+                  className="p-2 rounded-xl text-gray-500 hover:text-red-400 hover:bg-red-500/10 transition-all cursor-pointer"
+                  title="Eliminar recurso"
+                >
+                  <Trash2 size={15} />
+                </button>
+              )}
+            </div>
+          </div>
+
+        </div>
+      </div>
+    );
+  };
 
   return (
     <div className="space-y-6 pb-20">
@@ -449,6 +701,22 @@ export default function RecursosPage() {
           <YouTubeIcon size={15} />
           <span>Canal YouTube (cecytecopias@gmail.com)</span>
         </button>
+
+        {/* Pestaña CINECLUB (Para Todos los Semestres) */}
+        <button
+          onClick={() => setActiveTab('cineclub')}
+          className={`px-4 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center space-x-2 shrink-0 ${
+            activeTab === 'cineclub'
+              ? 'bg-purple-500/20 border border-purple-500/50 text-purple-300 shadow-md shadow-purple-500/10'
+              : 'text-purple-400 hover:bg-purple-500/10'
+          }`}
+        >
+          <Clapperboard size={14} />
+          <span>🎬 Películas CINECLUB</span>
+          <span className="text-[10px] bg-purple-500/30 text-purple-200 px-2 py-0.5 rounded-full font-mono border border-purple-500/40">
+            Todos los Semestres
+          </span>
+        </button>
       </div>
 
       {/* Main Tab Content: YouTube Integration Guide */}
@@ -509,6 +777,68 @@ export default function RecursosPage() {
               <h4 className="text-sm font-bold text-white">Validación por Administrador</h4>
               <p className="text-gray-400 leading-relaxed text-[11px]">
                 La Dirección Escolar revisa el video en la <strong>Bandeja de Validación</strong> y lo aprueba para que quede visible de inmediato a todos los alumnos del grupo asignado.
+              </p>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Banner CINECLUB (Acceso Directo a Google Drive) */}
+      {(activeTab === 'cineclub' || materiaFilter === 'CINECLUB') && (
+        <div className="glass-panel p-6 sm:p-8 rounded-3xl border border-purple-500/40 space-y-5 animate-fade-in bg-gradient-to-br from-purple-950/25 via-[#090d18] to-black">
+          <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-4 pb-4 border-b border-white/10">
+            <div className="flex items-center space-x-3.5">
+              <div className="w-14 h-14 rounded-2xl bg-gradient-to-br from-purple-600 to-pink-600 text-white flex items-center justify-center text-3xl shadow-xl shadow-purple-600/30 shrink-0">
+                <Clapperboard size={30} />
+              </div>
+              <div>
+                <span className="inline-flex items-center space-x-1 px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider bg-purple-500/20 text-purple-300 border border-purple-500/40 mb-1">
+                  🎬 CINECLUB • Para 1°, 3° y 5° Semestre
+                </span>
+                <h3 className="text-xl font-black text-white flex items-center gap-2">
+                  <span>Películas de CINECLUB Institucional</span>
+                </h3>
+                <p className="text-xs text-gray-300 mt-0.5">
+                  Presiona el nombre de cualquier película para abrirla y reproducirla de inmediato en Google Drive.
+                </p>
+              </div>
+            </div>
+
+            <a
+              href={CINECLUB_DRIVE_URL}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="w-full md:w-auto inline-flex items-center justify-center space-x-2 px-5 py-2.5 rounded-xl bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-500 hover:to-pink-500 text-white font-bold text-xs shadow-lg shadow-purple-600/30 transition-all shrink-0 cursor-pointer"
+            >
+              <Film size={15} />
+              <span>Abrir Carpeta Google Drive</span>
+              <ExternalLink size={13} />
+            </a>
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 text-xs">
+            <div className="p-4 rounded-2xl bg-white/[0.02] border border-white/10 space-y-1.5">
+              <span className="text-purple-400 font-bold flex items-center gap-1.5">
+                <Check size={14} /> Acceso para Todos
+              </span>
+              <p className="text-gray-400 text-[11px] leading-relaxed">
+                Disponible para alumnos de 1°, 3° y 5° semestre, docentes y directivos escolares.
+              </p>
+            </div>
+            <div className="p-4 rounded-2xl bg-white/[0.02] border border-white/10 space-y-1.5">
+              <span className="text-cyan-400 font-bold flex items-center gap-1.5">
+                <Check size={14} /> Reproducción Inmediata
+              </span>
+              <p className="text-gray-400 text-[11px] leading-relaxed">
+                Al hacer clic sobre el título o tarjeta de la película, se abrirá la vista previa de Google Drive.
+              </p>
+            </div>
+            <div className="p-4 rounded-2xl bg-white/[0.02] border border-white/10 space-y-1.5">
+              <span className="text-pink-400 font-bold flex items-center gap-1.5">
+                <Check size={14} /> Sin Descargas Pesadas
+              </span>
+              <p className="text-gray-400 text-[11px] leading-relaxed">
+                Streaming directo en la nube optimizado para computadoras, tabletas y teléfonos celulares.
               </p>
             </div>
           </div>
@@ -820,182 +1150,7 @@ export default function RecursosPage() {
 
               {/* Grid de recursos del docente */}
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-5">
-                {items.map((rec) => {
-                  const isPending = rec.estado === 'pendiente';
-                  const isApproved = rec.estado === 'aprobado';
-                  const isRejected = rec.estado === 'rechazado';
-                  const isPdf = rec.tipo === 'pdf';
-
-                  return (
-                    <div
-                      key={rec.id}
-                      className={`glass-panel rounded-3xl border transition-all flex flex-col justify-between overflow-hidden group ${
-                        isPending 
-                          ? 'border-amber-500/40 bg-amber-500/[0.02]' 
-                          : isRejected
-                          ? 'border-red-500/30 bg-red-500/[0.02] opacity-80'
-                          : 'border-white/10 hover:border-cyan-500/40 hover:shadow-[0_0_30px_rgba(6,182,212,0.1)]'
-                      }`}
-                    >
-                      {/* Thumbnail / Header Preview */}
-                      <div className="relative h-40 bg-black/50 overflow-hidden cursor-pointer" onClick={() => handleOpenResource(rec)}>
-                        {isPdf ? (
-                          <div className="w-full h-full flex flex-col items-center justify-center p-4 bg-gradient-to-br from-rose-950/40 via-black to-[#090d16] text-rose-400 group-hover:scale-105 transition-transform duration-300">
-                            <FileText size={44} className="mb-2" />
-                            <span className="text-xs font-bold text-rose-300 uppercase tracking-wider">Documento PDF</span>
-                            {rec.archivoTamano && (
-                              <span className="text-[10px] text-gray-400 font-mono mt-0.5">{rec.archivoTamano}</span>
-                            )}
-                          </div>
-                        ) : (
-                          <div className="w-full h-full relative group-hover:scale-105 transition-transform duration-300">
-                            <img 
-                              src={getYouTubeThumbnail(rec.youtubeId || rec.videoUrl || '')} 
-                              alt={rec.titulo}
-                              className="w-full h-full object-cover" 
-                            />
-                            <div className="absolute inset-0 bg-black/40 flex items-center justify-center">
-                              <div className="w-12 h-12 rounded-full bg-red-600/90 text-white flex items-center justify-center shadow-xl group-hover:scale-110 transition-transform">
-                                <YouTubeIcon size={24} />
-                              </div>
-                            </div>
-                            {rec.duracion && (
-                              <span className="absolute bottom-2 right-2 bg-black/80 px-2 py-0.5 rounded text-[10px] font-mono text-white">
-                                {rec.duracion}
-                              </span>
-                            )}
-                          </div>
-                        )}
-
-                        {/* Status Badge in corner */}
-                        <div className="absolute top-2.5 left-2.5 flex items-center gap-1.5">
-                          {isPending && (
-                            <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-amber-500 text-black flex items-center gap-1 shadow">
-                              <Clock size={11} /> Pendiente de Validación
-                            </span>
-                          )}
-                          {isApproved && (
-                            <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-emerald-500/80 text-white flex items-center gap-1 shadow">
-                              <Check size={11} /> Aprobado
-                            </span>
-                          )}
-                          {isRejected && (
-                            <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-red-500 text-white flex items-center gap-1 shadow">
-                              <X size={11} /> Rechazado
-                            </span>
-                          )}
-                        </div>
-
-                        {/* Semestre & Grupo Badge */}
-                        <div className="absolute top-2.5 right-2.5 flex items-center gap-1">
-                          <span className="px-2 py-0.5 rounded-md text-[10px] font-bold bg-black/80 text-cyan-300 border border-cyan-500/30">
-                            {rec.semestre} • {rec.grupo}
-                          </span>
-                        </div>
-                      </div>
-
-                      {/* Content Info */}
-                      <div className="p-5 space-y-3 flex-1 flex flex-col justify-between">
-                        <div className="space-y-2">
-                          <div className="text-[11px] font-bold uppercase tracking-wider text-cyan-400">
-                            {rec.materia}
-                          </div>
-
-                          <h4 
-                            onClick={() => handleOpenResource(rec)}
-                            className="text-sm font-bold text-white group-hover:text-cyan-300 transition-colors cursor-pointer line-clamp-2 leading-snug"
-                          >
-                            {rec.titulo}
-                          </h4>
-
-                          {rec.descripcion && (
-                            <p className="text-xs text-gray-400 line-clamp-2 leading-relaxed">
-                              {rec.descripcion}
-                            </p>
-                          )}
-
-                          {/* Rejection Notice if any */}
-                          {isRejected && rec.motivoRechazo && (
-                            <div className="p-2.5 rounded-xl bg-red-500/10 border border-red-500/30 text-[11px] text-red-300 space-y-0.5">
-                              <span className="font-bold">Motivo de revisión:</span>
-                              <p>{rec.motivoRechazo}</p>
-                            </div>
-                          )}
-                        </div>
-
-                        {/* Metadata & Actions */}
-                        <div className="pt-3 border-t border-white/5 space-y-3">
-                          <div className="flex items-center justify-between text-[11px] text-gray-400">
-                            <span className="truncate max-w-[170px]" title={rec.autorNombre}>
-                              Por: <button
-                                     type="button"
-                                     onClick={(e) => {
-                                       e.stopPropagation();
-                                       setDocenteFilter(rec.autorNombre);
-                                     }}
-                                     className="text-emerald-400 hover:text-emerald-300 hover:underline font-bold transition-colors cursor-pointer"
-                                     title={`Ver todos los recursos de ${rec.autorNombre}`}
-                                   >
-                                     {rec.autorNombre}
-                                   </button>
-                            </span>
-                            <span>{new Date(rec.fechaCreacion).toLocaleDateString()}</span>
-                          </div>
-
-                          {/* Validation Controls (For Administrador & Superadmin) */}
-                          {isAdminOrSuper && isPending && (
-                            <div className="pt-2 border-t border-amber-500/20 flex items-center justify-between gap-2">
-                              <button
-                                onClick={() => handleApprove(rec.id)}
-                                disabled={isProcessingAction}
-                                className="flex-1 py-1.5 px-3 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-black font-bold text-xs transition-all shadow-md shadow-emerald-500/20 flex items-center justify-center space-x-1 cursor-pointer"
-                              >
-                                <Check size={14} />
-                                <span>Aprobar</span>
-                              </button>
-
-                              <button
-                                onClick={() => { setRejectingResource(rec); setRejectionReason(''); }}
-                                disabled={isProcessingAction}
-                                className="py-1.5 px-3 rounded-xl bg-red-500/15 hover:bg-red-500/30 text-red-400 font-bold text-xs border border-red-500/30 transition-all flex items-center space-x-1 cursor-pointer"
-                              >
-                                <X size={14} />
-                                <span>Rechazar</span>
-                              </button>
-                            </div>
-                          )}
-
-                          {/* User Action Buttons */}
-                          <div className="flex items-center justify-between gap-2">
-                            <button
-                              onClick={() => handleOpenResource(rec)}
-                              className={`flex-1 py-2 px-3 rounded-xl font-bold text-xs transition-all cursor-pointer flex items-center justify-center space-x-1.5 ${
-                                isPdf
-                                  ? 'bg-rose-500/20 hover:bg-rose-500/30 text-rose-300 border border-rose-500/40'
-                                  : 'bg-red-500/20 hover:bg-red-500/30 text-red-300 border border-red-500/40'
-                              }`}
-                            >
-                              {isPdf ? <FileText size={14} /> : <YouTubeIcon size={14} />}
-                              <span>{isPdf ? 'Abrir Guía PDF' : 'Ver Video'}</span>
-                            </button>
-
-                            {/* Delete Option for Admins or Author */}
-                            {(isAdminOrSuper || (user?.email && rec.autorEmail.toLowerCase() === user.email.toLowerCase())) && (
-                              <button
-                                onClick={() => handleDelete(rec.id, rec.titulo)}
-                                className="p-2 rounded-xl text-gray-500 hover:text-red-400 hover:bg-red-500/10 transition-all cursor-pointer"
-                                title="Eliminar recurso"
-                              >
-                                <Trash2 size={15} />
-                              </button>
-                            )}
-                          </div>
-                        </div>
-
-                      </div>
-                    </div>
-                  );
-                })}
+                {items.map((rec) => renderResourceCard(rec))}
               </div>
             </div>
           ))}
@@ -1003,182 +1158,7 @@ export default function RecursosPage() {
       ) : (
         /* Vista Cuadrícula Estándar */
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-5">
-          {displayedResources.map((rec) => {
-            const isPending = rec.estado === 'pendiente';
-            const isApproved = rec.estado === 'aprobado';
-            const isRejected = rec.estado === 'rechazado';
-            const isPdf = rec.tipo === 'pdf';
-
-            return (
-              <div
-                key={rec.id}
-                className={`glass-panel rounded-3xl border transition-all flex flex-col justify-between overflow-hidden group ${
-                  isPending 
-                    ? 'border-amber-500/40 bg-amber-500/[0.02]' 
-                    : isRejected
-                    ? 'border-red-500/30 bg-red-500/[0.02] opacity-80'
-                    : 'border-white/10 hover:border-cyan-500/40 hover:shadow-[0_0_30px_rgba(6,182,212,0.1)]'
-                }`}
-              >
-                {/* Thumbnail / Header Preview */}
-                <div className="relative h-40 bg-black/50 overflow-hidden cursor-pointer" onClick={() => handleOpenResource(rec)}>
-                  {isPdf ? (
-                    <div className="w-full h-full flex flex-col items-center justify-center p-4 bg-gradient-to-br from-rose-950/40 via-black to-[#090d16] text-rose-400 group-hover:scale-105 transition-transform duration-300">
-                      <FileText size={44} className="mb-2" />
-                      <span className="text-xs font-bold text-rose-300 uppercase tracking-wider">Documento PDF</span>
-                      {rec.archivoTamano && (
-                        <span className="text-[10px] text-gray-400 font-mono mt-0.5">{rec.archivoTamano}</span>
-                      )}
-                    </div>
-                  ) : (
-                    <div className="w-full h-full relative group-hover:scale-105 transition-transform duration-300">
-                      <img 
-                        src={getYouTubeThumbnail(rec.youtubeId || rec.videoUrl || '')} 
-                        alt={rec.titulo}
-                        className="w-full h-full object-cover" 
-                      />
-                      <div className="absolute inset-0 bg-black/40 flex items-center justify-center">
-                        <div className="w-12 h-12 rounded-full bg-red-600/90 text-white flex items-center justify-center shadow-xl group-hover:scale-110 transition-transform">
-                          <YouTubeIcon size={24} />
-                        </div>
-                      </div>
-                      {rec.duracion && (
-                        <span className="absolute bottom-2 right-2 bg-black/80 px-2 py-0.5 rounded text-[10px] font-mono text-white">
-                          {rec.duracion}
-                        </span>
-                      )}
-                    </div>
-                  )}
-
-                  {/* Status Badge in corner */}
-                  <div className="absolute top-2.5 left-2.5 flex items-center gap-1.5">
-                    {isPending && (
-                      <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-amber-500 text-black flex items-center gap-1 shadow">
-                        <Clock size={11} /> Pendiente de Validación
-                      </span>
-                    )}
-                    {isApproved && (
-                      <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-emerald-500/80 text-white flex items-center gap-1 shadow">
-                        <Check size={11} /> Aprobado
-                      </span>
-                    )}
-                    {isRejected && (
-                      <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-red-500 text-white flex items-center gap-1 shadow">
-                        <X size={11} /> Rechazado
-                      </span>
-                    )}
-                  </div>
-
-                  {/* Semestre & Grupo Badge */}
-                  <div className="absolute top-2.5 right-2.5 flex items-center gap-1">
-                    <span className="px-2 py-0.5 rounded-md text-[10px] font-bold bg-black/80 text-cyan-300 border border-cyan-500/30">
-                      {rec.semestre} • {rec.grupo}
-                    </span>
-                  </div>
-                </div>
-
-                {/* Content Info */}
-                <div className="p-5 space-y-3 flex-1 flex flex-col justify-between">
-                  <div className="space-y-2">
-                    <div className="text-[11px] font-bold uppercase tracking-wider text-cyan-400">
-                      {rec.materia}
-                    </div>
-
-                    <h4 
-                      onClick={() => handleOpenResource(rec)}
-                      className="text-sm font-bold text-white group-hover:text-cyan-300 transition-colors cursor-pointer line-clamp-2 leading-snug"
-                    >
-                      {rec.titulo}
-                    </h4>
-
-                    {rec.descripcion && (
-                      <p className="text-xs text-gray-400 line-clamp-2 leading-relaxed">
-                        {rec.descripcion}
-                      </p>
-                    )}
-
-                    {/* Rejection Notice if any */}
-                    {isRejected && rec.motivoRechazo && (
-                      <div className="p-2.5 rounded-xl bg-red-500/10 border border-red-500/30 text-[11px] text-red-300 space-y-0.5">
-                        <span className="font-bold">Motivo de revisión:</span>
-                        <p>{rec.motivoRechazo}</p>
-                      </div>
-                    )}
-                  </div>
-
-                  {/* Metadata & Actions */}
-                  <div className="pt-3 border-t border-white/5 space-y-3">
-                    <div className="flex items-center justify-between text-[11px] text-gray-400">
-                      <span className="truncate max-w-[170px]" title={rec.autorNombre}>
-                        Por: <button
-                               type="button"
-                               onClick={(e) => {
-                                 e.stopPropagation();
-                                 setDocenteFilter(rec.autorNombre);
-                               }}
-                               className="text-emerald-400 hover:text-emerald-300 hover:underline font-bold transition-colors cursor-pointer"
-                               title={`Ver todos los recursos de ${rec.autorNombre}`}
-                             >
-                               {rec.autorNombre}
-                             </button>
-                      </span>
-                      <span>{new Date(rec.fechaCreacion).toLocaleDateString()}</span>
-                    </div>
-
-                    {/* Validation Controls (For Administrador & Superadmin) */}
-                    {isAdminOrSuper && isPending && (
-                      <div className="pt-2 border-t border-amber-500/20 flex items-center justify-between gap-2">
-                        <button
-                          onClick={() => handleApprove(rec.id)}
-                          disabled={isProcessingAction}
-                          className="flex-1 py-1.5 px-3 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-black font-bold text-xs transition-all shadow-md shadow-emerald-500/20 flex items-center justify-center space-x-1 cursor-pointer"
-                        >
-                          <Check size={14} />
-                          <span>Aprobar</span>
-                        </button>
-
-                        <button
-                          onClick={() => { setRejectingResource(rec); setRejectionReason(''); }}
-                          disabled={isProcessingAction}
-                          className="py-1.5 px-3 rounded-xl bg-red-500/15 hover:bg-red-500/30 text-red-400 font-bold text-xs border border-red-500/30 transition-all flex items-center space-x-1 cursor-pointer"
-                        >
-                          <X size={14} />
-                          <span>Rechazar</span>
-                        </button>
-                      </div>
-                    )}
-
-                    {/* User Action Buttons */}
-                    <div className="flex items-center justify-between gap-2">
-                      <button
-                        onClick={() => handleOpenResource(rec)}
-                        className={`flex-1 py-2 px-3 rounded-xl font-bold text-xs transition-all cursor-pointer flex items-center justify-center space-x-1.5 ${
-                          isPdf
-                            ? 'bg-rose-500/20 hover:bg-rose-500/30 text-rose-300 border border-rose-500/40'
-                            : 'bg-red-500/20 hover:bg-red-500/30 text-red-300 border border-red-500/40'
-                        }`}
-                      >
-                        {isPdf ? <FileText size={14} /> : <YouTubeIcon size={14} />}
-                        <span>{isPdf ? 'Abrir Guía PDF' : 'Ver Video'}</span>
-                      </button>
-
-                      {/* Delete Option for Admins or Author */}
-                      {(isAdminOrSuper || (user?.email && rec.autorEmail.toLowerCase() === user.email.toLowerCase())) && (
-                        <button
-                          onClick={() => handleDelete(rec.id, rec.titulo)}
-                          className="p-2 rounded-xl text-gray-500 hover:text-red-400 hover:bg-red-500/10 transition-all cursor-pointer"
-                          title="Eliminar recurso"
-                        >
-                          <Trash2 size={15} />
-                        </button>
-                      )}
-                    </div>
-                  </div>
-
-                </div>
-              </div>
-            );
-          })}
+          {displayedResources.map((rec) => renderResourceCard(rec))}
         </div>
       )}
 
