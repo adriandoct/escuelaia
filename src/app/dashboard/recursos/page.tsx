@@ -7,7 +7,8 @@ import Link from 'next/link';
 import { 
   FileText, Video, Upload, Search, Filter, CheckCircle2, 
   Clock, AlertTriangle, Shield, Check, X, ExternalLink, Download,
-  Layers, Eye, RefreshCw, Trash2, ShieldCheck, Sparkles, AlertCircle
+  Layers, Eye, RefreshCw, Trash2, ShieldCheck, Sparkles, AlertCircle,
+  Users, BookOpen
 } from 'lucide-react';
 import YouTubeIcon from '@/components/YouTubeIcon';
 import { 
@@ -64,6 +65,8 @@ export default function RecursosPage() {
   const [semestreFilter, setSemestreFilter] = useState<string>('all');
   const [grupoFilter, setGrupoFilter] = useState<string>('all');
   const [materiaFilter, setMateriaFilter] = useState<string>('TODAS');
+  const [docenteFilter, setDocenteFilter] = useState<string>('all');
+  const [viewGrouping, setViewGrouping] = useState<'grid' | 'por_docente'>('grid');
 
   // Modal states
   const [isUploadModalOpen, setIsUploadModalOpen] = useState(false);
@@ -225,6 +228,20 @@ export default function RecursosPage() {
     return recursos.filter(r => r.autorEmail.toLowerCase() === user.email.toLowerCase()).length;
   }, [recursos, user]);
 
+  // Available docentes dynamically computed with counts
+  const availableDocentes = useMemo(() => {
+    const counts: Record<string, number> = {};
+    recursos.forEach(r => {
+      if (r.estado === 'aprobado' || isAdminOrSuper) {
+        const name = (r.autorNombre || '').trim();
+        if (name) {
+          counts[name] = (counts[name] || 0) + 1;
+        }
+      }
+    });
+    return Object.entries(counts).sort((a, b) => a[0].localeCompare(b[0]));
+  }, [recursos, isAdminOrSuper]);
+
   // Filtered resources based on tab and filters
   const displayedResources = useMemo(() => {
     return recursos.filter(r => {
@@ -237,6 +254,11 @@ export default function RecursosPage() {
       } else if (activeTab === 'explorar') {
         // Alumnos y Docentes solo ven aprobados en explorar
         if (r.estado !== 'aprobado' && !isAdminOrSuper) return false;
+      }
+
+      // Docente filter (Repositorio por Docente)
+      if (docenteFilter !== 'all') {
+        if (r.autorNombre.toLowerCase().trim() !== docenteFilter.toLowerCase().trim()) return false;
       }
 
       // Tipo filter
@@ -272,7 +294,18 @@ export default function RecursosPage() {
 
       return true;
     });
-  }, [recursos, activeTab, tipoFilter, semestreFilter, grupoFilter, materiaFilter, searchQuery, isAdminOrSuper, user]);
+  }, [recursos, activeTab, tipoFilter, semestreFilter, grupoFilter, materiaFilter, docenteFilter, searchQuery, isAdminOrSuper, user]);
+
+  // Grouped resources by teacher
+  const resourcesGroupedByDocente = useMemo(() => {
+    const groups: Record<string, RecursoEducativo[]> = {};
+    displayedResources.forEach(r => {
+      const doc = (r.autorNombre || 'Docente CECYTE').trim();
+      if (!groups[doc]) groups[doc] = [];
+      groups[doc].push(r);
+    });
+    return Object.entries(groups).sort((a, b) => a[0].localeCompare(b[0]));
+  }, [displayedResources]);
 
   return (
     <div className="space-y-6 pb-20">
@@ -482,9 +515,9 @@ export default function RecursosPage() {
         </div>
       )}
 
-      {/* Filter Bar (Search, Semestre, Grupo, Materia, Tipo) */}
+      {/* Filter Bar (Search, Docente, Semestre, Grupo, Materia, Tipo) */}
       <div className="p-4 rounded-3xl glass-panel bg-[#090d16]/80 border border-white/10 space-y-3">
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-6 gap-3">
           
           {/* Search Box */}
           <div className="lg:col-span-2 relative">
@@ -496,6 +529,22 @@ export default function RecursosPage() {
               onChange={(e) => setSearchQuery(e.target.value)}
               className="w-full glass-input pl-10 pr-4 py-2 rounded-xl text-xs text-white border border-white/10 focus:border-cyan-500"
             />
+          </div>
+
+          {/* Filter Docente (Filtro por Docente) */}
+          <div>
+            <select
+              value={docenteFilter}
+              onChange={(e) => setDocenteFilter(e.target.value)}
+              className="w-full glass-input px-3 py-2 rounded-xl text-xs text-white bg-[#0b101d] border-emerald-500/30 focus:border-emerald-400 font-semibold text-emerald-300"
+            >
+              <option value="all">👨‍🏫 Todos los Docentes ({availableDocentes.length})</option>
+              {availableDocentes.map(([name, count]) => (
+                <option key={name} value={name}>
+                  {name} ({count} recurso{count > 1 ? 's' : ''})
+                </option>
+              ))}
+            </select>
           </div>
 
           {/* Filter Semestre */}
@@ -541,8 +590,44 @@ export default function RecursosPage() {
 
         </div>
 
-        {/* Quick Materia Filter Tags */}
+        {/* Quick Docentes Filter Tags (Repositorio por Docente) */}
         <div className="flex items-center space-x-2 overflow-x-auto pt-1 pb-1 text-xs no-scrollbar">
+          <span className="text-[10px] uppercase font-bold text-emerald-400 shrink-0 flex items-center space-x-1">
+            <span>👨‍🏫</span>
+            <span>Docente:</span>
+          </span>
+          <button
+            onClick={() => setDocenteFilter('all')}
+            className={`px-2.5 py-1 rounded-lg text-[11px] font-semibold whitespace-nowrap transition-all cursor-pointer shrink-0 ${
+              docenteFilter === 'all'
+                ? 'bg-emerald-500 text-black font-bold shadow-sm'
+                : 'bg-white/5 text-gray-400 hover:text-white hover:bg-white/10'
+            }`}
+          >
+            ⭐ Todos ({availableDocentes.length})
+          </button>
+          {availableDocentes.map(([name, count]) => (
+            <button
+              key={name}
+              onClick={() => setDocenteFilter(name)}
+              className={`px-2.5 py-1 rounded-lg text-[11px] font-semibold whitespace-nowrap transition-all cursor-pointer shrink-0 flex items-center space-x-1.5 ${
+                docenteFilter === name
+                  ? 'bg-emerald-500 text-black font-bold shadow-md shadow-emerald-500/20'
+                  : 'bg-emerald-500/10 text-emerald-300 hover:bg-emerald-500/20 border border-emerald-500/30'
+              }`}
+            >
+              <span>{name}</span>
+              <span className={`text-[10px] px-1.5 py-0.2 rounded-full font-mono ${
+                docenteFilter === name ? 'bg-black/30 text-white' : 'bg-emerald-400/20 text-emerald-200'
+              }`}>
+                {count}
+              </span>
+            </button>
+          ))}
+        </div>
+
+        {/* Quick Materia Filter Tags */}
+        <div className="flex items-center space-x-2 overflow-x-auto pt-1 pb-1 text-xs no-scrollbar border-t border-white/5">
           <span className="text-[10px] uppercase font-bold text-gray-400 shrink-0">Materia:</span>
           {MATERIAS_LIST.map(m => (
             <button
@@ -557,6 +642,82 @@ export default function RecursosPage() {
               {m === 'TODAS' ? '⭐ Todas las Materias' : m}
             </button>
           ))}
+        </div>
+      </div>
+
+      {/* Toolbar: Active Filters & View Grouping Selector (Cuadrícula vs Por Docente) */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+        <div className="flex items-center flex-wrap gap-2 text-xs">
+          {docenteFilter !== 'all' && (
+            <div className="inline-flex items-center space-x-2 px-3 py-1.5 rounded-xl bg-emerald-500/15 border border-emerald-500/30 text-emerald-300 font-semibold shadow-sm">
+              <span>👨‍🏫 Recursos de: <strong>{docenteFilter}</strong></span>
+              <button 
+                onClick={() => setDocenteFilter('all')} 
+                className="p-0.5 rounded hover:bg-white/10 text-emerald-400 hover:text-white cursor-pointer"
+                title="Quitar filtro de docente"
+              >
+                <X size={13} />
+              </button>
+            </div>
+          )}
+
+          {materiaFilter !== 'TODAS' && (
+            <div className="inline-flex items-center space-x-2 px-3 py-1.5 rounded-xl bg-cyan-500/15 border border-cyan-500/30 text-cyan-300 font-semibold">
+              <span>📖 {materiaFilter}</span>
+              <button onClick={() => setMateriaFilter('TODAS')} className="p-0.5 rounded hover:bg-white/10 text-cyan-400 hover:text-white cursor-pointer">
+                <X size={13} />
+              </button>
+            </div>
+          )}
+
+          {semestreFilter !== 'all' && (
+            <div className="inline-flex items-center space-x-2 px-3 py-1.5 rounded-xl bg-white/5 border border-white/10 text-gray-300 font-semibold">
+              <span>Semestre {semestreFilter}</span>
+              <button onClick={() => setSemestreFilter('all')} className="p-0.5 rounded hover:bg-white/10 text-gray-400 hover:text-white cursor-pointer">
+                <X size={13} />
+              </button>
+            </div>
+          )}
+
+          {grupoFilter !== 'all' && (
+            <div className="inline-flex items-center space-x-2 px-3 py-1.5 rounded-xl bg-white/5 border border-white/10 text-gray-300 font-semibold">
+              <span>Grupo {grupoFilter}</span>
+              <button onClick={() => setGrupoFilter('all')} className="p-0.5 rounded hover:bg-white/10 text-gray-400 hover:text-white cursor-pointer">
+                <X size={13} />
+              </button>
+            </div>
+          )}
+        </div>
+
+        {/* View Mode Toggle */}
+        <div className="flex items-center space-x-1.5 p-1 rounded-2xl bg-[#030712] border border-white/10 self-start sm:self-auto shrink-0 shadow-lg">
+          <button
+            type="button"
+            onClick={() => setViewGrouping('grid')}
+            className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center space-x-1.5 ${
+              viewGrouping === 'grid'
+                ? 'bg-cyan-500 text-black shadow-md font-extrabold'
+                : 'text-gray-400 hover:text-white'
+            }`}
+          >
+            <Layers size={13} />
+            <span>Vista Cuadrícula</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => setViewGrouping('por_docente')}
+            className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center space-x-1.5 ${
+              viewGrouping === 'por_docente'
+                ? 'bg-gradient-to-r from-emerald-500 to-teal-500 text-black shadow-md font-extrabold'
+                : 'text-emerald-400 hover:text-white hover:bg-emerald-500/10'
+            }`}
+          >
+            <span>👨‍🏫 Agrupar por Docente</span>
+            <span className="text-[10px] bg-black/20 px-1.5 py-0.2 rounded-full font-mono">
+              {resourcesGroupedByDocente.length}
+            </span>
+          </button>
         </div>
       </div>
 
@@ -580,7 +741,7 @@ export default function RecursosPage() {
         </div>
       )}
 
-      {/* Resources Cards Grid - Mobile, Tablet & Desktop Responsive */}
+      {/* Resources Cards Grid or Grouped by Teacher */}
       {isLoading ? (
         <div className="py-20 text-center space-y-3">
           <RefreshCw size={32} className="animate-spin text-cyan-400 mx-auto" />
@@ -591,16 +752,256 @@ export default function RecursosPage() {
           <div className="w-14 h-14 rounded-2xl bg-white/5 text-gray-400 flex items-center justify-center mx-auto text-2xl">
             📚
           </div>
-          <h3 className="text-base font-bold text-white">No se encontraron recursos en este filtro</h3>
+          <h3 className="text-base font-bold text-white">No se encontraron recursos con los filtros seleccionados</h3>
           <p className="text-xs text-gray-400 max-w-sm mx-auto">
             {activeTab === 'validacion'
               ? '¡Excelente! No hay recursos pendientes de validación por el Administrador.'
               : activeTab === 'mis_recursos'
               ? 'Aún no has subido recursos educativos. Usa "+ Subir Recurso" para compartir guías o videos.'
-              : 'Prueba cambiando los filtros de semestre, grupo o materia.'}
+              : 'Prueba cambiando los filtros de docente, semestre, grupo o materia.'}
           </p>
+
+          {(docenteFilter !== 'all' || materiaFilter !== 'TODAS' || semestreFilter !== 'all' || grupoFilter !== 'all' || searchQuery) && (
+            <button
+              onClick={() => {
+                setDocenteFilter('all');
+                setMateriaFilter('TODAS');
+                setSemestreFilter('all');
+                setGrupoFilter('all');
+                setSearchQuery('');
+              }}
+              className="mt-2 px-4 py-2 rounded-xl bg-cyan-500/20 hover:bg-cyan-500/30 text-cyan-300 text-xs font-bold transition-all cursor-pointer inline-flex items-center space-x-1.5"
+            >
+              <span>Ver todos los recursos sin filtros</span>
+            </button>
+          )}
+        </div>
+      ) : viewGrouping === 'por_docente' ? (
+        /* Vista Agrupada por Docente */
+        <div className="space-y-8 animate-fade-in">
+          {resourcesGroupedByDocente.map(([docenteName, items]) => (
+            <div 
+              key={docenteName} 
+              className="glass-panel p-5 sm:p-6 rounded-3xl border border-white/10 space-y-4 bg-gradient-to-br from-[#090d16] via-[#040916] to-[#040508] shadow-xl"
+            >
+              {/* Header de Docente */}
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-4 border-b border-white/10">
+                <div className="flex items-center space-x-3.5">
+                  <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-emerald-500/20 to-teal-500/10 border border-emerald-500/30 text-emerald-400 flex items-center justify-center text-2xl shadow-lg shrink-0">
+                    👨‍🏫
+                  </div>
+                  <div>
+                    <div className="flex items-center flex-wrap gap-2">
+                      <h3 className="text-base sm:text-lg font-extrabold text-white tracking-wide">{docenteName}</h3>
+                      <span className="text-[10px] bg-emerald-500/20 text-emerald-300 px-2.5 py-0.5 rounded-full font-mono border border-emerald-500/30 font-bold">
+                        {items.length} recurso{items.length > 1 ? 's' : ''} publicado{items.length > 1 ? 's' : ''}
+                      </span>
+                    </div>
+                    <p className="text-xs text-gray-400 mt-0.5">
+                      Docente CECYTE BC • Guías PDF y Clases en Video asignadas a alumnos
+                    </p>
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setDocenteFilter(docenteFilter === docenteName ? 'all' : docenteName)}
+                    className={`px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+                      docenteFilter === docenteName
+                        ? 'bg-emerald-500 text-black font-extrabold shadow-md shadow-emerald-500/20'
+                        : 'bg-white/5 hover:bg-white/10 text-emerald-300 border border-emerald-500/30'
+                    }`}
+                  >
+                    {docenteFilter === docenteName ? '✓ Mostrando solo este docente' : 'Ver solo este docente'}
+                  </button>
+                </div>
+              </div>
+
+              {/* Grid de recursos del docente */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-5">
+                {items.map((rec) => {
+                  const isPending = rec.estado === 'pendiente';
+                  const isApproved = rec.estado === 'aprobado';
+                  const isRejected = rec.estado === 'rechazado';
+                  const isPdf = rec.tipo === 'pdf';
+
+                  return (
+                    <div
+                      key={rec.id}
+                      className={`glass-panel rounded-3xl border transition-all flex flex-col justify-between overflow-hidden group ${
+                        isPending 
+                          ? 'border-amber-500/40 bg-amber-500/[0.02]' 
+                          : isRejected
+                          ? 'border-red-500/30 bg-red-500/[0.02] opacity-80'
+                          : 'border-white/10 hover:border-cyan-500/40 hover:shadow-[0_0_30px_rgba(6,182,212,0.1)]'
+                      }`}
+                    >
+                      {/* Thumbnail / Header Preview */}
+                      <div className="relative h-40 bg-black/50 overflow-hidden cursor-pointer" onClick={() => handleOpenResource(rec)}>
+                        {isPdf ? (
+                          <div className="w-full h-full flex flex-col items-center justify-center p-4 bg-gradient-to-br from-rose-950/40 via-black to-[#090d16] text-rose-400 group-hover:scale-105 transition-transform duration-300">
+                            <FileText size={44} className="mb-2" />
+                            <span className="text-xs font-bold text-rose-300 uppercase tracking-wider">Documento PDF</span>
+                            {rec.archivoTamano && (
+                              <span className="text-[10px] text-gray-400 font-mono mt-0.5">{rec.archivoTamano}</span>
+                            )}
+                          </div>
+                        ) : (
+                          <div className="w-full h-full relative group-hover:scale-105 transition-transform duration-300">
+                            <img 
+                              src={getYouTubeThumbnail(rec.youtubeId || rec.videoUrl || '')} 
+                              alt={rec.titulo}
+                              className="w-full h-full object-cover" 
+                            />
+                            <div className="absolute inset-0 bg-black/40 flex items-center justify-center">
+                              <div className="w-12 h-12 rounded-full bg-red-600/90 text-white flex items-center justify-center shadow-xl group-hover:scale-110 transition-transform">
+                                <YouTubeIcon size={24} />
+                              </div>
+                            </div>
+                            {rec.duracion && (
+                              <span className="absolute bottom-2 right-2 bg-black/80 px-2 py-0.5 rounded text-[10px] font-mono text-white">
+                                {rec.duracion}
+                              </span>
+                            )}
+                          </div>
+                        )}
+
+                        {/* Status Badge in corner */}
+                        <div className="absolute top-2.5 left-2.5 flex items-center gap-1.5">
+                          {isPending && (
+                            <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-amber-500 text-black flex items-center gap-1 shadow">
+                              <Clock size={11} /> Pendiente de Validación
+                            </span>
+                          )}
+                          {isApproved && (
+                            <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-emerald-500/80 text-white flex items-center gap-1 shadow">
+                              <Check size={11} /> Aprobado
+                            </span>
+                          )}
+                          {isRejected && (
+                            <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-red-500 text-white flex items-center gap-1 shadow">
+                              <X size={11} /> Rechazado
+                            </span>
+                          )}
+                        </div>
+
+                        {/* Semestre & Grupo Badge */}
+                        <div className="absolute top-2.5 right-2.5 flex items-center gap-1">
+                          <span className="px-2 py-0.5 rounded-md text-[10px] font-bold bg-black/80 text-cyan-300 border border-cyan-500/30">
+                            {rec.semestre} • {rec.grupo}
+                          </span>
+                        </div>
+                      </div>
+
+                      {/* Content Info */}
+                      <div className="p-5 space-y-3 flex-1 flex flex-col justify-between">
+                        <div className="space-y-2">
+                          <div className="text-[11px] font-bold uppercase tracking-wider text-cyan-400">
+                            {rec.materia}
+                          </div>
+
+                          <h4 
+                            onClick={() => handleOpenResource(rec)}
+                            className="text-sm font-bold text-white group-hover:text-cyan-300 transition-colors cursor-pointer line-clamp-2 leading-snug"
+                          >
+                            {rec.titulo}
+                          </h4>
+
+                          {rec.descripcion && (
+                            <p className="text-xs text-gray-400 line-clamp-2 leading-relaxed">
+                              {rec.descripcion}
+                            </p>
+                          )}
+
+                          {/* Rejection Notice if any */}
+                          {isRejected && rec.motivoRechazo && (
+                            <div className="p-2.5 rounded-xl bg-red-500/10 border border-red-500/30 text-[11px] text-red-300 space-y-0.5">
+                              <span className="font-bold">Motivo de revisión:</span>
+                              <p>{rec.motivoRechazo}</p>
+                            </div>
+                          )}
+                        </div>
+
+                        {/* Metadata & Actions */}
+                        <div className="pt-3 border-t border-white/5 space-y-3">
+                          <div className="flex items-center justify-between text-[11px] text-gray-400">
+                            <span className="truncate max-w-[170px]" title={rec.autorNombre}>
+                              Por: <button
+                                     type="button"
+                                     onClick={(e) => {
+                                       e.stopPropagation();
+                                       setDocenteFilter(rec.autorNombre);
+                                     }}
+                                     className="text-emerald-400 hover:text-emerald-300 hover:underline font-bold transition-colors cursor-pointer"
+                                     title={`Ver todos los recursos de ${rec.autorNombre}`}
+                                   >
+                                     {rec.autorNombre}
+                                   </button>
+                            </span>
+                            <span>{new Date(rec.fechaCreacion).toLocaleDateString()}</span>
+                          </div>
+
+                          {/* Validation Controls (For Administrador & Superadmin) */}
+                          {isAdminOrSuper && isPending && (
+                            <div className="pt-2 border-t border-amber-500/20 flex items-center justify-between gap-2">
+                              <button
+                                onClick={() => handleApprove(rec.id)}
+                                disabled={isProcessingAction}
+                                className="flex-1 py-1.5 px-3 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-black font-bold text-xs transition-all shadow-md shadow-emerald-500/20 flex items-center justify-center space-x-1 cursor-pointer"
+                              >
+                                <Check size={14} />
+                                <span>Aprobar</span>
+                              </button>
+
+                              <button
+                                onClick={() => { setRejectingResource(rec); setRejectionReason(''); }}
+                                disabled={isProcessingAction}
+                                className="py-1.5 px-3 rounded-xl bg-red-500/15 hover:bg-red-500/30 text-red-400 font-bold text-xs border border-red-500/30 transition-all flex items-center space-x-1 cursor-pointer"
+                              >
+                                <X size={14} />
+                                <span>Rechazar</span>
+                              </button>
+                            </div>
+                          )}
+
+                          {/* User Action Buttons */}
+                          <div className="flex items-center justify-between gap-2">
+                            <button
+                              onClick={() => handleOpenResource(rec)}
+                              className={`flex-1 py-2 px-3 rounded-xl font-bold text-xs transition-all cursor-pointer flex items-center justify-center space-x-1.5 ${
+                                isPdf
+                                  ? 'bg-rose-500/20 hover:bg-rose-500/30 text-rose-300 border border-rose-500/40'
+                                  : 'bg-red-500/20 hover:bg-red-500/30 text-red-300 border border-red-500/40'
+                              }`}
+                            >
+                              {isPdf ? <FileText size={14} /> : <YouTubeIcon size={14} />}
+                              <span>{isPdf ? 'Abrir Guía PDF' : 'Ver Video'}</span>
+                            </button>
+
+                            {/* Delete Option for Admins or Author */}
+                            {(isAdminOrSuper || (user?.email && rec.autorEmail.toLowerCase() === user.email.toLowerCase())) && (
+                              <button
+                                onClick={() => handleDelete(rec.id, rec.titulo)}
+                                className="p-2 rounded-xl text-gray-500 hover:text-red-400 hover:bg-red-500/10 transition-all cursor-pointer"
+                                title="Eliminar recurso"
+                              >
+                                <Trash2 size={15} />
+                              </button>
+                            )}
+                          </div>
+                        </div>
+
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          ))}
         </div>
       ) : (
+        /* Vista Cuadrícula Estándar */
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-5">
           {displayedResources.map((rec) => {
             const isPending = rec.estado === 'pendiente';
@@ -709,7 +1110,17 @@ export default function RecursosPage() {
                   <div className="pt-3 border-t border-white/5 space-y-3">
                     <div className="flex items-center justify-between text-[11px] text-gray-400">
                       <span className="truncate max-w-[170px]" title={rec.autorNombre}>
-                        Por: <strong className="text-gray-300">{rec.autorNombre}</strong>
+                        Por: <button
+                               type="button"
+                               onClick={(e) => {
+                                 e.stopPropagation();
+                                 setDocenteFilter(rec.autorNombre);
+                               }}
+                               className="text-emerald-400 hover:text-emerald-300 hover:underline font-bold transition-colors cursor-pointer"
+                               title={`Ver todos los recursos de ${rec.autorNombre}`}
+                             >
+                               {rec.autorNombre}
+                             </button>
                       </span>
                       <span>{new Date(rec.fechaCreacion).toLocaleDateString()}</span>
                     </div>
