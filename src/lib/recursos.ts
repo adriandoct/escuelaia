@@ -1,7 +1,58 @@
 "use strict";
 
-export type RecursoTipo = 'pdf' | 'video';
+export type RecursoTipo = 'pdf' | 'video' | 'examen';
 export type RecursoEstado = 'pendiente' | 'aprobado' | 'rechazado';
+
+export interface OpcionPregunta {
+  inciso: string; // 'A', 'B', 'C', 'D'
+  texto: string;
+}
+
+export interface PreguntaExamen {
+  id: string;
+  numero: number;
+  texto: string;
+  opciones: OpcionPregunta[];
+  respuestaCorrecta: string; // Clave de respuesta: 'A', 'B', 'C', 'D'
+  puntos?: number;
+  explicacion?: string;
+}
+
+export interface ExamenData {
+  id: string;
+  recursoId?: string;
+  titulo: string;
+  descripcion?: string;
+  semestre: string;
+  grupo: string;
+  materia: string;
+  docenteNombre: string;
+  docenteEmail: string;
+  preguntas: PreguntaExamen[];
+  fechaCreacion: string;
+  googleFormUrl?: string;
+  googleSheetUrl?: string;
+  totalPreguntas: number;
+  respuestasCount?: number;
+}
+
+export interface RespuestaExamenAlumno {
+  id: string;
+  examenId: string;
+  recursoId?: string;
+  alumnoMatricula: string;
+  alumnoNombre: string;
+  alumnoGrupo: string;
+  alumnoSemestre: string;
+  respuestas: Record<string, string>; // preguntaId -> inciso seleccionado
+  aciertos: number;
+  totalPreguntas: number;
+  calificacion: number; // 0 - 10
+  porcentaje: number;   // 0 - 100
+  fecha: string;        // YYYY-MM-DD
+  hora: string;         // HH:MM:SS
+  tiempoSegundos?: number;
+}
 
 export interface RecursoEducativo {
   id: string;
@@ -20,6 +71,12 @@ export interface RecursoEducativo {
   youtubeId?: string; // ID de 11 caracteres de YouTube
   canalYoutube?: string; // Por defecto: 'cecytecopias@gmail.com'
   duracion?: string;
+  
+  // Examen Interactivo / Google Form con clave
+  examenId?: string;
+  totalPreguntas?: number;
+  googleFormUrl?: string;
+  googleSheetUrl?: string;
   
   // Asignación académica obligatoria
   semestre: string; // '1°' | '3°' | '5°' | 'TODOS'

@@ -28,7 +28,8 @@ import {
   BookOpen,
   Film,
   Clapperboard,
-  FileText
+  FileText,
+  CheckSquare
 } from 'lucide-react';
 
 interface PushAlertItem {
@@ -639,6 +640,28 @@ function TutorMobilePortalContent() {
                   </div>
                   <ExternalLink size={14} className="text-pink-400 opacity-70 group-hover:opacity-100" />
                 </a>
+
+                {/* Enlace directo a Exámenes Interactivos (Sin Clave) */}
+                <Link
+                  href={`/dashboard/recursos?tab=examenes&semestre=${encodeURIComponent(selectedStudent.grado)}&grupo=${encodeURIComponent(selectedStudent.grupo)}`}
+                  className="p-3.5 rounded-2xl bg-gradient-to-r from-indigo-600/25 to-emerald-600/25 hover:from-indigo-600/40 hover:to-emerald-600/40 border border-indigo-500/40 text-white font-bold text-xs flex items-center justify-between transition-all group shadow-sm col-span-1 sm:col-span-2"
+                >
+                  <div className="flex items-center space-x-2.5">
+                    <CheckSquare size={20} className="text-emerald-400 group-hover:scale-110 transition-transform" />
+                    <div>
+                      <div className="font-extrabold text-white flex items-center gap-1.5">
+                        <span>📝 Exámenes y Evaluaciones de Opción Múltiple</span>
+                        <span className="px-2 py-0.5 rounded-full text-[9px] bg-emerald-500/20 text-emerald-300 font-bold border border-emerald-500/30">
+                          Sin Clave
+                        </span>
+                      </div>
+                      <div className="text-[10px] text-emerald-300/80 font-normal">
+                        Contesta en línea los exámenes asignados al grupo {selectedStudent.grupo}
+                      </div>
+                    </div>
+                  </div>
+                  <ExternalLink size={14} className="text-emerald-400 opacity-70 group-hover:opacity-100" />
+                </Link>
               </div>
 
               <div className="pt-2.5 border-t border-white/5 flex flex-wrap items-center justify-between gap-2 text-[11px] text-gray-400">

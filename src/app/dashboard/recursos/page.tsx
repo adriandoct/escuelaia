@@ -8,7 +8,7 @@ import {
   FileText, Video, Upload, Search, Filter, CheckCircle2, 
   Clock, AlertTriangle, Shield, Check, X, ExternalLink, Download,
   Layers, Eye, RefreshCw, Trash2, ShieldCheck, Sparkles, AlertCircle,
-  Users, BookOpen, Film, Clapperboard
+  Users, BookOpen, Film, Clapperboard, CheckSquare, FileSpreadsheet, GraduationCap
 } from 'lucide-react';
 import YouTubeIcon from '@/components/YouTubeIcon';
 import { 
@@ -26,6 +26,9 @@ import { useAuth } from '@/lib/auth';
 import UploadResourceModal from '@/components/UploadResourceModal';
 import PDFViewerModal from '@/components/PDFViewerModal';
 import VideoPlayerModal from '@/components/VideoPlayerModal';
+import UploadExamModal from '@/components/UploadExamModal';
+import TakeExamModal from '@/components/TakeExamModal';
+import ExamResultsSheetModal from '@/components/ExamResultsSheetModal';
 
 const MATERIAS_LIST = [
   'TODAS',
@@ -52,7 +55,7 @@ export default function RecursosPage() {
   const isTutor = user?.role === 'tutor';
   const isAlumnoOrTutor = isAlumno || isTutor;
 
-  // Regla estricta: Los alumnos y tutores NO pueden subir recursos (solo docentes, directivos y administrativos autorizados)
+  // Regla estricta: Los alumnos y tutores NO pueden subir recursos ni exámenes (solo docentes, directivos y administrativos autorizados)
   const canUpload = !!user && !isAlumnoOrTutor && (isDocente || isAdminOrSuper || user?.role === 'administrativo');
 
   // Data states
@@ -62,9 +65,9 @@ export default function RecursosPage() {
   const [toastMessage, setToastMessage] = useState<{ text: string; type: 'success' | 'error' | 'info' } | null>(null);
 
   // Filter states
-  const [activeTab, setActiveTab] = useState<'explorar' | 'cineclub' | 'validacion' | 'mis_recursos' | 'youtube'>('explorar');
+  const [activeTab, setActiveTab] = useState<'explorar' | 'examenes' | 'cineclub' | 'validacion' | 'mis_recursos' | 'youtube'>('explorar');
   const [searchQuery, setSearchQuery] = useState('');
-  const [tipoFilter, setTipoFilter] = useState<'all' | 'pdf' | 'video'>('all');
+  const [tipoFilter, setTipoFilter] = useState<'all' | 'pdf' | 'video' | 'examen'>('all');
   const [semestreFilter, setSemestreFilter] = useState<string>('all');
   const [grupoFilter, setGrupoFilter] = useState<string>('all');
   const [materiaFilter, setMateriaFilter] = useState<string>('TODAS');
@@ -73,8 +76,11 @@ export default function RecursosPage() {
 
   // Modal states
   const [isUploadModalOpen, setIsUploadModalOpen] = useState(false);
+  const [isUploadExamOpen, setIsUploadExamOpen] = useState(false);
   const [selectedPdfResource, setSelectedPdfResource] = useState<RecursoEducativo | null>(null);
   const [selectedVideoResource, setSelectedVideoResource] = useState<RecursoEducativo | null>(null);
+  const [selectedExamToTake, setSelectedExamToTake] = useState<RecursoEducativo | null>(null);
+  const [selectedExamResults, setSelectedExamResults] = useState<{ id: string; titulo: string } | null>(null);
   const [rejectingResource, setRejectingResource] = useState<RecursoEducativo | null>(null);
   const [rejectionReason, setRejectionReason] = useState('');
   const [isProcessingAction, setIsProcessingAction] = useState(false);
@@ -91,8 +97,8 @@ export default function RecursosPage() {
       if (semParam) setSemestreFilter(semParam);
       if (grpParam) setGrupoFilter(grpParam);
       if (matParam) setMateriaFilter(matParam);
-      if (tabParam === 'cineclub' || tabParam === 'explorar' || tabParam === 'youtube' || tabParam === 'validacion' || tabParam === 'mis_recursos') {
-        setActiveTab(tabParam);
+      if (tabParam === 'cineclub' || tabParam === 'explorar' || tabParam === 'examenes' || tabParam === 'youtube' || tabParam === 'validacion' || tabParam === 'mis_recursos') {
+        setActiveTab(tabParam as any);
       }
     }
 
@@ -225,6 +231,17 @@ export default function RecursosPage() {
       return;
     }
 
+    if (r.tipo === 'examen') {
+      if (isAlumnoOrTutor) {
+        setSelectedExamToTake(r);
+      } else if (canUpload || isAdminOrSuper) {
+        setSelectedExamResults({ id: r.examenId || r.id, titulo: r.titulo });
+      } else {
+        setSelectedExamToTake(r);
+      }
+      return;
+    }
+
     if (r.tipo === 'pdf') {
       setSelectedPdfResource(r);
     } else {
@@ -273,6 +290,9 @@ export default function RecursosPage() {
       // Tab filtering
       if (activeTab === 'cineclub') {
         if (r.materia !== 'CINECLUB' && !r.externalUrl?.includes('drive.google.com')) return false;
+      } else if (activeTab === 'examenes') {
+        if (r.tipo !== 'examen') return false;
+        if (r.estado !== 'aprobado' && !isAdminOrSuper) return false;
       } else if (activeTab === 'validacion') {
         if (r.estado !== 'pendiente') return false;
       } else if (activeTab === 'mis_recursos') {
@@ -340,6 +360,7 @@ export default function RecursosPage() {
     const isApproved = rec.estado === 'aprobado';
     const isRejected = rec.estado === 'rechazado';
     const isPdf = rec.tipo === 'pdf';
+    const isExamen = rec.tipo === 'examen';
     const isCineclub = rec.materia === 'CINECLUB' || !!rec.externalUrl?.includes('drive.google.com') || (!!rec.videoUrl && rec.videoUrl.includes('drive.google.com'));
 
     return (
@@ -348,6 +369,8 @@ export default function RecursosPage() {
         className={`glass-panel rounded-3xl border transition-all flex flex-col justify-between overflow-hidden group ${
           isCineclub
             ? 'border-purple-500/35 hover:border-purple-400 hover:shadow-[0_0_35px_rgba(168,85,247,0.2)] bg-gradient-to-br from-purple-950/20 via-[#0a0d18] to-black'
+            : isExamen
+            ? 'border-indigo-500/40 hover:border-emerald-400 hover:shadow-[0_0_35px_rgba(16,185,129,0.2)] bg-gradient-to-br from-indigo-950/25 via-[#0a0d18] to-black'
             : isPending 
             ? 'border-amber-500/40 bg-amber-500/[0.02]' 
             : isRejected
@@ -359,7 +382,7 @@ export default function RecursosPage() {
         <div 
           className="relative h-40 bg-black/50 overflow-hidden cursor-pointer" 
           onClick={() => handleOpenResource(rec)}
-          title={isCineclub ? 'Presiona para ver la película en Google Drive' : 'Presiona para ver el recurso'}
+          title={isCineclub ? 'Presiona para ver la película en Google Drive' : isExamen ? 'Presiona para ver el examen' : 'Presiona para ver el recurso'}
         >
           {isCineclub ? (
             <div className="w-full h-full flex flex-col items-center justify-center p-4 bg-gradient-to-br from-purple-950/60 via-black to-[#090d18] text-purple-300 group-hover:scale-105 transition-transform duration-300">
@@ -371,6 +394,18 @@ export default function RecursosPage() {
                 <span>Película CINECLUB</span>
               </span>
               <span className="text-[10px] text-purple-300/80 font-mono mt-0.5">Google Drive • Todos los Semestres</span>
+            </div>
+          ) : isExamen ? (
+            <div className="w-full h-full flex flex-col items-center justify-center p-4 bg-gradient-to-br from-indigo-950/70 via-purple-950/40 to-black text-emerald-400 group-hover:scale-105 transition-transform duration-300">
+              <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-indigo-600 via-purple-600 to-emerald-500 text-white flex items-center justify-center shadow-lg shadow-purple-600/30 mb-2">
+                <CheckSquare size={24} />
+              </div>
+              <span className="text-xs font-black text-white uppercase tracking-wider flex items-center gap-1.5">
+                <span>Examen Interactivo</span>
+              </span>
+              <span className="text-[10px] text-emerald-300/90 font-mono mt-0.5">
+                {rec.totalPreguntas || 5} Preguntas • {isAlumnoOrTutor ? 'Sin Clave' : 'Google Form con Clave'}
+              </span>
             </div>
           ) : isPdf ? (
             <div className="w-full h-full flex flex-col items-center justify-center p-4 bg-gradient-to-br from-rose-950/40 via-black to-[#090d16] text-rose-400 group-hover:scale-105 transition-transform duration-300">
@@ -517,6 +552,10 @@ export default function RecursosPage() {
                 className={`flex-1 py-2 px-3 rounded-xl font-bold text-xs transition-all cursor-pointer flex items-center justify-center space-x-1.5 ${
                   isCineclub
                     ? 'bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-500 hover:to-pink-500 text-white shadow-md shadow-purple-600/30 font-black'
+                    : isExamen
+                    ? isAlumnoOrTutor
+                      ? 'bg-gradient-to-r from-emerald-500 to-teal-600 hover:from-emerald-400 hover:to-teal-500 text-black shadow-md shadow-emerald-500/30 font-black'
+                      : 'bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-300 border border-emerald-500/40'
                     : isPdf
                     ? 'bg-rose-500/20 hover:bg-rose-500/30 text-rose-300 border border-rose-500/40'
                     : 'bg-red-500/20 hover:bg-red-500/30 text-red-300 border border-red-500/40'
@@ -528,6 +567,18 @@ export default function RecursosPage() {
                     <span>🎬 Ver Película en Drive</span>
                     <ExternalLink size={12} className="opacity-80" />
                   </>
+                ) : isExamen ? (
+                  isAlumnoOrTutor ? (
+                    <>
+                      <CheckSquare size={14} />
+                      <span>✍️ Contestar Examen (Sin Clave)</span>
+                    </>
+                  ) : (
+                    <>
+                      <FileSpreadsheet size={14} />
+                      <span>📊 Ver en Google Sheet</span>
+                    </>
+                  )
                 ) : isPdf ? (
                   <>
                     <FileText size={14} />
@@ -540,6 +591,18 @@ export default function RecursosPage() {
                   </>
                 )}
               </button>
+
+              {/* Botón extra para Docente / Admin: Probar examen como alumno */}
+              {isExamen && (canUpload || isAdminOrSuper) && (
+                <button
+                  onClick={() => setSelectedExamToTake(rec)}
+                  className="py-2 px-2.5 rounded-xl font-bold text-xs bg-purple-500/20 hover:bg-purple-500/30 text-purple-300 border border-purple-500/40 transition-all cursor-pointer flex items-center space-x-1 shrink-0"
+                  title="Probar examen sin ver las claves (vista alumno)"
+                >
+                  <Eye size={13} />
+                  <span>Probar</span>
+                </button>
+              )}
 
               {/* Delete Option for Admins or Author */}
               {(isAdminOrSuper || (user?.email && rec.autorEmail.toLowerCase() === user.email.toLowerCase())) && (
@@ -613,22 +676,34 @@ export default function RecursosPage() {
             <RefreshCw size={15} className={isRefreshing ? 'animate-spin text-cyan-400' : ''} />
           </button>
 
-          {/* Botón Subir Recurso: Exclusivo para docentes y directivos (Oculto para Alumnos y Tutores) */}
-          {canUpload && (
-            <button
-              onClick={() => {
-                if (!user) {
-                  openLoginModal();
-                  return;
-                }
-                setIsUploadModalOpen(true);
-              }}
-              className="flex-1 sm:flex-initial inline-flex items-center justify-center space-x-2 px-4 py-2.5 rounded-xl bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-400 hover:to-blue-500 text-white font-bold text-xs shadow-lg shadow-cyan-500/20 hover:shadow-cyan-500/40 transition-all cursor-pointer"
-            >
-              <Upload size={15} />
-              <span>+ Subir Recurso (PDF o Video)</span>
-            </button>
-          )}
+          {/* Botones de Carga: Exclusivo para docentes y directivos (Estrictamente Oculto para Alumnos y Tutores) */}
+          {canUpload ? (
+            <div className="flex items-center gap-2 flex-wrap">
+              {/* Botón Subir Examen en Word para convertirlo a Google Form con Clave */}
+              <button
+                onClick={() => setIsUploadExamOpen(true)}
+                className="flex-1 sm:flex-initial inline-flex items-center justify-center space-x-2 px-4 py-2.5 rounded-xl bg-gradient-to-r from-purple-600 via-indigo-600 to-purple-700 hover:from-purple-500 hover:to-indigo-500 text-white font-bold text-xs shadow-lg shadow-purple-600/25 hover:shadow-purple-600/45 transition-all cursor-pointer"
+                title="Subir examen en Word (.docx) contestado para convertirlo en Google Form automático con clave"
+              >
+                <FileSpreadsheet size={15} />
+                <span>📝 + Subir Examen Word (Google Form)</span>
+              </button>
+
+              {/* Botón Subir Recurso (PDF o Video) */}
+              <button
+                onClick={() => setIsUploadModalOpen(true)}
+                className="flex-1 sm:flex-initial inline-flex items-center justify-center space-x-2 px-4 py-2.5 rounded-xl bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-400 hover:to-blue-500 text-white font-bold text-xs shadow-lg shadow-cyan-500/20 hover:shadow-cyan-500/40 transition-all cursor-pointer"
+              >
+                <Upload size={15} />
+                <span>+ Subir Recurso (PDF o Video)</span>
+              </button>
+            </div>
+          ) : isAlumno ? (
+            <div className="flex items-center space-x-2 px-3.5 py-2 rounded-xl bg-cyan-500/10 border border-cyan-500/30 text-cyan-300 text-xs font-semibold">
+              <GraduationCap size={15} className="text-cyan-400 shrink-0" />
+              <span>Modo Alumno: Consulta y contesta evaluaciones sin clave</span>
+            </div>
+          ) : null}
         </div>
       </div>
 
@@ -646,6 +721,22 @@ export default function RecursosPage() {
           <span>Explorar Recursos Aprobados</span>
           <span className="text-[10px] bg-white/10 px-2 py-0.5 rounded-full text-white font-mono">
             {recursos.filter(r => r.estado === 'aprobado').length}
+          </span>
+        </button>
+
+        {/* Pestaña Exámenes Interactivos (Word a Google Form) */}
+        <button
+          onClick={() => setActiveTab('examenes')}
+          className={`px-4 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center space-x-2 shrink-0 ${
+            activeTab === 'examenes'
+              ? 'bg-indigo-500/20 border border-indigo-500/50 text-indigo-300 shadow-md shadow-indigo-500/10'
+              : 'text-indigo-400 hover:bg-indigo-500/10'
+          }`}
+        >
+          <CheckSquare size={14} />
+          <span>📝 Exámenes Interactivos</span>
+          <span className="text-[10px] bg-indigo-500/30 text-indigo-200 px-2 py-0.5 rounded-full font-mono border border-indigo-500/40">
+            {recursos.filter(r => r.tipo === 'examen').length}
           </span>
         </button>
 
@@ -915,6 +1006,7 @@ export default function RecursosPage() {
               <option value="all">📁 Todos los Formatos</option>
               <option value="pdf">📄 Solo Documentos PDF</option>
               <option value="video">🎥 Solo Videos de YouTube</option>
+              <option value="examen">📝 Solo Exámenes Word (Forms)</option>
             </select>
           </div>
 
@@ -1217,6 +1309,47 @@ export default function RecursosPage() {
           defaultSemestre={semestreFilter !== 'all' ? semestreFilter : '3°'}
           defaultGrupo={grupoFilter !== 'all' ? grupoFilter : 'TODOS'}
           defaultMateria={materiaFilter !== 'TODAS' ? materiaFilter : ''}
+        />
+      )}
+
+      {/* Modal para Subir Examen Word a Google Form con Clave (Docentes y Administradores) */}
+      {canUpload && (
+        <UploadExamModal
+          isOpen={isUploadExamOpen}
+          onClose={() => setIsUploadExamOpen(false)}
+          onSuccess={() => {
+            showToast('¡Examen en Word convertido y publicado en Google Form exitosamente!', 'success');
+            loadRecursos();
+          }}
+          defaultSemestre={semestreFilter !== 'all' ? semestreFilter : '3°'}
+          defaultGrupo={grupoFilter !== 'all' ? grupoFilter : 'TODOS'}
+          defaultMateria={materiaFilter !== 'TODAS' ? materiaFilter : ''}
+        />
+      )}
+
+      {/* Modal para Contestar Examen (Alumnos - Sin Clave) */}
+      {selectedExamToTake && (
+        <TakeExamModal
+          isOpen={!!selectedExamToTake}
+          onClose={() => setSelectedExamToTake(null)}
+          examenId={selectedExamToTake.examenId || selectedExamToTake.id}
+          examenTitulo={selectedExamToTake.titulo}
+          semestre={selectedExamToTake.semestre}
+          grupo={selectedExamToTake.grupo}
+          materia={selectedExamToTake.materia}
+          onFinished={() => {
+            loadRecursos();
+          }}
+        />
+      )}
+
+      {/* Modal Visor de Google Sheet en Vivo (Docentes y Administradores) */}
+      {selectedExamResults && (
+        <ExamResultsSheetModal
+          isOpen={!!selectedExamResults}
+          onClose={() => setSelectedExamResults(null)}
+          examenId={selectedExamResults.id}
+          examenTitulo={selectedExamResults.titulo}
         />
       )}
 
