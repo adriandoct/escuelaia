@@ -72,7 +72,7 @@ export default function RecursosPage() {
   const [grupoFilter, setGrupoFilter] = useState<string>('all');
   const [materiaFilter, setMateriaFilter] = useState<string>('TODAS');
   const [docenteFilter, setDocenteFilter] = useState<string>('all');
-  const [viewGrouping, setViewGrouping] = useState<'grid' | 'por_docente'>('grid');
+  const [viewGrouping, setViewGrouping] = useState<'grid' | 'por_docente'>('por_docente');
 
   // Modal states
   const [isUploadModalOpen, setIsUploadModalOpen] = useState(false);
@@ -284,6 +284,34 @@ export default function RecursosPage() {
     return Object.entries(counts).sort((a, b) => a[0].localeCompare(b[0]));
   }, [recursos, isAdminOrSuper]);
 
+  // Materias dinámicas por Maestro: Si hay un docente seleccionado, SOLO sus materias;
+  // de lo contrario, únicamente las materias con recursos activos en el sistema.
+  const availableMaterias = useMemo(() => {
+    const counts: Record<string, number> = {};
+    recursos.forEach(r => {
+      if (r.estado === 'aprobado' || isAdminOrSuper) {
+        if (docenteFilter !== 'all') {
+          if ((r.autorNombre || '').toLowerCase().trim() !== docenteFilter.toLowerCase().trim()) return;
+        }
+        const mat = (r.materia || '').trim().toUpperCase();
+        if (mat) {
+          counts[mat] = (counts[mat] || 0) + 1;
+        }
+      }
+    });
+    return Object.entries(counts).sort((a, b) => a[0].localeCompare(b[0]));
+  }, [recursos, docenteFilter, isAdminOrSuper]);
+
+  // Si cambia el docente y la materia seleccionada ya no pertenece a ese docente, resetear a 'TODAS'
+  useEffect(() => {
+    if (materiaFilter !== 'TODAS') {
+      const exists = availableMaterias.some(([m]) => m.toUpperCase() === materiaFilter.toUpperCase());
+      if (!exists) {
+        setMateriaFilter('TODAS');
+      }
+    }
+  }, [docenteFilter, availableMaterias, materiaFilter]);
+
   // Filtered resources based on tab and filters
   const displayedResources = useMemo(() => {
     return recursos.filter(r => {
@@ -343,15 +371,30 @@ export default function RecursosPage() {
     });
   }, [recursos, activeTab, tipoFilter, semestreFilter, grupoFilter, materiaFilter, docenteFilter, searchQuery, isAdminOrSuper, user]);
 
-  // Grouped resources by teacher
+  // Grouped resources by teacher AND then by materia
   const resourcesGroupedByDocente = useMemo(() => {
-    const groups: Record<string, RecursoEducativo[]> = {};
+    const docMap: Record<string, Record<string, RecursoEducativo[]>> = {};
+
     displayedResources.forEach(r => {
       const doc = (r.autorNombre || 'Docente CECYTE').trim();
-      if (!groups[doc]) groups[doc] = [];
-      groups[doc].push(r);
+      const mat = (r.materia || 'General').trim();
+
+      if (!docMap[doc]) docMap[doc] = {};
+      if (!docMap[doc][mat]) docMap[doc][mat] = [];
+      docMap[doc][mat].push(r);
     });
-    return Object.entries(groups).sort((a, b) => a[0].localeCompare(b[0]));
+
+    return Object.entries(docMap)
+      .map(([docenteName, materiasMap]) => {
+        const matEntries = Object.entries(materiasMap).sort((a, b) => a[0].localeCompare(b[0]));
+        const total = matEntries.reduce((sum, [, items]) => sum + items.length, 0);
+        return {
+          docenteName,
+          materias: matEntries,
+          totalRecursos: total
+        };
+      })
+      .sort((a, b) => a.docenteName.localeCompare(b.docenteName));
   }, [displayedResources]);
 
   // Render single resource card with CINECLUB Google Drive automatic opening support
@@ -1012,11 +1055,11 @@ export default function RecursosPage() {
 
         </div>
 
-        {/* Quick Docentes Filter Tags (Repositorio por Docente) */}
+        {/* Quick Docentes Filter Tags (Repositorio por Maestro) */}
         <div className="flex items-center space-x-2 overflow-x-auto pt-1 pb-1 text-xs no-scrollbar">
           <span className="text-[10px] uppercase font-bold text-emerald-400 shrink-0 flex items-center space-x-1">
             <span>👨‍🏫</span>
-            <span>Docente:</span>
+            <span>Maestro:</span>
           </span>
           <button
             onClick={() => setDocenteFilter('all')}
@@ -1026,12 +1069,12 @@ export default function RecursosPage() {
                 : 'bg-white/5 text-gray-400 hover:text-white hover:bg-white/10'
             }`}
           >
-            ⭐ Todos ({availableDocentes.length})
+            ⭐ Todos los Maestros ({availableDocentes.length})
           </button>
           {availableDocentes.map(([name, count]) => (
             <button
               key={name}
-              onClick={() => setDocenteFilter(name)}
+              onClick={() => setDocenteFilter(docenteFilter === name ? 'all' : name)}
               className={`px-2.5 py-1 rounded-lg text-[11px] font-semibold whitespace-nowrap transition-all cursor-pointer shrink-0 flex items-center space-x-1.5 ${
                 docenteFilter === name
                   ? 'bg-emerald-500 text-black font-bold shadow-md shadow-emerald-500/20'
@@ -1048,20 +1091,38 @@ export default function RecursosPage() {
           ))}
         </div>
 
-        {/* Quick Materia Filter Tags */}
+        {/* Quick Materia Filter Tags - SOLO las materias del Maestro */}
         <div className="flex items-center space-x-2 overflow-x-auto pt-1 pb-1 text-xs no-scrollbar border-t border-white/5">
-          <span className="text-[10px] uppercase font-bold text-gray-400 shrink-0">Materia:</span>
-          {MATERIAS_LIST.map(m => (
+          <span className="text-[10px] uppercase font-bold text-cyan-400 shrink-0 flex items-center space-x-1">
+            <span>📖</span>
+            <span>{docenteFilter !== 'all' ? `Materias de ${docenteFilter}:` : 'Materias:'}</span>
+          </span>
+          <button
+            onClick={() => setMateriaFilter('TODAS')}
+            className={`px-2.5 py-1 rounded-lg text-[11px] font-semibold whitespace-nowrap transition-all cursor-pointer shrink-0 ${
+              materiaFilter === 'TODAS'
+                ? 'bg-cyan-500 text-black font-bold shadow-sm'
+                : 'bg-white/5 text-gray-400 hover:text-white hover:bg-white/10'
+            }`}
+          >
+            {docenteFilter !== 'all' ? '⭐ Todas sus materias' : '⭐ Todas las materias'}
+          </button>
+          {availableMaterias.map(([m, count]) => (
             <button
               key={m}
-              onClick={() => setMateriaFilter(m)}
-              className={`px-2.5 py-1 rounded-lg text-[11px] font-semibold whitespace-nowrap transition-all cursor-pointer shrink-0 ${
+              onClick={() => setMateriaFilter(materiaFilter === m ? 'TODAS' : m)}
+              className={`px-2.5 py-1 rounded-lg text-[11px] font-semibold whitespace-nowrap transition-all cursor-pointer shrink-0 flex items-center space-x-1.5 ${
                 materiaFilter === m
                   ? 'bg-cyan-500 text-black font-bold shadow-sm'
-                  : 'bg-white/5 text-gray-400 hover:text-white hover:bg-white/10'
+                  : 'bg-cyan-500/10 text-cyan-300 hover:bg-cyan-500/20 border border-cyan-500/30'
               }`}
             >
-              {m === 'TODAS' ? '⭐ Todas las Materias' : m}
+              <span>{m}</span>
+              <span className={`text-[10px] px-1.5 py-0.2 rounded-full font-mono ${
+                materiaFilter === m ? 'bg-black/30 text-white' : 'bg-cyan-400/20 text-cyan-200'
+              }`}>
+                {count}
+              </span>
             </button>
           ))}
         </div>
@@ -1115,6 +1176,21 @@ export default function RecursosPage() {
         <div className="flex items-center space-x-1.5 p-1 rounded-2xl bg-[#030712] border border-white/10 self-start sm:self-auto shrink-0 shadow-lg">
           <button
             type="button"
+            onClick={() => setViewGrouping('por_docente')}
+            className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center space-x-1.5 ${
+              viewGrouping === 'por_docente'
+                ? 'bg-gradient-to-r from-emerald-500 to-teal-500 text-black shadow-md font-extrabold'
+                : 'text-emerald-400 hover:text-white hover:bg-emerald-500/10'
+            }`}
+          >
+            <span>👨‍🏫 Por Maestro y Materia</span>
+            <span className="text-[10px] bg-black/20 px-1.5 py-0.2 rounded-full font-mono">
+              {resourcesGroupedByDocente.length}
+            </span>
+          </button>
+
+          <button
+            type="button"
             onClick={() => setViewGrouping('grid')}
             className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center space-x-1.5 ${
               viewGrouping === 'grid'
@@ -1123,22 +1199,7 @@ export default function RecursosPage() {
             }`}
           >
             <Layers size={13} />
-            <span>Vista Cuadrícula</span>
-          </button>
-
-          <button
-            type="button"
-            onClick={() => setViewGrouping('por_docente')}
-            className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center space-x-1.5 ${
-              viewGrouping === 'por_docente'
-                ? 'bg-gradient-to-r from-emerald-500 to-teal-500 text-black shadow-md font-extrabold'
-                : 'text-emerald-400 hover:text-white hover:bg-emerald-500/10'
-            }`}
-          >
-            <span>👨‍🏫 Agrupar por Docente</span>
-            <span className="text-[10px] bg-black/20 px-1.5 py-0.2 rounded-full font-mono">
-              {resourcesGroupedByDocente.length}
-            </span>
+            <span>Cuadrícula General</span>
           </button>
         </div>
       </div>
@@ -1199,14 +1260,14 @@ export default function RecursosPage() {
           )}
         </div>
       ) : viewGrouping === 'por_docente' ? (
-        /* Vista Agrupada por Docente */
+        /* Vista Agrupada por Maestro y por Materia */
         <div className="space-y-8 animate-fade-in">
-          {resourcesGroupedByDocente.map(([docenteName, items]) => (
+          {resourcesGroupedByDocente.map(({ docenteName, materias, totalRecursos }) => (
             <div 
               key={docenteName} 
-              className="glass-panel p-5 sm:p-6 rounded-3xl border border-white/10 space-y-4 bg-gradient-to-br from-[#090d16] via-[#040916] to-[#040508] shadow-xl"
+              className="glass-panel p-5 sm:p-7 rounded-3xl border border-white/10 space-y-6 bg-gradient-to-br from-[#090d16] via-[#040916] to-[#040508] shadow-2xl"
             >
-              {/* Header de Docente */}
+              {/* Header de Maestro */}
               <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-4 border-b border-white/10">
                 <div className="flex items-center space-x-3.5">
                   <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-emerald-500/20 to-teal-500/10 border border-emerald-500/30 text-emerald-400 flex items-center justify-center text-2xl shadow-lg shrink-0">
@@ -1216,11 +1277,14 @@ export default function RecursosPage() {
                     <div className="flex items-center flex-wrap gap-2">
                       <h3 className="text-base sm:text-lg font-extrabold text-white tracking-wide">{docenteName}</h3>
                       <span className="text-[10px] bg-emerald-500/20 text-emerald-300 px-2.5 py-0.5 rounded-full font-mono border border-emerald-500/30 font-bold">
-                        {items.length} recurso{items.length > 1 ? 's' : ''} publicado{items.length > 1 ? 's' : ''}
+                        {totalRecursos} recurso{totalRecursos > 1 ? 's' : ''}
+                      </span>
+                      <span className="text-[10px] bg-cyan-500/15 text-cyan-300 px-2 py-0.5 rounded-full border border-cyan-500/30 font-semibold">
+                        {materias.length} materia{materias.length > 1 ? 's' : ''}
                       </span>
                     </div>
-                    <p className="text-xs text-gray-400 mt-0.5">
-                      Docente CECYTE BC • Guías PDF y Clases en Video asignadas a alumnos
+                    <p className="text-xs text-gray-400 mt-1">
+                      Materias del maestro: <strong className="text-gray-200">{materias.map(([m]) => m).join(' • ')}</strong>
                     </p>
                   </div>
                 </div>
@@ -1235,14 +1299,36 @@ export default function RecursosPage() {
                         : 'bg-white/5 hover:bg-white/10 text-emerald-300 border border-emerald-500/30'
                     }`}
                   >
-                    {docenteFilter === docenteName ? '✓ Mostrando solo este docente' : 'Ver solo este docente'}
+                    {docenteFilter === docenteName ? '✓ Mostrando solo este maestro' : 'Ver solo este maestro'}
                   </button>
                 </div>
               </div>
 
-              {/* Grid de recursos del docente */}
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-5">
-                {items.map((rec) => renderResourceCard(rec))}
+              {/* Secciones por Materia del Maestro */}
+              <div className="space-y-6">
+                {materias.map(([materiaName, items]) => (
+                  <div key={materiaName} className="space-y-3 p-4 sm:p-5 rounded-2xl bg-white/[0.015] border border-white/5">
+                    <div className="flex items-center justify-between border-b border-white/5 pb-2">
+                      <div className="flex items-center space-x-2">
+                        <span className="text-sm">📖</span>
+                        <h4 className="text-xs sm:text-sm font-extrabold text-cyan-300 uppercase tracking-wider">
+                          {materiaName}
+                        </h4>
+                        <span className="text-[10px] bg-cyan-500/15 text-cyan-300 px-2 py-0.2 rounded-full font-mono border border-cyan-500/20">
+                          {items.length} {items.length === 1 ? 'recurso' : 'recursos'}
+                        </span>
+                      </div>
+                      <span className="text-[11px] text-gray-400 font-mono hidden sm:inline">
+                        Maestro: {docenteName}
+                      </span>
+                    </div>
+
+                    {/* Grid de recursos de esta materia */}
+                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                      {items.map((rec) => renderResourceCard(rec))}
+                    </div>
+                  </div>
+                ))}
               </div>
             </div>
           ))}
